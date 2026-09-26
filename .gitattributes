@@ -1,0 +1,10 @@
+# Keep line endings stable in the repository whatever the checkout platform does.
+* text=auto eol=lf
+
+*.woff2 binary
+*.task  binary
+*.wasm  binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.cmd   text eol=crlf

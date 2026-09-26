@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#170F14">
+<meta name="description" content="رُژا؛ آینهٔ زنده برای امتحان رنگ آرایش روی صورت و دیدن نتیجهٔ تقریبی عمل‌های زیبایی. نسخهٔ آزمایشی بدون پرداخت.">
+<title>رُژا | آینهٔ زنده</title>
+<link rel="icon" href="favicon.svg">
+<link rel="preload" href="fonts/Estedad-var.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="roja.css?v=12">
+</head>
+<body>
+
+<header class="topbar">
+  <a class="brand" href="./" aria-label="رُژا، بارگذاری دوبارهٔ صفحه">رُژا <span>آینهٔ زنده</span></a>
+  <button id="basket" class="ghost">سبد نمونه <span id="count">۰</span></button>
+</header>
+
+<main class="shell">
+  <nav class="rail" role="tablist" aria-label="حالت آینه">
+    <button id="mode-makeup" role="tab" aria-selected="true" aria-controls="panel-makeup">
+      آرایش<small>رنگ روی صورت</small>
+    </button>
+    <button id="mode-procedure" role="tab" aria-selected="false" aria-controls="panel-procedure">
+      عمل‌های زیبایی<small>نتیجهٔ تقریبی</small>
+    </button>
+  </nav>
+
+  <div class="stage-wrap">
+    <div class="stage" id="viewport">
+      <video id="video" autoplay muted playsinline aria-label="تصویر زندهٔ دوربین"></video>
+      <canvas id="stage" aria-hidden="true" hidden></canvas>
+      <canvas id="overlay" aria-hidden="true"></canvas>
+      <canvas id="debug" aria-hidden="true" hidden></canvas>
+
+      <span class="badge" id="badge" hidden><b id="badge-text"></b></span>
+
+      <div class="seam" id="seam" hidden>
+        <div class="seam-line" id="seam-line"></div>
+        <span class="seam-tag" id="seam-before">پیش از عمل</span>
+        <span class="seam-tag" id="seam-after">پس از عمل</span>
+        <button class="seam-grip" id="seam-grip" aria-label="جابه‌جایی مرز پیش و پس از عمل"
+                role="slider" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50">⇔</button>
+      </div>
+
+      <div id="welcome">
+        <div class="iris" aria-hidden="true"></div>
+        <h2>صورتت را ببین</h2>
+        <p>دوربین فقط با اجازهٔ تو روشن می‌شود. تصویر روی همین دستگاه پردازش می‌شود و جایی فرستاده یا ذخیره نمی‌شود.</p>
+        <button id="start" class="primary">روشن‌کردن دوربین</button>
+      </div>
+    </div>
+
+    <div class="tray" id="tray" role="group" aria-label="انتخاب"></div>
+
+    <!-- The control you actually reach for, docked to the mirror so it never
+         scrolls away on a phone. -->
+    <div class="quick" id="quick">
+      <div id="quick-makeup">
+        <div id="shades" role="radiogroup" aria-label="رنگ"></div>
+        <div class="quick-meta">
+          <span class="swatch" id="big-swatch"></span>
+          <span><strong id="shade-name"></strong><small id="shade-code"></small></span>
+        </div>
+      </div>
+      <div id="quick-procedure" hidden>
+        <label class="field" for="strength"><span id="strength-label">میزان</span> <output id="strength-amount">۰٪</output></label>
+        <input id="strength" type="range" min="0" max="100" value="0">
+      </div>
+    </div>
+
+    <div class="stage-foot">
+      <p id="status" role="status" aria-live="polite">برای شروع، دوربین را روشن کن.</p>
+      <div class="camera-actions">
+        <button id="compare" class="ghost" disabled aria-pressed="false">نمایش بدون آرایش</button>
+        <button id="stop" class="ghost" disabled>خاموش‌کردن</button>
+      </div>
+    </div>
+  </div>
+
+  <aside class="inspector" id="inspector">
+
+    <section id="panel-makeup" role="tabpanel" aria-labelledby="mode-makeup">
+      <p class="eyebrow" id="product-kicker"></p>
+      <h2 id="product-title"></h2>
+      <p class="lede" id="product-description"></p>
+
+      <div id="palette-field" hidden>
+        <label class="field" for="palette-select">پالت</label>
+        <select id="palette-select"></select>
+      </div>
+
+      <p class="quiet" id="shade-legend"></p>
+
+      <label class="field" for="intensity">شدت رنگ <output id="amount">۵۵٪</output></label>
+      <input id="intensity" type="range" min="10" max="85" value="55">
+
+      <label class="field" for="fade">محوشدن لبه <output id="fade-amount">۴۵٪</output></label>
+      <input id="fade" type="range" min="0" max="100" value="45" aria-describedby="fade-help">
+      <p class="help" id="fade-help">کم، لبهٔ مشخص‌تر. زیاد، پخش نرم‌تر رنگ.</p>
+
+      <label class="check"><input id="natural-blend" type="checkbox" checked>ترکیب رنگ با بافت و روشنایی پوست</label>
+
+      <div class="divider"></div>
+      <p class="eyebrow">ترکیب فعلی</p>
+      <div class="look" id="look-items"></div>
+      <div class="camera-actions" style="margin-top:14px">
+        <button id="add" class="primary">افزودن به سبد نمونه</button>
+        <button id="product-toggle" class="ghost"></button>
+      </div>
+      <p class="quiet" id="product-limitation" style="margin-top:14px"></p>
+      <p class="quiet">رنگ روی صفحه با نور محیط، دوربین و رنگ طبیعی پوست تفاوت می‌کند.</p>
+    </section>
+
+    <section id="panel-procedure" role="tabpanel" aria-labelledby="mode-procedure" hidden>
+      <p class="eyebrow">عمل‌های زیبایی</p>
+      <h2 id="procedure-title">یک عمل را انتخاب کن</h2>
+      <p class="lede" id="procedure-summary">از نوار بالا عملی را بزن تا نتیجهٔ تقریبی آن روی صورتت ساخته شود. می‌توانی چند مورد را با هم ببینی.</p>
+
+      <p class="note">
+        این نمایش یک شبیه‌سازی تصویری است، نه پیش‌بینی نتیجهٔ جراحی یا تزریق. تورم، کبودی، دورهٔ بهبودی،
+        ضخامت پوست و آنچه هر جراح در عمل به دست می‌آورد در آن دیده نمی‌شود. برای هر تصمیم پزشکی با پزشک متخصص مشورت کن.
+      </p>
+
+      <p class="help" id="procedure-note"></p>
+      <button id="procedure-reset" class="ghost" style="width:100%" hidden>برداشتن همهٔ عمل‌ها</button>
+
+      <details id="fine-tune">
+        <summary>تنظیم دقیق ناحیه‌ها</summary>
+        <p class="help">این‌ها روی نتیجهٔ عمل‌های انتخاب‌شده اضافه می‌شوند.</p>
+        <div id="fine-controls"></div>
+      </details>
+
+      <p class="quiet" id="webgl-missing" hidden>
+        مرورگر این دستگاه این بخش را اجرا نمی‌کند. بخش آرایش بدون مشکل کار می‌کند.
+      </p>
+    </section>
+
+    <details id="debug-panel">
+      <summary>حالت دیباگ</summary>
+      <p class="help">نقطه‌هایی که مدل روی صورت پیدا می‌کند، با شمارهٔ هرکدام. نقاطی که همین الان محصول یا عمل انتخاب‌شده را می‌سازند، رنگ جدا می‌گیرند.</p>
+      <label class="check"><input id="debug-on" type="checkbox">نمایش نقاط روی تصویر</label>
+      <label class="field" for="debug-size">اندازهٔ شماره <output id="debug-size-amount">۱۰</output></label>
+      <input id="debug-size" type="range" min="0" max="26" value="10">
+      <p class="help">صفر یعنی فقط نقطه‌ها، بدون شماره.</p>
+      <label class="check"><input id="debug-highlight" type="checkbox" checked>رنگ جدا برای نقاط درگیر</label>
+      <label class="check"><input id="debug-only" type="checkbox">فقط نقاط درگیر را نشان بده</label>
+      <p class="quiet" id="debug-count"></p>
+    </details>
+
+  </aside>
+</main>
+
+<footer>
+  <span>تصویر دوربین روی همین دستگاه پردازش می‌شود و ارسال یا ذخیره نمی‌شود.</span>
+  <span>رنگ‌ها نمونه‌اند و سبد آزمایشی است؛ پرداختی ثبت نمی‌شود.</span>
+</footer>
+
+<dialog id="cart">
+  <div class="dialog-head">
+    <h2>سبد نمونه</h2>
+    <button id="close" class="ghost">بستن</button>
+  </div>
+  <p class="quiet">این سبد فقط برای امتحان تجربهٔ فروشگاه است. هیچ سفارشی ثبت نمی‌شود.</p>
+  <div id="cart-items"></div>
+</dialog>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script type="module" src="app.js?v=12"></script>
+</body>
+</html>
