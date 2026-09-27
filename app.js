@@ -35,7 +35,7 @@ const native=window.RojaAndroid||null;
 // In the app the live camera is native (android/…/NativeMirror.kt): the camera, the
 // tracking on the GPU and the drawing happen under the page, which shows through a hole
 // where the mirror is. The page stays the interface and paints the masks.
-const nativeMirror=(()=>{try{return !!native?.nativeMirror?.();}catch{return false;}})();
+let nativeMirror=(()=>{try{return !!native?.nativeMirror?.();}catch{return false;}})();
 // Every browser on an iPhone is WebKit underneath; Chrome and Firefox there only change
 // the settings screen that grants the camera. In-app browsers (Instagram, Telegram…)
 // often have no camera at all.
@@ -1117,6 +1117,11 @@ window.rojaNative={
   },
   onError(name,message){
     if(!nativeStarting&&!source?.native)return;
+    // A phone the native tracker cannot run on still has the browser's: carry on there.
+    if(name==='TrackerError'){
+      perf.lastError=`native tracker: ${message}`;nativeMirror=false;
+      stop('');start();return;
+    }
     const token=generation;
     stop('');
     if(token+1===generation)cameraFailed(Object.assign(new Error(message||name),{name}));

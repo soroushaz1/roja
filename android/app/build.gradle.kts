@@ -49,9 +49,10 @@ android {
         versionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
         versionName = "1.0.$versionCode"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        // Phones (64 and 32-bit ARM) and the x86_64 emulator; MediaPipe's native code for
-        // other ABIs would only make the APK bigger.
-        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
+        // Phones: 64 and 32-bit ARM. MediaPipe has native code for nothing else, and an x86
+        // device or emulator (Android 11 and later) runs ARM code by translation, but only
+        // if the APK holds no x86 code at all to make it choose x86 instead.
+        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
     }
 
     // MediaPipe maps the face model straight out of the APK, which needs it stored

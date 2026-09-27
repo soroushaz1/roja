@@ -898,6 +898,24 @@ const LIPS=[61,0,291,17,40,270,91,321];
       assert.deepEqual(appErrors,[],'page errors with the native mirror');
       report.nativeMirror={masks:Object.keys(c.masks).length,plans:c.plan.length,placed:c.place.length};
       await app.close();
+
+      // A phone the native tracker cannot run on: the page carries on with the
+      // browser's camera and tracker.
+      const fallback=await browser.newPage({viewport:{width:1280,height:800}});
+      const fallbackErrors=[];fallback.on('pageerror',e=>fallbackErrors.push(e.message));
+      await fallback.addInitScript(fakeCamera,{data:fixture});
+      await fallback.addInitScript(()=>{
+        window.RojaAndroid={saveFile(){return 'saved';},keepScreenOn(){},version(){return 'test';},
+          nativeMirror(){return true;},mirrorStop(){},
+          mirrorStart(){setTimeout(()=>window.rojaNative.onError('TrackerError','no native tracker here'),50);}};
+      });
+      await fallback.goto(origin+'/index.html',{waitUntil:'domcontentloaded',timeout:60000});
+      await fallback.locator('#start').click();
+      await fallback.waitForFunction(()=>document.querySelector('#guide').hidden&&!document.querySelector('#stage').hidden,null,{timeout:120000});
+      assert.equal(await fallback.evaluate(()=>window.rojaState().native),false,'the page stayed on the broken native mirror');
+      assert.deepEqual(fallbackErrors,[],'page errors falling back from the native mirror');
+      report.nativeMirror.fallback='browser camera';
+      await fallback.close();
     }
 
     report.errors=[];

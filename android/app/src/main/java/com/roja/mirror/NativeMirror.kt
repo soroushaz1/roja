@@ -1,6 +1,7 @@
 package com.roja.mirror
 
 import android.graphics.Bitmap
+import android.graphics.Matrix
 import android.opengl.EGL14
 import android.opengl.GLES20
 import android.opengl.GLSurfaceView
@@ -18,7 +19,6 @@ import androidx.core.content.ContextCompat
 import com.google.mediapipe.framework.image.BitmapImageBuilder
 import com.google.mediapipe.tasks.core.BaseOptions
 import com.google.mediapipe.tasks.core.Delegate
-import com.google.mediapipe.tasks.vision.core.ImageProcessingOptions
 import com.google.mediapipe.tasks.vision.core.RunningMode
 import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarker
 import java.util.Locale
@@ -66,9 +66,17 @@ class NativeMirror(
     @Volatile var wantSkin = false
     @Volatile var wantExtras = false
 
-    /** A still picture instead of the camera, turned by [stillRotation] like a sensor frame (for tests). */
+    /**
+     * A still picture instead of the camera (for tests), as a sensor turned [rotation]
+     * degrees would send it; it is turned upright once, as CameraX turns camera frames.
+     */
     @Volatile var still: Bitmap? = null
-    @Volatile var stillRotation = 0
+        private set
+
+    fun useStill(picture: Bitmap?, rotation: Int) {
+        still = if (picture == null || rotation % 360 == 0) picture
+        else Bitmap.createBitmap(picture, 0, 0, picture.width, picture.height, Matrix().apply { postRotate(rotation.toFloat()) }, true)
+    }
     private var feeder: ScheduledFuture<*>? = null
     private var provider: ProcessCameraProvider? = null
     private var session = 0
@@ -168,6 +176,9 @@ class NativeMirror(
                     )
                     .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                     .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
+                    // Upright frames, turned by CameraX in native code: the tracker and the
+                    // renderer then never have to agree on which way a sensor faces.
+                    .setOutputImageRotationEnabled(true)
                     .build()
                 analysis.setAnalyzer(worker) { image -> onImage(image, token) }
                 val selector = if (cameras.hasCamera(CameraSelector.DEFAULT_FRONT_CAMERA)) CameraSelector.DEFAULT_FRONT_CAMERA
@@ -223,7 +234,7 @@ class NativeMirror(
         val frame = obtain(picture.width, picture.height) ?: return
         frame.pixels.clear()
         picture.copyPixelsToBuffer(frame.pixels)
-        frame.rotation = stillRotation
+        frame.rotation = 0
         process(frame, session)
     }
 
@@ -303,11 +314,8 @@ class NativeMirror(
         frame.time = now
         val begin = SystemClock.elapsedRealtimeNanos()
         val result = try {
-            model.detectForVideo(
-                BitmapImageBuilder(bitmap).build(),
-                ImageProcessingOptions.builder().setRotationDegrees(frame.rotation).build(),
-                now
-            )
+            // Frames arrive upright, so there is nothing to turn.
+            model.detectForVideo(BitmapImageBuilder(bitmap).build(), now)
         } catch (e: Throwable) {
             Log.e(TAG, "detect", e)
             pool.offer(frame)

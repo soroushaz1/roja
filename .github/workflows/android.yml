@@ -38,7 +38,10 @@ jobs:
       # a failure shows up here, not first on the day the signing secrets are added.
       - name: Debug APK, and a check that the release build compiles
         working-directory: android
-        run: ./gradlew --no-daemon assembleDebug assembleRelease
+        run: |
+          ./gradlew --no-daemon assembleDebug assembleRelease
+          # The native code in the APK, by ABI: phones need arm64-v8a and armeabi-v7a.
+          unzip -l app/build/outputs/apk/debug/app-debug.apk | grep '\.so$' | awk '{print $4}'
 
       - name: Signed release APK and App Bundle
         if: env.HAS_KEYSTORE == 'true'

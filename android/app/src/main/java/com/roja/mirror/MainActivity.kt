@@ -379,12 +379,11 @@ class MainActivity : ComponentActivity() {
         fun mirrorTestFrames(png: String, rotation: Int) {
             val m = mirror ?: return
             if (png.isEmpty()) {
-                m.still = null
+                m.useStill(null, 0)
                 return
             }
             val bytes = Base64.decode(png, Base64.DEFAULT)
-            m.still = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.copy(Bitmap.Config.ARGB_8888, false)
-            m.stillRotation = rotation
+            m.useStill(BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.copy(Bitmap.Config.ARGB_8888, false), rotation)
         }
     }
 
