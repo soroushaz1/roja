@@ -98,6 +98,7 @@ jobs:
           # hang is), and logcat's warnings, errors and crashes with the app's own lines.
           # A crash in the WebView or the emulator's graphics shows up only there.
           script: |
+            $ANDROID_HOME/platform-tools/adb logcat -G 16M
             $ANDROID_HOME/platform-tools/adb logcat -c
             timeout 1500 ./gradlew --no-daemon connectedDebugAndroidTest || { find app/build/outputs/androidTest-results -name '*.xml' -exec cat {} +; sh ../.github/device-report.sh; exit 1; }
 
