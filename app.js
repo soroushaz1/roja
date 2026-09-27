@@ -28,6 +28,9 @@ const el=(tag,props={},...children)=>{
 };
 
 const video=$('video'), photo=$('photo'), overlay=$('overlay'), octx=overlay.getContext('2d');
+// Inside the Android app (android/), the page talks to the app through this bridge:
+// saving files, and keeping the screen on while the mirror is live.
+const native=window.RojaAndroid||null;
 const debugCanvas=$('debug'), debugCtx=debugCanvas.getContext('2d');
 const viewport=$('viewport');
 
@@ -805,6 +808,7 @@ function goLive(){
   overlay.width=source.width;overlay.height=source.height;
   enableTools(ready);
   ensureWorker();
+  native?.keepScreenOn?.(true);
   cancelAnimationFrame(raf);raf=requestAnimationFrame(frame);
   updateSeam();invalidate({masks:true,measure:true});
 }
@@ -831,6 +835,7 @@ function stop(message='دوربین خاموش شد.'){
   if(brushState.on)setBrush(false);
   enableTools(false);
   if(finder.state==='sampling'){finder.state='idle';wantSkin=false;renderFinder();}
+  native?.keepScreenOn?.(false);
   status(message);
 }
 
@@ -999,7 +1004,7 @@ function snapshot(){
     :(products.filter(p=>makeupState[p.id].enabled).map(p=>`${p.name} ${shadeOf(p,makeupState[p.id].shade).name}`).join('، ')||'بدون آرایش');
   c.toBlob(blob=>{
     if(!blob){toast('ذخیرهٔ عکس روی این مرورگر ممکن نشد.');return;}
-    shots.unshift({url:URL.createObjectURL(blob),label,time:new Date(),picked:false});
+    shots.unshift({url:URL.createObjectURL(blob),blob,label,time:new Date(),picked:false});
     while(shots.length>12){URL.revokeObjectURL(shots.pop().url);}
     $('shots-count').textContent=fa.format(shots.length);
     $('flash').classList.remove('on');void $('flash').offsetWidth;$('flash').classList.add('on');
@@ -1022,13 +1027,29 @@ function renderGallery(){
       el('img',{src:shot.url,alt:shot.label}),
       el('label',{},pick,'مقایسه'),
       el('div',{class:'shot-bar'},el('span',{text:`${time.format(shot.time)} · ${shot.label}`,title:shot.label}),
-        el('a',{href:shot.url,download:`roja-${i+1}.png`,'aria-label':'ذخیرهٔ عکس',title:'ذخیره'},icon('i-download')),
+        el('a',{href:shot.url,download:`roja-${i+1}.png`,'aria-label':'ذخیرهٔ عکس',title:'ذخیره',
+          onclick:e=>{if(native){e.preventDefault();saveBlob(shot.blob,`roja-${Date.now()}.png`);}}},icon('i-download')),
         el('button',{type:'button','aria-label':'حذف عکس',title:'حذف',onclick:()=>{URL.revokeObjectURL(shot.url);shots.splice(shots.indexOf(shot),1);
           $('shots-count').textContent=fa.format(shots.length);renderGallery();}},icon('i-trash'))));
   }));
   const picked=shots.filter(s=>s.picked);
   $('gallery-compare').hidden=picked.length!==2;
   if(picked.length===2)$('gallery-compare').replaceChildren(...picked.map(s=>el('figure',{},el('img',{src:s.url,alt:s.label}),el('figcaption',{text:s.label}))));
+}
+// A browser downloads the file; the Android app's WebView cannot download a blob:
+// URL, so there the bytes go to the app, which saves them to the gallery or Downloads.
+async function saveBlob(blob,name){
+  if(native?.saveFile){
+    const data=await new Promise((resolve,reject)=>{const r=new FileReader();
+      r.onload=()=>resolve(String(r.result).split(',')[1]);r.onerror=reject;r.readAsDataURL(blob);});
+    const result=native.saveFile(data,name,blob.type||'application/octet-stream');
+    toast(result==='saved'?(blob.type.startsWith('image/')?'در گالری، پوشهٔ Roja ذخیره شد.':'در پوشهٔ Download/Roja ذخیره شد.')
+      :result==='picker'?'جای ذخیرهٔ فایل را انتخاب کن.':'ذخیره نشد. دوباره امتحان کن.');
+    return;
+  }
+  const url=URL.createObjectURL(blob);
+  const a=el('a',{href:url,download:name});document.body.append(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 function icon(id){
   const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('class','ico');
@@ -1214,7 +1235,8 @@ $('fullscreen').onclick=()=>{
   if(document.fullscreenElement)document.exitFullscreen?.();
   else viewport.requestFullscreen?.().catch(()=>toast('تمام‌صفحه در این مرورگر در دسترس نیست.'));
 };
-if(!document.fullscreenEnabled)$('fullscreen').hidden=true;
+// The app is full-screen already, and its WebView has no element full-screen.
+if(!document.fullscreenEnabled||native)$('fullscreen').hidden=true;
 document.addEventListener('click',e=>{
   if(!$('light-menu').hidden&&!e.target.closest('#light-menu,#light-toggle')){$('light-menu').hidden=true;$('light-toggle').setAttribute('aria-expanded','false');}
 });
@@ -1249,12 +1271,7 @@ function setFind(index){
   invalidate();
 }
 $('debug-find').oninput=()=>setFind($('debug-find').value===''?null:Number($('debug-find').value));
-function download(name,text,type='application/json'){
-  const url=URL.createObjectURL(new Blob([text],{type}));
-  const a=el('a',{href:url,download:name});document.body.append(a);a.click();a.remove();
-  setTimeout(()=>URL.revokeObjectURL(url),1000);
-}
-$('debug-export').onclick=()=>{download(`roja-debug-${Date.now()}.json`,JSON.stringify(exportData(),null,1));};
+$('debug-export').onclick=()=>{saveBlob(new Blob([JSON.stringify(exportData(),null,1)],{type:'application/json'}),`roja-debug-${Date.now()}.json`);};
 $('debug-copy').onclick=async()=>{
   try{await navigator.clipboard.writeText(JSON.stringify(exportData()));toast('داده‌های دیباگ کپی شد.');}
   catch{toast('کپی در این مرورگر اجازه داده نشد؛ از «دانلود JSON» استفاده کن.');}
@@ -1317,6 +1334,24 @@ setMode('makeup');
 renderCart();updateBrushInfo();
 placeSeam();
 document.querySelectorAll('input[type=range]').forEach(paintRange);
+
+// The Android back button: close whatever is open on top first. Returns whether it
+// did anything, so the app knows when to leave instead.
+window.rojaBack=()=>{
+  const dialog=document.querySelector('dialog[open]');
+  if(dialog){dialog.close();return true;}
+  if(!$('light-menu').hidden){$('light-menu').hidden=true;$('light-toggle').setAttribute('aria-expanded','false');return true;}
+  if(brushState.on){setBrush(false);return true;}
+  if(document.fullscreenElement){document.exitFullscreen?.();return true;}
+  return false;
+};
+
+// Installed from the browser, the site keeps working offline (sw.js). Not in the app,
+// which carries every file itself, and not on a development server, where a cache
+// would serve yesterday's files.
+if('serviceWorker' in navigator&&!native&&!['localhost','127.0.0.1','[::1]'].includes(location.hostname))
+  navigator.serviceWorker.register('sw.js').catch(()=>{});
+document.documentElement.dataset.ready='1';
 
 /* Optional agent hooks. */
 function selectMakeup(input){

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The page's own dark lacquer from the first frame, so there is no white flash
+         while the WebView starts. -->
+    <style name="Theme.Roja" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/roja_bg</item>
+        <item name="android:colorBackground">@color/roja_bg</item>
+        <item name="android:colorAccent">@color/roja_rose</item>
+        <item name="android:statusBarColor">@color/roja_bg</item>
+        <item name="android:navigationBarColor">@color/roja_bg</item>
+    </style>
+</resources>
