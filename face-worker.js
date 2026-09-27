@@ -6,7 +6,7 @@
 // Frames arrive as ImageBitmaps (or ImageData) and are let go as soon as they are
 // measured. Nothing is kept, sent anywhere or stored.
 const here=p=>new URL(p,self.location.href).href;
-importScripts(here('vendor/vision_bundle.js'),here('face-core.js?v=14'));
+importScripts(here('vendor/vision_bundle.js'),here('face-core.js?v=15'));
 const core=rojaFaceCore(Vision,self.location.href);
 
 core.init().then(

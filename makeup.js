@@ -3,8 +3,8 @@
 // The WebGL stage (stage.js) uploads each mask and decides how the colour meets the
 // skin. Without WebGL, renderFallback() paints the same masks in flat colour on the 2D
 // overlay, so makeup still works on a device that cannot run the stage.
-import {products,layerOrder} from './catalog.js?v=14';
-import {blurInto} from './blur.js?v=14';
+import {products,layerOrder} from './catalog.js?v=15';
+import {blurInto} from './blur.js?v=15';
 export {products};
 
 // MediaPipe's contours. Eye openings and the mouth opening are never painted.

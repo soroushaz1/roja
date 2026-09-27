@@ -1,11 +1,12 @@
-import {products,categories,finishes,looks,byProduct} from './catalog.js?v=14';
-import {layerSpecs,createMaskPainter,renderFallback,smoothLandmarks,landmarksByType,frameLandmarks,hexToRgb} from './makeup.js?v=14';
-import {createStage,layerModes} from './stage.js?v=14';
-import {controls,regions,controlLandmarks,controlRange,deformers,textureLayers} from './deform.js?v=14';
-import {procedures,byId,amountsFor,resolve,kinds} from './procedures.js?v=14';
-import {renderDebug,nearest} from './debug.js?v=14';
-import {createBrush,brushModes} from './brush.js?v=14';
-import {metrics,measure,points as placed,symmetry,pose as poseOf} from './measure.js?v=14';
+import {products,categories,finishes,looks,byProduct} from './catalog.js?v=15';
+import {layerSpecs,createMaskPainter,renderFallback,smoothLandmarks,landmarksByType,frameLandmarks,hexToRgb} from './makeup.js?v=15';
+import {createStage,layerModes} from './stage.js?v=15';
+import {controls,regions,controlLandmarks,controlRange,deformers,textureLayers} from './deform.js?v=15';
+import {procedures,byId,amountsFor,resolve,kinds} from './procedures.js?v=15';
+import {renderDebug,nearest} from './debug.js?v=15';
+import {createBrush,brushModes} from './brush.js?v=15';
+import {metrics,measure,points as placed,symmetry,pose as poseOf} from './measure.js?v=15';
+import {CANON,CANON_ASPECT} from './facemesh.js?v=15';
 
 const $=id=>document.getElementById(id);
 const fa=new Intl.NumberFormat('fa-IR');
@@ -578,30 +579,50 @@ function plan(){
 }
 const TYPE_COLOR={foundation:'#E0B48C',concealer:'#F5D7B2',contour:'#8E6E5E',blush:'#FF6F91',highlighter:'#FFF1B8',
   eyeshadow:'#B388FF',eyeliner:'#40C4FF',mascara:'#00E5FF',brow:'#FFAB40',lipliner:'#FF5252',lipstick:'#FF1744',gloss:'#FF80AB',texture:'#69F0AE'};
-function rebuildMasks(p){
-  const {w,h}=frameSize();
-  const maps=brush.maps(landmarks,w,h);
+// Masks are painted in the face's own front-on space (facemesh.js) and the stage
+// carries them onto the live face each frame, so they are repainted only when what is
+// on the face changes (a product, a setting, a brush stroke), never because it moved.
+const FACE_W=768, FACE_H=Math.round(FACE_W*CANON_ASPECT);
+const canonLandmarks=Array.from({length:CANON.length/2},(_,i)=>({x:CANON[i*2],y:CANON[i*2+1]}));
+const maskCrop=document.createElement('canvas');
+function maskSpecs(p){
   const specs=new Map();
   for(const s of [...p.after,...(p.before||[])])specs.set(s.key,s);
   for(const t of p.textures)specs.set(t.key,{key:t.key,type:'texture',zone:t.zone,fade:60});
-  if(debug.on&&debug.masks){
-    if(!maskView)maskView=document.createElement('canvas');
-    maskView.width=w;maskView.height=h;
-  }
-  const mv=debug.on&&debug.masks?maskView.getContext('2d'):null;
-  if(mv&&(maskTint.width!==w||maskTint.height!==h)){maskTint.width=w;maskTint.height=h;}
+  return specs;
+}
+function rebuildMasks(p){
+  const maps=brush.maps(canonLandmarks,FACE_W,FACE_H);
+  const specs=maskSpecs(p);
+  const cx=maskCrop.getContext('2d');
   for(const spec of specs.values()){
-    const canvas=painter.paint(spec,landmarks,w,h,spec.type==='texture'?null:maps);
-    stage.setMask(spec.key,canvas,painter.box);
-    if(mv){
-      const t=maskTint.getContext('2d');
-      t.globalCompositeOperation='source-over';t.clearRect(0,0,w,h);t.drawImage(canvas,0,0,w,h);
-      t.globalCompositeOperation='source-in';t.fillStyle=TYPE_COLOR[spec.type]||'#fff';t.fillRect(0,0,w,h);
-      mv.drawImage(maskTint,0,0);
-    }
+    const canvas=painter.paint(spec,canonLandmarks,FACE_W,FACE_H,spec.type==='texture'?null:maps);
+    // Only the painted part is uploaded; the stage treats the rest as empty.
+    const b=painter.box,W=canvas.width,H=canvas.height;
+    const x0=Math.floor(b.x*W),y0=Math.floor(b.y*H),x1=Math.ceil((b.x+b.w)*W),y1=Math.ceil((b.y+b.h)*H);
+    const cw=Math.max(1,x1-x0),ch=Math.max(1,y1-y0);
+    maskCrop.width=cw;maskCrop.height=ch;
+    cx.drawImage(canvas,x0,y0,cw,ch,0,0,cw,ch);
+    stage.setMask(spec.key,maskCrop,{x:x0/W,y:y0/H,w:cw/W,h:ch/H});
   }
   stage.dropMasks(new Set(specs.keys()));
   masksDirty=false;
+}
+// The debug overlay's view of the masks, on the frame: painted the slow way, from the
+// live landmarks, and only while that view is open.
+function paintMaskView(p){
+  const {w,h}=frameSize();
+  if(!maskView)maskView=document.createElement('canvas');
+  maskView.width=w;maskView.height=h;
+  if(maskTint.width!==w||maskTint.height!==h){maskTint.width=w;maskTint.height=h;}
+  const mv=maskView.getContext('2d'),t=maskTint.getContext('2d');
+  const maps=brush.maps(landmarks,w,h);
+  for(const spec of maskSpecs(p).values()){
+    const canvas=painter.paint(spec,landmarks,w,h,spec.type==='texture'?null:maps);
+    t.globalCompositeOperation='source-over';t.clearRect(0,0,w,h);t.drawImage(canvas,0,0,w,h);
+    t.globalCompositeOperation='source-in';t.fillStyle=TYPE_COLOR[spec.type]||'#fff';t.fillRect(0,0,w,h);
+    mv.drawImage(maskTint,0,0);
+  }
 }
 // Both cheeks, the forehead and the chin: where the light on the face is read.
 function probes(){
@@ -615,7 +636,8 @@ function draw(now=performance.now()){
   const p=plan();
   const face=faceWidthPx();
   if(gl){
-    if(masksDirty&&landmarks){const t=performance.now();rebuildMasks(p);perf.maskMs=ema(perf.maskMs,performance.now()-t);}
+    if(debug.on&&debug.masks&&landmarks&&(dirty||masksDirty))paintMaskView(p);
+    if(masksDirty){const t=performance.now();rebuildMasks(p);perf.maskMs=ema(perf.maskMs,performance.now()-t);}
     const t=performance.now();
     const ok=gl.draw({
       source:source.el,width:w,height:h,version:source.version,live:source.live,landmarks,
@@ -794,7 +816,7 @@ function onTracker(d){
     else if(wantSkin&&!d.landmarks)onSkin(null);
     $('guide').hidden=!!landmarks;
     status(landmarks||source.kind==='photo'?statusText():'صورت پیدا نشد. کمی روبه‌روی دوربین و در نور بیشتر قرار بگیر.');
-    invalidate({masks:true,measure:true});
+    invalidate({measure:true});
   }else if(d.type==='error'){
     busy=false;
     perf.lastError=`${d.stage||'tracker'}: ${d.message||''}`;
@@ -805,7 +827,7 @@ function onTracker(d){
 function ensureTracker(){
   if(tracker||trackerStarting)return;
   let w=null;
-  try{w=new Worker(new URL('face-worker.js?v=14',import.meta.url));}catch(e){perf.lastError=`worker: ${e.message}`;}
+  try{w=new Worker(new URL('face-worker.js?v=15',import.meta.url));}catch(e){perf.lastError=`worker: ${e.message}`;}
   if(!w){useTracker('page','no worker');return;}
   ready=false;busy=false;
   tracker={kind:'worker',post:(m,transfer)=>w.postMessage(m,transfer),close:()=>w.terminate()};
@@ -825,7 +847,7 @@ async function useTracker(kind,reason){
   const token=++trackerGeneration;
   try{
     const Vision=await import('./vendor/vision_bundle.mjs');
-    await import('./face-core.js?v=14');
+    await import('./face-core.js?v=15');
     const core=self.rojaFaceCore(Vision,new URL('./',import.meta.url).href);
     const found=await core.init();
     if(token!==trackerGeneration){core.close();return;}
