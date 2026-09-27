@@ -49,6 +49,15 @@ android {
         versionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
         versionName = "1.0.$versionCode"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // Phones (64 and 32-bit ARM) and the x86_64 emulator; MediaPipe's native code for
+        // other ABIs would only make the APK bigger.
+        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
+    }
+
+    // MediaPipe maps the face model straight out of the APK, which needs it stored
+    // uncompressed.
+    androidResources {
+        noCompress += listOf("task", "tflite")
     }
 
     signingConfigs {
@@ -99,6 +108,13 @@ dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.activity:activity-ktx:1.9.3")
     implementation("androidx.webkit:webkit:1.12.1")
+
+    // The native mirror: the camera, and face tracking on the GPU.
+    val camerax = "1.4.0"
+    implementation("androidx.camera:camera-core:$camerax")
+    implementation("androidx.camera:camera-camera2:$camerax")
+    implementation("androidx.camera:camera-lifecycle:$camerax")
+    implementation("com.google.mediapipe:tasks-vision:0.10.14")
 
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test:runner:1.6.2")

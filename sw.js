@@ -6,7 +6,7 @@
 // through here: frames never leave the page.
 const CACHE='roja-v15';
 const SHELL=['./','index.html','roja.css?v=15','app.js?v=15','catalog.js?v=15','makeup.js?v=15','stage.js?v=15',
-  'deform.js?v=15','procedures.js?v=15','debug.js?v=15','brush.js?v=15','measure.js?v=15','blur.js?v=15','facemesh.js?v=15',
+  'deform.js?v=15','procedures.js?v=15','debug.js?v=15','brush.js?v=15','measure.js?v=15','blur.js?v=15','facemesh.js?v=15','shaders.js?v=15',
   'face-worker.js?v=15','face-core.js?v=15',
   'fonts/Estedad-var.woff2','favicon.svg','manifest.webmanifest','icons/icon-192.png'];
 

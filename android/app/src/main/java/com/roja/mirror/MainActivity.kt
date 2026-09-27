@@ -6,8 +6,11 @@ import android.content.ContentValues
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.AssetManager
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.net.Uri
+import android.opengl.GLSurfaceView
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
@@ -38,16 +41,23 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.webkit.WebViewAssetLoader
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.io.IOException
 
 /**
- * Roja on Android: the website, carried inside the app and shown in a WebView.
+ * Roja on Android: the website, carried inside the app and shown in a WebView, with the
+ * live mirror done natively underneath it.
  *
  * Every file is served from the APK's assets under https://appassets.androidplatform.net,
- * a secure origin, so the camera, the face-tracking worker and WebGL behave exactly as
- * they do in a browser. The app has no network permission: nothing it shows comes from
- * the internet, and nothing the camera sees can leave the phone.
+ * a secure origin. The page is the interface; for the live camera it hands the heavy
+ * part to [NativeMirror] (CameraX, MediaPipe on the GPU, and [MirrorRenderer] in OpenGL),
+ * drawn in a surface under the WebView, which lets it show through where the page's
+ * mirror is. Photos still go through the page's own WebGL. The app has no network
+ * permission: nothing it shows comes from the internet, and nothing the camera sees can
+ * leave the phone.
  */
 class MainActivity : ComponentActivity() {
 
@@ -55,10 +65,25 @@ class MainActivity : ComponentActivity() {
         private set
 
     private var pendingCamera: PermissionRequest? = null
+    private var pendingMirror = false
+
+    // The native mirror. Null if it could not be set up, and the page then uses the
+    // browser camera as it does on the web.
+    private var mirror: NativeMirror? = null
+    private var renderer: MirrorRenderer? = null
+    private var mirrorView: GLSurfaceView? = null
     private var pendingPhoto: ValueCallback<Array<Uri>>? = null
     private var pendingSave: ByteArray? = null
 
     private val askCamera = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (pendingMirror) {
+            pendingMirror = false
+            if (granted) mirror?.start()
+            else {
+                page("window.rojaNative&&rojaNative.onError('NotAllowedError','')")
+                toast(R.string.camera_denied)
+            }
+        }
         val request = pendingCamera ?: return@registerForActivityResult
         pendingCamera = null
         if (granted) {
@@ -84,8 +109,27 @@ class MainActivity : ComponentActivity() {
 
         val background = getColor(R.color.roja_bg)
         val root = FrameLayout(this).apply { setBackgroundColor(background) }
-        web = WebView(this).apply { setBackgroundColor(background) }
-        root.addView(web, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        val fill = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        // The native mirror's surface, under the page. It fills the same area, so the
+        // page's coordinates are its coordinates.
+        try {
+            val drawer = MirrorRenderer(SiteCode(assets))
+            val surface = GLSurfaceView(this).apply {
+                setEGLContextClientVersion(2)
+                preserveEGLContextOnPause = true
+                setRenderer(drawer)
+                renderMode = GLSurfaceView.RENDERMODE_WHEN_DIRTY
+            }
+            root.addView(surface, fill)
+            renderer = drawer
+            mirrorView = surface
+            mirror = NativeMirror(this, drawer, surface, MirrorEvents())
+        } catch (e: Throwable) {
+            Log.e(TAG, "native mirror unavailable", e)
+        }
+        // Transparent, so the native mirror shows through where the page leaves a hole.
+        web = WebView(this).apply { setBackgroundColor(if (mirror != null) Color.TRANSPARENT else background) }
+        root.addView(web, fill)
         setContentView(root)
         // Keep the page clear of the status bar, the navigation bar, a camera cutout
         // and the keyboard.
@@ -164,20 +208,62 @@ class MainActivity : ComponentActivity() {
         web.loadUrl(START_URL)
     }
 
-    // The page turns the camera off when it is hidden, so leaving the app releases it.
+    // The page turns the camera off when it is hidden, so leaving the app releases it;
+    // the native camera is stopped here, and the page told.
     override fun onPause() {
+        mirror?.let {
+            if (it.running) {
+                it.stop()
+                page("window.rojaNative&&rojaNative.onStop()")
+            }
+        }
+        mirrorView?.onPause()
         web.onPause()
         super.onPause()
     }
 
     override fun onResume() {
         super.onResume()
+        mirrorView?.onResume()
         web.onResume()
     }
 
     override fun onDestroy() {
+        mirror?.close()
         web.destroy()
         super.onDestroy()
+    }
+
+    private fun page(script: String) = runOnUiThread { web.evaluateJavascript(script, null) }
+
+    private inner class MirrorEvents : NativeMirror.Events {
+        override fun onStart(width: Int, height: Int) = page("window.rojaNative&&rojaNative.onStart($width,$height)")
+        override fun onFrame(json: String) = page("window.rojaNative&&rojaNative.onFrame($json)")
+        override fun onError(name: String, message: String) =
+            page("window.rojaNative&&rojaNative.onError(${JSONObject.quote(name)},${JSONObject.quote(message)})")
+    }
+
+    private fun startMirror() {
+        val m = mirror ?: return
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED || m.still != null) m.start()
+        else {
+            pendingMirror = true
+            askCamera.launch(Manifest.permission.CAMERA)
+        }
+    }
+
+    private fun layers(array: JSONArray?): List<MirrorRenderer.Layer>? {
+        if (array == null) return null
+        return (0 until array.length()).map { i ->
+            val l = array.getJSONObject(i)
+            val c = l.getJSONArray("color")
+            MirrorRenderer.Layer(
+                l.getString("key"), floatArrayOf(c.getDouble(0).toFloat(), c.getDouble(1).toFloat(), c.getDouble(2).toFloat()),
+                l.optDouble("amount", 0.0).toFloat(), l.optDouble("mode", 0.0).toFloat(), l.optDouble("detail", 0.0).toFloat(),
+                l.optDouble("gloss", 0.0).toFloat(), l.optDouble("matte", 0.0).toFloat(), l.optDouble("shimmer", 0.0).toFloat(),
+                l.optDouble("smooth", 0.0).toFloat(), l.optDouble("bright", 0.0).toFloat(), l.optDouble("radiusK", .03).toFloat()
+            )
+        }
     }
 
     /** What the page may ask of the app, through `window.RojaAndroid`. Runs on a WebView thread. */
@@ -202,6 +288,104 @@ class MainActivity : ComponentActivity() {
 
         @JavascriptInterface
         fun version(): String = BuildConfig.VERSION_NAME
+
+        /* The native mirror. The page calls these instead of using the browser camera. */
+
+        @JavascriptInterface
+        fun nativeMirror(): Boolean = mirror != null
+
+        @JavascriptInterface
+        fun mirrorStart() = runOnUiThread { startMirror() }
+
+        @JavascriptInterface
+        fun mirrorStop() = runOnUiThread { mirror?.stop() }
+
+        @JavascriptInterface
+        fun mirrorFreeze(on: Boolean) {
+            mirror?.frozen = on
+        }
+
+        /** Where the page's mirror is, in device pixels: {x, y, w, h, r} and the picture {px, py, pw, ph}. */
+        @JavascriptInterface
+        fun mirrorPlace(json: String) {
+            val o = JSONObject(json)
+            renderer?.placement = MirrorRenderer.Placement(
+                o.getInt("x"), o.getInt("y"), o.getInt("w"), o.getInt("h"), o.optDouble("r", 0.0).toFloat(),
+                o.getInt("px"), o.getInt("py"), o.getInt("pw"), o.getInt("ph")
+            )
+            mirrorView?.requestRender()
+        }
+
+        /** What to draw: {after, amounts, before, seam, grade}, as the page's plan() gives it. */
+        @JavascriptInterface
+        fun mirrorPlan(json: String) {
+            val o = JSONObject(json)
+            val amounts = o.optJSONObject("amounts")?.let { a -> a.keys().asSequence().associateWith { a.getDouble(it).toFloat() } }
+            val grade = o.optJSONArray("grade")?.let { g -> floatArrayOf(g.getDouble(0).toFloat(), g.getDouble(1).toFloat(), g.getDouble(2).toFloat()) }
+            renderer?.plan = MirrorRenderer.Plan(
+                layers(o.optJSONArray("after")) ?: emptyList(), amounts, layers(o.optJSONArray("before")),
+                if (o.isNull("seam")) null else o.getDouble("seam").toFloat(), grade
+            )
+            mirrorView?.requestRender()
+        }
+
+        /** One mask, painted by the page in face space: [box] is [x, y, w, h] there; [alpha] is base64, one byte a pixel. */
+        @JavascriptInterface
+        fun mirrorMask(key: String, box: String, width: Int, height: Int, alpha: String) {
+            val b = JSONArray(box)
+            val bytes = Base64.decode(alpha, Base64.DEFAULT)
+            if (bytes.size != width * height) return
+            renderer?.setMask(key, floatArrayOf(b.getDouble(0).toFloat(), b.getDouble(1).toFloat(), b.getDouble(2).toFloat(), b.getDouble(3).toFloat()), width, height, bytes)
+            mirrorView?.requestRender()
+        }
+
+        @JavascriptInterface
+        fun mirrorKeep(keys: String) {
+            val a = JSONArray(keys)
+            renderer?.keepMasks((0 until a.length()).map { a.getString(it) }.toSet())
+            mirrorView?.requestRender()
+        }
+
+        @JavascriptInterface
+        fun mirrorSkin(on: Boolean) {
+            mirror?.wantSkin = on
+        }
+
+        @JavascriptInterface
+        fun mirrorExtras(on: Boolean) {
+            mirror?.wantExtras = on
+        }
+
+        /** The picture as drawn, delivered to rojaNative.onSnapshot as a PNG data URL (or null). */
+        @JavascriptInterface
+        fun mirrorSnapshot() {
+            val drawer = renderer ?: return
+            drawer.snapshot { bitmap ->
+                val url = bitmap?.let {
+                    val out = ByteArrayOutputStream()
+                    it.compress(Bitmap.CompressFormat.PNG, 100, out)
+                    "'data:image/png;base64," + Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP) + "'"
+                } ?: "null"
+                page("window.rojaNative&&rojaNative.onSnapshot($url)")
+            }
+            mirrorView?.requestRender()
+        }
+
+        /**
+         * For the device tests: a still picture (PNG, base64) stands in for the camera,
+         * turned by [rotation] as a sensor frame would be. An empty string goes back to the camera.
+         */
+        @JavascriptInterface
+        fun mirrorTestFrames(png: String, rotation: Int) {
+            val m = mirror ?: return
+            if (png.isEmpty()) {
+                m.still = null
+                return
+            }
+            val bytes = Base64.decode(png, Base64.DEFAULT)
+            m.still = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.copy(Bitmap.Config.ARGB_8888, false)
+            m.stillRotation = rotation
+        }
     }
 
     /** Snapshots go to Pictures/Roja, anything else to Download/Roja. */
