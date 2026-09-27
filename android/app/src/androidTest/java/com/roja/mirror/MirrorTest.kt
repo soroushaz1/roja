@@ -36,11 +36,17 @@ class MirrorTest {
     @get:Rule val camera: GrantPermissionRule = GrantPermissionRule.grant(Manifest.permission.CAMERA)
     @get:Rule val activity = ActivityScenarioRule(MainActivity::class.java)
 
-    /** Runs a script in the page and returns its result, JSON-encoded as WebView reports it. */
+    private lateinit var app: MainActivity
+
+    /**
+     * Runs a script in the page and returns its result, JSON-encoded as WebView reports it.
+     * Posted to the main thread rather than run through the scenario, so a main thread
+     * that is stuck fails the test instead of hanging the run.
+     */
     private fun js(script: String): String {
         val latch = CountDownLatch(1)
         var result = ""
-        activity.scenario.onActivity { it.web.evaluateJavascript(script) { value -> result = value ?: ""; latch.countDown() } }
+        app.runOnUiThread { app.web.evaluateJavascript(script) { value -> result = value ?: ""; latch.countDown() } }
         check(latch.await(20, TimeUnit.SECONDS)) { "the page did not answer ${script.take(80)}" }
         return result
     }
@@ -57,7 +63,10 @@ class MirrorTest {
     }
 
     @Before
-    fun pageIsUp() = waitFor("document.documentElement.dataset.ready||''", "\"1\"", 90)
+    fun pageIsUp() {
+        activity.scenario.onActivity { app = it }
+        waitFor("document.documentElement.dataset.ready||''", "\"1\"", 90)
+    }
 
     /** A script's result as the value it is (evaluateJavascript hands back JSON). */
     private fun value(script: String): Any? = JSONTokener(js(script)).nextValue()

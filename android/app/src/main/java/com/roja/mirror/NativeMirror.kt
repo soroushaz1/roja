@@ -97,10 +97,13 @@ class NativeMirror(
         if (running) return
         running = true
         started = false
+        images = 0
         val token = ++session
+        Log.i(TAG, "start (${if (still != null) "still picture" else "camera"})")
         worker.execute {
             try {
                 ensureLandmarker()
+                Log.i(TAG, "tracker ready on the $delegate${if (gpuNote.isNotEmpty()) " ($gpuNote)" else ""}")
             } catch (e: Throwable) {
                 Log.e(TAG, "tracker", e)
                 stopOn(token)
@@ -110,7 +113,14 @@ class NativeMirror(
             if (token != session) return@execute
             val picture = still
             if (picture != null) {
-                feeder = worker.scheduleWithFixedDelay({ if (token == session) feedStill(picture) }, 0, 66, TimeUnit.MILLISECONDS)
+                // An exception would silently cancel a scheduled task, so none escapes.
+                feeder = worker.scheduleWithFixedDelay({
+                    try {
+                        if (token == session) feedStill(picture)
+                    } catch (e: Throwable) {
+                        Log.e(TAG, "still frame", e)
+                    }
+                }, 0, 66, TimeUnit.MILLISECONDS)
             } else {
                 activity.runOnUiThread { bindCamera(token) }
             }
@@ -119,6 +129,7 @@ class NativeMirror(
 
     fun stop() {
         if (!running) return
+        Log.i(TAG, "stop")
         running = false
         session++
         feeder?.cancel(false)
@@ -163,6 +174,7 @@ class NativeMirror(
                 else CameraSelector.DEFAULT_BACK_CAMERA
                 cameras.unbindAll()
                 cameras.bindToLifecycle(activity, selector, analysis)
+                Log.i(TAG, "camera bound (${if (selector == CameraSelector.DEFAULT_FRONT_CAMERA) "front" else "back"})")
             } catch (e: Throwable) {
                 Log.e(TAG, "camera", e)
                 stop()
@@ -171,10 +183,13 @@ class NativeMirror(
         }, ContextCompat.getMainExecutor(activity))
     }
 
+    private var images = 0
+
     private fun onImage(image: ImageProxy, token: Int) {
         try {
             if (token != session || (frozen && started && !wantSkin)) return
             val plane = image.planes[0]
+            if (images++ == 0) Log.i(TAG, "first camera image: ${image.width}x${image.height}, row ${plane.rowStride}, turned ${image.imageInfo.rotationDegrees}")
             val w = image.width
             val h = image.height
             val frame = obtain(w, h) ?: return
@@ -195,6 +210,9 @@ class NativeMirror(
             }
             frame.rotation = image.imageInfo.rotationDegrees
             process(frame, token)
+        } catch (e: Throwable) {
+            // The analyzer's executor would swallow it.
+            Log.e(TAG, "camera frame", e)
         } finally {
             image.close()
         }
@@ -244,27 +262,25 @@ class NativeMirror(
 
     /** The GPU's name if it is a software one, from a throwaway EGL context. */
     private fun softwareGpu(): String? {
+        // The default display is shared with the mirror's own surface (and MediaPipe's),
+        // so it is initialised here but never terminated.
         val display = EGL14.eglGetDisplay(EGL14.EGL_DEFAULT_DISPLAY)
         val version = IntArray(2)
         if (!EGL14.eglInitialize(display, version, 0, version, 1)) return "no EGL"
+        val configs = arrayOfNulls<android.opengl.EGLConfig>(1)
+        val count = IntArray(1)
+        val attributes = intArrayOf(EGL14.EGL_RENDERABLE_TYPE, EGL14.EGL_OPENGL_ES2_BIT, EGL14.EGL_SURFACE_TYPE, EGL14.EGL_PBUFFER_BIT, EGL14.EGL_NONE)
+        if (!EGL14.eglChooseConfig(display, attributes, 0, configs, 0, 1, count, 0) || count[0] == 0) return "no config"
+        val context = EGL14.eglCreateContext(display, configs[0], EGL14.EGL_NO_CONTEXT, intArrayOf(EGL14.EGL_CONTEXT_CLIENT_VERSION, 2, EGL14.EGL_NONE), 0)
+        val surface = EGL14.eglCreatePbufferSurface(display, configs[0], intArrayOf(EGL14.EGL_WIDTH, 1, EGL14.EGL_HEIGHT, 1, EGL14.EGL_NONE), 0)
         try {
-            val configs = arrayOfNulls<android.opengl.EGLConfig>(1)
-            val count = IntArray(1)
-            val attributes = intArrayOf(EGL14.EGL_RENDERABLE_TYPE, EGL14.EGL_OPENGL_ES2_BIT, EGL14.EGL_SURFACE_TYPE, EGL14.EGL_PBUFFER_BIT, EGL14.EGL_NONE)
-            if (!EGL14.eglChooseConfig(display, attributes, 0, configs, 0, 1, count, 0) || count[0] == 0) return "no config"
-            val context = EGL14.eglCreateContext(display, configs[0], EGL14.EGL_NO_CONTEXT, intArrayOf(EGL14.EGL_CONTEXT_CLIENT_VERSION, 2, EGL14.EGL_NONE), 0)
-            val surface = EGL14.eglCreatePbufferSurface(display, configs[0], intArrayOf(EGL14.EGL_WIDTH, 1, EGL14.EGL_HEIGHT, 1, EGL14.EGL_NONE), 0)
-            try {
-                if (!EGL14.eglMakeCurrent(display, surface, surface, context)) return "no context"
-                val name = GLES20.glGetString(GLES20.GL_RENDERER) ?: ""
-                return if (Regex("swiftshader|llvmpipe|softpipe|software", RegexOption.IGNORE_CASE).containsMatchIn(name)) name else null
-            } finally {
-                EGL14.eglMakeCurrent(display, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_CONTEXT)
-                EGL14.eglDestroySurface(display, surface)
-                EGL14.eglDestroyContext(display, context)
-            }
+            if (!EGL14.eglMakeCurrent(display, surface, surface, context)) return "no context"
+            val name = GLES20.glGetString(GLES20.GL_RENDERER) ?: ""
+            return if (Regex("swiftshader|llvmpipe|softpipe|software", RegexOption.IGNORE_CASE).containsMatchIn(name)) name else null
         } finally {
-            EGL14.eglTerminate(display)
+            EGL14.eglMakeCurrent(display, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_CONTEXT)
+            EGL14.eglDestroySurface(display, surface)
+            EGL14.eglDestroyContext(display, context)
         }
     }
 
@@ -328,6 +344,7 @@ class NativeMirror(
         view.requestRender()
         if (!started) {
             started = true
+            Log.i(TAG, "first frame: ${w}x$h turned ${frame.rotation}, face ${landmarks != null}, ${inferMs.roundToInt()} ms")
             activity.runOnUiThread { if (token == session) events.onStart(fw, fh) }
         }
 
