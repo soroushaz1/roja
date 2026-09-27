@@ -96,19 +96,18 @@ class MirrorTest {
     }
 
     /**
-     * The native renderer's picture, read back, as the mean colour around some landmarks:
-     * [[r, g, b], ...] in the order of [ids].
+     * The native renderer's picture, read back, as the mean colour of 5×5 pixels around
+     * each of [at] (x, y as fractions of the frame): [[r, g, b], ...].
      */
-    private fun sample(ids: List<Int>): JSONArray {
+    private fun sample(at: List<List<Double>>): JSONArray {
         js("""window.__sample=null;(async()=>{
             const url=await new Promise(done=>{const was=rojaNative.onSnapshot;
               rojaNative.onSnapshot=u=>{rojaNative.onSnapshot=was;was(u);done(u);};RojaAndroid.mirrorSnapshot();});
             const image=new Image();image.src=url;await image.decode();
             const c=document.createElement('canvas');c.width=image.width;c.height=image.height;
             const x=c.getContext('2d');x.drawImage(image,0,0);
-            const s=rojaState();
-            window.__sample=JSON.stringify(${ids}.map(i=>{
-              const cx=Math.round(s.points[i][0]*c.width),cy=Math.round(s.points[i][1]*c.height);
+            window.__sample=JSON.stringify(${JSONArray(at)}.map(([px,py])=>{
+              const cx=Math.round(px*c.width),cy=Math.round(py*c.height);
               const d=x.getImageData(cx-2,cy-2,5,5).data;let r=0,g=0,b=0;
               for(let k=0;k<d.length;k+=4){r+=d[k];g+=d[k+1];b+=d[k+2];}
               return [r/25,g/25,b/25];}));
@@ -166,20 +165,25 @@ class MirrorTest {
 
     @Test
     fun theNativeMirrorDrawsMakeupOnAStill() {
-        val upright = startOnStill(portrait(0f), 0)
+        startOnStill(portrait(0f), 0)
+        // Let the tracking settle, then keep these positions for every picture below.
+        Thread.sleep(2500)
+        val upright = state()
         val points = upright.getJSONArray("points")
         fun x(i: Int) = points.getJSONArray(i).getDouble(0)
         fun y(i: Int) = points.getJSONArray(i).getDouble(1)
         assertTrue("the eyes are not above the nose", y(33) < y(1) && y(263) < y(1))
         assertTrue("the nose is not above the mouth", y(1) < y(13))
         assertTrue("the face came out mirrored", x(33) < x(263))
-        // The lipstick that is on at the start colours the lips, and only the lips.
+        // The lipstick that is on at the start colours the lips, and only the lips: the
+        // cheeks, the nose, the forehead and between the brows stay as they were.
         val lips = listOf(14, 17)
-        val elsewhere = listOf(234, 50, 1, 10, 152)
-        val withLipstick = sample(lips + elsewhere)
+        val elsewhere = listOf(50, 280, 1, 9, 6)
+        val at = (lips + elsewhere).map { listOf(x(it), y(it)) }
+        val withLipstick = sample(at)
         js("document.querySelector('#clear-look').click();'cleared'")
         Thread.sleep(1500)
-        val bare = sample(lips + elsewhere)
+        val bare = sample(at)
         val lipChange = lips.indices.maxOf { difference(withLipstick.getJSONArray(it), bare.getJSONArray(it)) }
         assertTrue("the lipstick did not colour the lips ($lipChange)", lipChange > 20)
         for (k in elsewhere.indices) {
@@ -190,7 +194,9 @@ class MirrorTest {
 
         // The same face as a sensor turned a quarter turn would send it: the landmarks and
         // the picture must come out the same way up.
-        val turned = startOnStill(portrait(-90f), 90)
+        startOnStill(portrait(-90f), 90)
+        Thread.sleep(2500)
+        val turned = state()
         assertEquals(upright.getInt("width"), turned.getInt("width"))
         assertEquals(upright.getInt("height"), turned.getInt("height"))
         val moved = turned.getJSONArray("points")
@@ -199,8 +205,8 @@ class MirrorTest {
             val dy = abs(moved.getJSONArray(i).getDouble(1) - y(i))
             assertTrue("landmark $i moved by ($dx, $dy) when the sensor turned", dx < .03 && dy < .03)
         }
-        val turnedBare = sample(lips + elsewhere)
-        for (k in 0 until lips.size + elsewhere.size) {
+        val turnedBare = sample(at)
+        for (k in at.indices) {
             val d = difference(bare.getJSONArray(k), turnedBare.getJSONArray(k))
             assertTrue("the turned picture differs at sample $k ($d)", d < 30)
         }
