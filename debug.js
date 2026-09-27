@@ -95,21 +95,6 @@ export function renderDebug(context, landmarks, options={}) {
     }
   }
 
-  let count=0;
-  if(points){
-    for(let i=0;i<landmarks.length;i++){
-      if(!shown(i))continue;
-      count++;
-      const marked=lit(i);
-      context.beginPath();
-      context.arc(landmarks[i].x*width, landmarks[i].y*height, (marked?2.4:1.3)*scale, 0, Math.PI*2);
-      context.fillStyle=marked?ACTIVE:PLAIN;
-      context.globalAlpha=marked?1:0.65;
-      context.fill();
-    }
-    context.globalAlpha=1;
-  }
-
   if(points&&labelSize>0){
     const size=labelSize*scale;
     context.font=`${size}px ui-monospace,Consolas,monospace`;
@@ -129,6 +114,23 @@ export function renderDebug(context, landmarks, options={}) {
       context.fillText(label, size*0.35, -size*0.45);
       context.restore();
     }
+  }
+
+  // Dots last, over every label: where a landmark is matters more than its number,
+  // and in dense places (the nose, the lips) neighbouring labels would hide it.
+  let count=0;
+  if(points){
+    for(let i=0;i<landmarks.length;i++){
+      if(!shown(i))continue;
+      count++;
+      const marked=lit(i);
+      context.beginPath();
+      context.arc(landmarks[i].x*width, landmarks[i].y*height, (marked?2.4:1.3)*scale, 0, Math.PI*2);
+      context.fillStyle=marked?ACTIVE:PLAIN;
+      context.globalAlpha=marked?1:0.65;
+      context.fill();
+    }
+    context.globalAlpha=1;
   }
 
   if(find!==null&&find>=0&&find<landmarks.length){

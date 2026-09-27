@@ -9,12 +9,11 @@ self.rojaFaceCore=function(Vision,base){
   const {FaceLandmarker,FilesetResolver}=Vision;
   const here=p=>new URL(p,base).href;
   const pairs=list=>(list||[]).map(c=>[c.start,c.end]);
-  let detector=null;
+  let detector=null,files=null,delegate='CPU',gpuError='';
 
-  async function init(){
-    const files=await FilesetResolver.forVisionTasks(here('vendor/wasm'));
-    detector=await FaceLandmarker.createFromOptions(files,{
-      baseOptions:{modelAssetPath:here('vendor/face_landmarker.task'),delegate:'CPU'},
+  function create(kind){
+    return FaceLandmarker.createFromOptions(files,{
+      baseOptions:{modelAssetPath:here('vendor/face_landmarker.task'),delegate:kind},
       runningMode:'VIDEO',numFaces:1,
       minFaceDetectionConfidence:.55,minTrackingConfidence:.55,
       // Head pose feeds the "face the camera" hint and the debug readout; the
@@ -22,8 +21,37 @@ self.rojaFaceCore=function(Vision,base){
       outputFacialTransformationMatrixes:true,
       outputFaceBlendshapes:true
     });
+  }
+  // A GPU the browser only emulates in software (SwiftShader, llvmpipe) runs the model
+  // far slower than the CPU does.
+  function softwareGL(){
+    try{
+      const c=typeof OffscreenCanvas!=='undefined'?new OffscreenCanvas(1,1):document.createElement('canvas');
+      const gl=c.getContext('webgl2');
+      if(!gl)return true;
+      const info=gl.getExtension('WEBGL_debug_renderer_info');
+      const name=String(gl.getParameter(info?info.UNMASKED_RENDERER_WEBGL:gl.RENDERER)||'');
+      gl.getExtension('WEBGL_lose_context')?.loseContext();
+      return /swiftshader|llvmpipe|softpipe|software|basic render/i.test(name)?name:false;
+    }catch{return true;}
+  }
+  // On the GPU the model runs several times faster than on the CPU. Where the GPU
+  // cannot run it (no WebGL2 here, a driver MediaPipe rejects, a software GPU), the
+  // CPU does. 'GPU!' insists on the GPU even so (the test harness uses it).
+  async function init(prefer='CPU'){
+    files=files||await FilesetResolver.forVisionTasks(here('vendor/wasm'));
+    detector?.close();detector=null;
+    if(prefer==='GPU'){
+      const soft=softwareGL();
+      if(soft){gpuError=soft===true?'no WebGL2':`software GPU (${soft})`;prefer='CPU';}
+    }
+    if(prefer==='GPU'||prefer==='GPU!'){
+      try{detector=await create('GPU');delegate='GPU';}
+      catch(e){gpuError=String(e&&e.message||e);}
+    }
+    if(!detector){detector=await create('CPU');delegate='CPU';}
     // The mesh topology for the debug overlay.
-    return {
+    return {delegate,gpuError,
       tesselation:pairs(FaceLandmarker.FACE_LANDMARKS_TESSELATION),
       contours:{
         oval:pairs(FaceLandmarker.FACE_LANDMARKS_FACE_OVAL),
@@ -41,7 +69,7 @@ self.rojaFaceCore=function(Vision,base){
   // leave this function; the pixels do not.
   const SKIN_PATCHES=[50,280,101,330,151,199,205,425];
   function sampleSkin(frame,landmarks){
-    const w=frame.width,h=frame.height;
+    const w=frame.displayWidth||frame.width,h=frame.displayHeight||frame.height;
     let ctx;
     if(typeof ImageData!=='undefined'&&frame instanceof ImageData){
       ctx={getImageData:(x,y,cw,ch)=>{
@@ -76,11 +104,12 @@ self.rojaFaceCore=function(Vision,base){
     return {rgb:[median(0),median(1),median(2)],patches:found.length};
   }
 
-  // One frame (an ImageBitmap or ImageData) in, one result message out.
+  // One frame (a VideoFrame, an ImageBitmap or ImageData) in, one result message out.
   function handle({frame,timestamp,extras,sample}){
+    const start=performance.now();
     const result=detector.detectForVideo(frame,timestamp);
     const landmarks=result.faceLandmarks[0]||null;
-    const message={type:'result',landmarks};
+    const message={type:'result',landmarks,ms:performance.now()-start,delegate};
     if(landmarks){
       const matrix=result.facialTransformationMatrixes?.[0];
       if(matrix)message.matrix=Array.from(matrix.data);
@@ -91,5 +120,5 @@ self.rojaFaceCore=function(Vision,base){
     return message;
   }
 
-  return {init,handle,close(){try{detector?.close();}catch{}}};
+  return {init,handle,get delegate(){return delegate;},close(){try{detector?.close();}catch{}}};
 };

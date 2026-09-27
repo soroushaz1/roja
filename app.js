@@ -1,5 +1,5 @@
 import {products,categories,finishes,looks,byProduct} from './catalog.js?v=15';
-import {layerSpecs,createMaskPainter,renderFallback,smoothLandmarks,landmarksByType,frameLandmarks,hexToRgb} from './makeup.js?v=15';
+import {layerSpecs,createMaskPainter,renderFallback,createSmoother,landmarksByType,frameLandmarks,hexToRgb} from './makeup.js?v=15';
 import {createStage,layerModes} from './stage.js?v=15';
 import {controls,regions,controlLandmarks,controlRange,deformers,textureLayers} from './deform.js?v=15';
 import {procedures,byId,amountsFor,resolve,kinds} from './procedures.js?v=15';
@@ -83,7 +83,7 @@ const debug={on:false,points:true,mesh:false,contours:false,axes:false,masks:fal
   labelSize:10,highlight:true,onlyActive:false,find:null,hud:false,inspect:false};
 let topology=null, maskView=null;
 const maskTint=document.createElement('canvas');
-const perf={frames:0,fps:0,since:0,detections:0,hz:0,latency:0,lastHud:0,maskMs:0,drawMs:0,lastError:'',trackerNote:''};
+const perf={frames:0,fps:0,since:0,draws:0,drawn:0,detections:0,hz:0,latency:0,inferMs:0,lastHud:0,maskMs:0,drawMs:0,lastError:'',trackerNote:''};
 const ema=(old,v)=>old?old*.85+v*.15:v;
 let finder={state:'idle',samples:[],tries:0,result:null};
 let wantSkin=false;
@@ -639,14 +639,17 @@ function draw(now=performance.now()){
     if(debug.on&&debug.masks&&landmarks&&(dirty||masksDirty))paintMaskView(p);
     if(masksDirty){const t=performance.now();rebuildMasks(p);perf.maskMs=ema(perf.maskMs,performance.now()-t);}
     const t=performance.now();
+    const sync=source.kind==='camera'&&syncing();
     const ok=gl.draw({
-      source:source.el,width:w,height:h,version:source.version,live:source.live,landmarks,
+      source:sync?shown:source.el,width:w,height:h,
+      version:sync?`s${shownVersion}`:source.version,live:source.live&&!sync,landmarks,
       after:{layers:[...p.after.map(s=>stageLayer(s,face)),...p.textures.map(t=>textureLayer(t,face))],amounts:p.amounts},
       before:p.before?{layers:p.before.map(s=>stageLayer(s,face)),amounts:null}:null,
       seam:seamOn?1-seam:null,grade:lights.find(l=>l.id===light).grade,
       probes:landmarks?probes():null,time:now/1000
     });
-    perf.drawMs=ema(perf.drawMs,performance.now()-t);
+    perf.drawMs=ema(perf.drawMs,performance.now()-t);perf.draws++;
+    if(!ok&&sync){stepBroken=true;perf.lastError='in step: the frame could not be drawn';dirty=true;return;}
     if(ok){
       // The canvas covers the video exactly. The video stays visible underneath: iOS
       // pauses a muted video it thinks is hidden, which froze the camera on its first
@@ -751,8 +754,10 @@ function debugStats(){
     ['مسیر نمایش',stage?'WebGL':stageBroken?'2D canvas':'—'],
     ['منبع',source?(source.kind==='photo'?'photo':frozen?'camera (frozen)':'camera'):'—'],
     ['فریم',source?`${w}×${h}`:'—'],
-    ['نمایش',`${perf.fps} fps`],
-    ['ردیابی',`${perf.hz} Hz · ${Math.round(perf.latency)} ms · ${tracker?(tracker.kind==='worker'?'worker':'main thread'):trackerStarting?'starting':'—'}`],
+    ['نمایش',`${perf.drawn} fps (حلقه ${perf.fps})`],
+    ['ردیابی',`${perf.hz} Hz · ${Math.round(perf.latency)} ms · ${tracker?(tracker.kind==='worker'?'worker':'main thread'):trackerStarting?'starting':'—'}${delegate?' · '+delegate:''}`],
+    ['مدل',`${perf.inferMs.toFixed(1)} ms هر فریم${gpuError?' · GPU: '+gpuError.slice(0,60):''}`],
+    ['هماهنگی',source?.kind==='camera'?(syncing()?'فریم و نقاط هم‌زمان':'تصویر زنده'):'—'],
     ['هزینهٔ هر فریم',`masks ${perf.maskMs.toFixed(1)} ms · draw ${perf.drawMs.toFixed(1)} ms`],
     ['نقاط',landmarks?String(landmarks.length):'0'],
     ['پهنای صورت',landmarks?`${Math.round(faceWidthPx())} px`:'—'],
@@ -766,7 +771,13 @@ function debugStats(){
 }
 function updateHud(now){
   perf.frames++;
-  if(now-perf.since>=1000){perf.fps=Math.round(perf.frames*1000/(now-perf.since));perf.hz=Math.round(perf.detections*1000/(now-perf.since));perf.frames=0;perf.detections=0;perf.since=now;}
+  if(now-perf.since>=1000){
+    const k=1000/(now-perf.since);
+    perf.fps=Math.round(perf.frames*k);perf.hz=Math.round(perf.detections*k);perf.drawn=Math.round(perf.draws*k);
+    perf.frames=0;perf.detections=0;perf.draws=0;perf.since=now;
+    // In step from 16 tracked frames a second, back to live below 12.
+    inStep=source?.kind==='camera'&&(alwaysInStep||(inStep?perf.hz>=12:perf.hz>=16));
+  }
   if(!debug.on&&!$('debug-panel').open)return;
   if(now-perf.lastHud<250)return;
   perf.lastHud=now;
@@ -796,6 +807,39 @@ let stream=null,tracker=null,trackerStarting=false,trackerGeneration=0,ready=fal
 let generation=0,raf=0,lastSent=0,sentAt=0,sentGen=-1,initTimer;
 let photoPasses=0,sourceVersion=0;
 const PHOTO_PASSES=8;
+const smoother=createSmoother();
+// The model on the GPU, off iPhones (where MediaPipe's GPU path is not dependable in
+// WebKit); the tracker falls back to the CPU by itself if the GPU fails. ?gpu=0 keeps
+// it on the CPU, ?gpu=force insists on the GPU, for comparing the two.
+const params=new URLSearchParams(location.search),gpuParam=params.get('gpu');
+// ?sync=always shows frames in step whatever the tracker's pace (for testing).
+const alwaysInStep=params.get('sync')==='always';
+const gpuQuery=gpuParam==='0'?'':gpuParam==='force'?'&gpu=force':iOS?'':'&gpu=1';
+let delegate='', gpuError='';
+// The fast path: a camera frame goes to the worker as a VideoFrame, with no copy.
+let fastFrames=!iOS&&typeof VideoFrame==='function';
+// Either way a copy of the frame sent is kept, and when its landmarks come back that
+// very frame is shown with them: the makeup sits exactly on the face in the picture
+// instead of trailing the live video by one tracking round-trip. The picture then
+// moves at the tracker's pace, so this is done only while the tracker keeps up;
+// below that, the live video with the latest landmarks looks better.
+let inFlight=null, shown=null, shownAt=0, shownVersion=0, inStep=false;
+// A camera frame that has not been measured yet (requestVideoFrameCallback), so the
+// model never runs twice on the same picture.
+let freshFrame=false, watching=0;
+function watchFrames(){
+  if(!video.requestVideoFrameCallback)return;
+  const token=++watching;
+  const tick=()=>{if(token!==watching||source?.kind!=='camera')return;freshFrame=true;video.requestVideoFrameCallback(tick);};
+  video.requestVideoFrameCallback(tick);
+}
+function dropFrames(){
+  inFlight?.close();inFlight=null;
+  shown?.close();shown=null;
+}
+// A WebGL that cannot take the kept frame as a texture turns showing in step off.
+let stepBroken=false;
+const syncing=()=>inStep&&!stepBroken&&!!shown&&performance.now()-shownAt<400;
 
 // The tracker runs in a worker. Where a worker cannot start MediaPipe (iPhones before
 // iOS 17 have no WebGL inside workers) the same code runs on the page instead: a
@@ -803,12 +847,18 @@ const PHOTO_PASSES=8;
 function onTracker(d){
   if(d.type==='ready'){
     clearTimeout(initTimer);ready=true;topology=d.topology;
+    delegate=d.delegate||'CPU';if(d.gpuError)gpuError=d.gpuError;
+    if(delegate!=='GPU')fastFrames=false;
     if(source){status(statusText());enableTools(true);}
+  }else if(d.type==='skip'){
+    busy=false;inFlight?.close();inFlight=null;
   }else if(d.type==='result'){
     busy=false;
-    if(sentGen!==generation||!source)return;
-    perf.detections++;perf.latency=performance.now()-sentAt;
-    landmarks=smoothLandmarks(landmarks,d.landmarks);
+    const frame=inFlight;inFlight=null;
+    if(sentGen!==generation||!source){frame?.close();return;}
+    perf.detections++;perf.latency=performance.now()-sentAt;perf.inferMs=ema(perf.inferMs,d.ms||0);
+    if(frame){shown?.close();shown=frame;shownAt=performance.now();shownVersion++;}
+    landmarks=smoother.smooth(d.landmarks,sentAt);
     if(source.kind==='photo')photoPasses++;
     poseAngles=d.landmarks?poseOf(d.matrix):null;
     if(d.blendshapes)blendshapes=d.blendshapes;
@@ -818,8 +868,9 @@ function onTracker(d){
     status(landmarks||source.kind==='photo'?statusText():'صورت پیدا نشد. کمی روبه‌روی دوربین و در نور بیشتر قرار بگیر.');
     invalidate({measure:true});
   }else if(d.type==='error'){
-    busy=false;
+    busy=false;inFlight?.close();inFlight=null;
     perf.lastError=`${d.stage||'tracker'}: ${d.message||''}`;
+    if(d.recoverable){gpuError=d.message;fastFrames=false;return;}
     if(!ready&&tracker?.kind==='worker')useTracker('page',d.message);
     else shutdown('آینه روی این مرورگر آماده نشد. آخرین نسخهٔ مرورگر را امتحان کن.'+code({message:d.message}));
   }
@@ -827,7 +878,7 @@ function onTracker(d){
 function ensureTracker(){
   if(tracker||trackerStarting)return;
   let w=null;
-  try{w=new Worker(new URL('face-worker.js?v=15',import.meta.url));}catch(e){perf.lastError=`worker: ${e.message}`;}
+  try{w=new Worker(new URL(`face-worker.js?v=15${gpuQuery}`,import.meta.url));}catch(e){perf.lastError=`worker: ${e.message}`;}
   if(!w){useTracker('page','no worker');return;}
   ready=false;busy=false;
   tracker={kind:'worker',post:(m,transfer)=>w.postMessage(m,transfer),close:()=>w.terminate()};
@@ -858,7 +909,7 @@ async function useTracker(kind,reason){
       onTracker(out);
     },0),close:()=>core.close()};
     trackerStarting=false;
-    onTracker({type:'ready',topology:found});
+    onTracker({type:'ready',topology:found,delegate:found.delegate});
   }catch(e){
     trackerStarting=false;
     if(token===trackerGeneration)shutdown('آینه روی این مرورگر آماده نشد. آخرین نسخهٔ Safari یا Chrome را امتحان کن.'+code(e));
@@ -888,7 +939,7 @@ function goLive(){
 }
 
 function stop(message='دوربین خاموش شد.'){
-  generation++;activeSource=false;busy=false;
+  generation++;activeSource=false;busy=false;watching++;dropFrames();smoother.reset();
   cancelAnimationFrame(raf);
   if(stream)stream.getTracks().forEach(t=>t.stop());
   stream=null;video.srcObject=null;
@@ -922,7 +973,7 @@ async function start(){
   status('اجازهٔ دوربین را در مرورگر تأیید کن.');
   try{
     if(!window.isSecureContext||!navigator.mediaDevices?.getUserMedia)throw new Error('UNSUPPORTED');
-    const acquired=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:'user',width:{ideal:640},height:{ideal:480},frameRate:{ideal:24,max:30}}});
+    const acquired=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:'user',width:{ideal:640},height:{ideal:480},frameRate:{ideal:30,max:30}}});
     if(token!==generation){acquired.getTracks().forEach(t=>t.stop());return;}
     stream=acquired;video.srcObject=stream;
     const playing=await video.play().then(()=>true,()=>false);
@@ -930,6 +981,7 @@ async function start(){
     if(token!==generation)return;
     if(!video.videoWidth||!video.videoHeight)throw Object.assign(new Error('the camera sent no picture'),{name:'NoVideo'});
     source={kind:'camera',el:video,width:video.videoWidth,height:video.videoHeight,live:true,version:++sourceVersion};
+    freshFrame=true;watchFrames();
     status(ready?'صورتت را روبه‌روی دوربین نگه دار.':'آماده‌سازی آینه. بار اول ممکن است کمی طول بکشد.');
     goLive();
     if(!playing)$('tap-start').hidden=false;
@@ -1002,7 +1054,9 @@ function frame(now){
   if(!source)return;
   raf=requestAnimationFrame(frame);
   detect(now);
-  if(source.live||dirty||masksDirty||hasShimmer())draw(now);
+  // In step with the tracker, a frame is drawn when its landmarks arrive (which marks
+  // the mirror dirty), not on every display refresh.
+  if((source.live&&!syncing())||dirty||masksDirty||hasShimmer())draw(now);
   drawDebug();
   renderMeasure(now);
   updateHud(now);
@@ -1011,31 +1065,49 @@ function hasShimmer(){return plan().after.some(s=>(FINISH[s.finish]?.shimmer||0)
 function detect(now){
   if(!ready||busy||!tracker||!source)return;
   if(source.kind==='camera'){
-    if(frozen&&landmarks&&!wantSkin)return;
-    // On the page itself, a little less often, so the interface stays responsive.
-    if(now-lastSent<(tracker.kind==='page'?110:60)||video.readyState<2)return;
+    if(video.readyState<2)return;
+    if(frozen){
+      if(landmarks&&!wantSkin)return;
+      if(now-lastSent<100)return;
+    }else{
+      // Each camera frame once, as soon as the last one is measured. Without
+      // requestVideoFrameCallback, at the camera's pace at most.
+      if(!video.requestVideoFrameCallback)freshFrame=now-lastSent>=30;
+      if(!freshFrame)return;
+      // On the page itself a little less often, so the interface stays responsive.
+      if(tracker.kind==='page'&&now-lastSent<80)return;
+    }
   }else{
     if(photoPasses>=PHOTO_PASSES&&!wantSkin)return;
     if(now-lastSent<30)return;
   }
-  busy=true;lastSent=now;sentAt=performance.now();sentGen=generation;
+  busy=true;freshFrame=false;lastSent=now;sentAt=performance.now();sentGen=generation;
   const token=generation;
-  grabFrame().then(({frame,transfer})=>{
-    if(token!==generation||!tracker){frame.close?.();busy=false;return;}
-    tracker.post({type:'frame',frame,timestamp:now,extras:debug.on||$('debug-panel').open,sample:wantSkin},transfer);
+  grabFrame().then(({frame,transfer,keep})=>{
+    if(token!==generation||!tracker){frame.close?.();keep?.close();busy=false;return;}
+    inFlight?.close();inFlight=keep||null;
+    tracker.post({type:'frame',frame,timestamp:sentAt,extras:debug.on||$('debug-panel').open,sample:wantSkin},transfer);
   }).catch(e=>{busy=false;perf.lastError=`frame: ${e?.message||e}`;
     if(token===generation)stop('پردازش تصویر روی این مرورگر انجام نشد. مرورگر دیگری را امتحان کن.'+code(e));});
 }
-// The frame the tracker measures, 480 px wide. Drawing the video into a 2D canvas works
+// The frame the tracker measures, at most 640 px wide. Drawing the video into a 2D canvas works
 // the same everywhere; createImageBitmap straight from a camera video, with resizing,
 // does not (WebKit on iPhone was the trouble). No createImageBitmap at all: ImageData.
 const frameCanvas=document.createElement('canvas');
 function grabFrame(){
-  const w=480,h=Math.max(1,Math.round(480*source.height/source.width));
+  if(fastFrames&&source.kind==='camera'&&tracker.kind==='worker'&&!frozen){
+    try{
+      const frame=new VideoFrame(video,{timestamp:Math.round(sentAt*1000)});
+      return Promise.resolve({frame,transfer:[frame],keep:frame.clone()});
+    }catch(e){fastFrames=false;perf.lastError=`VideoFrame: ${e?.message||e}`;}
+  }
+  const scale=Math.min(1,640/source.width);
+  const w=Math.max(1,Math.round(source.width*scale)),h=Math.max(1,Math.round(source.height*scale));
   if(frameCanvas.width!==w||frameCanvas.height!==h){frameCanvas.width=w;frameCanvas.height=h;}
   const x=frameCanvas.getContext('2d',{willReadFrequently:!window.createImageBitmap});
   x.drawImage(source.el,0,0,w,h);
-  if(window.createImageBitmap)return createImageBitmap(frameCanvas).then(frame=>({frame,transfer:[frame]}));
+  if(window.createImageBitmap)return Promise.all([createImageBitmap(frameCanvas),
+    source.kind==='camera'&&!frozen?createImageBitmap(frameCanvas):null]).then(([frame,keep])=>({frame,transfer:[frame],keep}));
   const frame=x.getImageData(0,0,w,h);
   return Promise.resolve({frame,transfer:[frame.data.buffer]});
 }

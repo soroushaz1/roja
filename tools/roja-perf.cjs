@@ -26,7 +26,7 @@ const fixture='data:image/png;base64,'+fs.readFileSync(path.join(__dirname,'face
       draw();setInterval(draw,33);return c.captureStream(30);
     }});
   },{data:fixture});
-  await page.goto(origin+'/index.html');
+  await page.goto(origin+'/index.html'+(process.env.ROJA_QUERY||''));
   await page.locator('#start').click();
   await page.waitForFunction(()=>document.querySelector('#guide').hidden&&!document.querySelector('#stage').hidden,null,{timeout:120000});
   await page.evaluate(()=>{document.querySelector('#debug-panel').open=true;});

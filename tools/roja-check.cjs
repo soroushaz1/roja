@@ -795,6 +795,39 @@ const LIPS=[61,0,291,17,40,270,91,321];
       await phone.close();
     }
 
+    /* ---- the fast path, and frames in step ---- */
+    // The model on the GPU, camera frames handed over as VideoFrames, and each frame
+    // shown with its own landmarks; then the same showing-in-step on the CPU route
+    // iPhones take, where the frame kept is an ImageBitmap. This browser only emulates
+    // a GPU, so the tracker would rightly choose the CPU: ?gpu=force makes it take the
+    // GPU anyway, and ?sync=always shows frames in step although the tracker here is
+    // too slow for that to be chosen. What is checked is that both work.
+    report.inStep={};
+    for(const [name,query,engine] of [['gpu','?gpu=force&sync=always','GPU'],['cpu','?gpu=0&sync=always','CPU']]){
+      const fast=await browser.newPage({viewport:{width:1280,height:800}});
+      const fastErrors=[];fast.on('pageerror',e=>fastErrors.push(e.message));
+      await fast.addInitScript(fakeCamera,{data:fixture});
+      await fast.goto(origin+'/index.html'+query,{waitUntil:'domcontentloaded',timeout:60000});
+      await fast.locator('#start').click();
+      await fast.waitForFunction(()=>document.querySelector('#guide').hidden&&!document.querySelector('#stage').hidden,null,{timeout:180000});
+      await fast.evaluate(()=>document.querySelector('#debug-panel').open=true);
+      await fast.waitForTimeout(1800);
+      const stats=await fast.locator('#debug-stats').textContent();
+      assert(stats.includes(engine),`${name}: the model is not on the ${engine}: ${stats}`);
+      assert(stats.includes('فریم و نقاط هم‌زمان'),`${name}: frames are not shown with their own landmarks: ${stats}`);
+      // With nothing on, the shown frame is the camera's picture.
+      await fast.locator('#clear-look').click();await fast.waitForTimeout(1200);
+      const plain=await fast.evaluate(probe,{GX,GY});
+      assert(plain.diff<.5,`${name}: the frame shown differs from the camera by ${plain.diff.toFixed(2)}`);
+      await fast.locator('#shades .shade').nth(7).click();
+      await fast.waitForTimeout(1500);
+      const cells=changed(null,await fast.evaluate(probe,{GX,GY}),1).count;
+      assert(cells>0,`${name}: no makeup with frames in step`);
+      assert.deepEqual(fastErrors,[],`${name}: page errors with frames in step`);
+      report.inStep[name]={makeupCells:cells,plainDiff:+plain.diff.toFixed(3)};
+      await fast.close();
+    }
+
     report.errors=[];
     console.log(JSON.stringify(report,null,1));
   }finally{await browser.close();}
