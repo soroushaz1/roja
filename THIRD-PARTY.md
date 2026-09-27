@@ -13,7 +13,8 @@ fetched from a third-party CDN.
 - Privacy notice: https://goo.gle/mediapipe-privacy
 
 The ES-module WebAssembly variant and the source maps that ship with the package were
-removed; this app loads the classic-worker runtime only.
+removed; this app loads the classic runtime, in a worker or, where a worker cannot run it,
+on the page through `vision_bundle.mjs`.
 
 ## Estedad — `fonts/`
 

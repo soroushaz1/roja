@@ -6,6 +6,8 @@
 // three landmarks around it by barycentric weights, so a stroke keeps its place on the
 // skin when the head turns, the mouth opens or the camera moves closer.
 
+import {blurInto} from './blur.js?v=14';
+
 export const brushModes=[
   {id:'blend',  name:'پخش‌کن',   help:'رنگ را زیر براش نرم و پخش می‌کند، مثل براش ترکیب.',strength:60},
   {id:'fade',   name:'محوکن',    help:'هر بار کشیدن، کمی از رنگ را کم می‌کند.',strength:35},
@@ -67,27 +69,38 @@ export function createBrush(){
   }
 
   // A whole stroke is one path, so overlapping points inside it never add up: one
-  // pass of «محوکن» at 35% takes away 35%, however slowly the pointer moved.
+  // pass of «محوکن» at 35% takes away 35%, however slowly the pointer moved. It is
+  // drawn sharp on a scratch canvas, then softened onto the map at the stroke's strength.
+  const scratch=document.createElement('canvas');
   function drawStroke(ctx,stroke,lm,W,H,operation){
     const radius=stroke.size*faceWidth(lm,W,H);
     const pts=stroke.points.map(a=>locate(lm,W,H,a));
-    ctx.save();
-    ctx.globalCompositeOperation=operation;
-    ctx.shadowColor=`rgba(255,255,255,${stroke.strength})`;
-    ctx.shadowBlur=radius*.9;ctx.shadowOffsetX=W*2;
-    ctx.translate(-W*2,0);
-    ctx.fillStyle=ctx.strokeStyle='#fff';
+    if(scratch.width!==W||scratch.height!==H){scratch.width=W;scratch.height=H;}
+    const pad=radius*2+4;
+    let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;
+    for(const q of pts){x0=Math.min(x0,q.x);y0=Math.min(y0,q.y);x1=Math.max(x1,q.x);y1=Math.max(y1,q.y);}
+    x0=Math.max(0,Math.floor(x0-pad));y0=Math.max(0,Math.floor(y0-pad));
+    x1=Math.min(W,Math.ceil(x1+pad));y1=Math.min(H,Math.ceil(y1+pad));
+    if(x1<=x0||y1<=y0)return;
+    const box={x:x0,y:y0,w:x1-x0,h:y1-y0};
+    const s=scratch.getContext('2d');
+    s.clearRect(box.x,box.y,box.w,box.h);
+    s.fillStyle=s.strokeStyle='#fff';
     if(pts.length===1){
-      ctx.beginPath();ctx.arc(pts[0].x,pts[0].y,radius*.6,0,Math.PI*2);ctx.fill();
+      s.beginPath();s.arc(pts[0].x,pts[0].y,radius*.6,0,Math.PI*2);s.fill();
     }else{
-      ctx.lineWidth=radius*1.2;ctx.lineCap='round';ctx.lineJoin='round';
-      ctx.beginPath();ctx.moveTo(pts[0].x,pts[0].y);
+      s.lineWidth=radius*1.2;s.lineCap='round';s.lineJoin='round';
+      s.beginPath();s.moveTo(pts[0].x,pts[0].y);
       for(let i=1;i<pts.length-1;i++){
         const mx=(pts[i].x+pts[i+1].x)/2,my=(pts[i].y+pts[i+1].y)/2;
-        ctx.quadraticCurveTo(pts[i].x,pts[i].y,mx,my);
+        s.quadraticCurveTo(pts[i].x,pts[i].y,mx,my);
       }
-      const last=pts[pts.length-1];ctx.lineTo(last.x,last.y);ctx.stroke();
+      const last=pts[pts.length-1];s.lineTo(last.x,last.y);s.stroke();
     }
+    ctx.save();
+    ctx.globalCompositeOperation=operation;
+    ctx.globalAlpha=stroke.strength;
+    blurInto(ctx,scratch,box,radius*.45);
     ctx.restore();
   }
 

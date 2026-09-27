@@ -122,7 +122,7 @@ select{
 .topbar{
   display:flex;align-items:center;justify-content:space-between;gap:16px;
   padding:10px 20px;border-bottom:1px solid var(--line-soft);
-  background:#140C11CC;backdrop-filter:blur(10px);position:relative;z-index:5;
+  background:#140C11CC;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);position:relative;z-index:5;
 }
 /* Clicking the mark reloads the page, so it is a real link: keyboard, middle-click
    and open-in-new-tab all keep working. */
@@ -192,6 +192,8 @@ select{
 @keyframes turn{to{transform:rotate(1turn)}}
 
 .guide{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;z-index:1}
+.tap-start{position:absolute;left:50%;bottom:18px;translate:-50% 0;z-index:5;padding:11px 18px;border-radius:999px;
+  background:linear-gradient(135deg,#F2729A,var(--rose-2));color:#2A0E1A;font-weight:800;box-shadow:0 8px 22px -8px #EC5A84}
 .guide i{width:min(38%,240px);aspect-ratio:3/4;border-radius:50%;border:2px dashed #FFFFFF55;box-shadow:0 0 0 2000px #0000002A;
   animation:breathe 2.4s ease-in-out infinite}
 @keyframes breathe{50%{border-color:#EC5A84AA;transform:scale(1.02)}}
@@ -199,7 +201,7 @@ select{
 .badge{
   position:absolute;top:12px;inset-inline-start:12px;z-index:3;
   background:#140C11D9;border:1px solid var(--line);color:var(--muted);
-  padding:5px 11px;border-radius:999px;font-size:12px;pointer-events:none;backdrop-filter:blur(6px);
+  padding:5px 11px;border-radius:999px;font-size:12px;pointer-events:none;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);
 }
 .badge b{color:var(--text);font-weight:600}
 
@@ -230,7 +232,7 @@ select{
 .toolbar{
   position:absolute;top:12px;inset-inline-end:12px;z-index:5;
   display:flex;flex-direction:column;gap:4px;padding:5px;
-  background:#140C11B3;border:1px solid #FFFFFF14;border-radius:14px;backdrop-filter:blur(10px);
+  background:#140C11B3;border:1px solid #FFFFFF14;border-radius:14px;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
   max-height:calc(100% - 24px);overflow-y:auto;scrollbar-width:none;
 }
 .toolbar::-webkit-scrollbar{display:none}
@@ -413,7 +415,7 @@ dialog{
   max-height:calc(100dvh - 40px);
 }
 #gallery{max-width:880px}
-dialog::backdrop{background:#0B0709CC;backdrop-filter:blur(4px)}
+dialog::backdrop{background:#0B0709CC;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
 .dialog-head{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:12px}
 .cart-row{display:flex;align-items:center;gap:11px;padding:10px 0;border-top:1px solid var(--line-soft)}
 .cart-row p{flex:1;margin:0;font-size:13.5px;line-height:1.6}

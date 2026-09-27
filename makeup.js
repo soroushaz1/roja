@@ -3,7 +3,8 @@
 // The WebGL stage (stage.js) uploads each mask and decides how the colour meets the
 // skin. Without WebGL, renderFallback() paints the same masks in flat colour on the 2D
 // overlay, so makeup still works on a device that cannot run the stage.
-import {products,layerOrder} from './catalog.js?v=13';
+import {products,layerOrder} from './catalog.js?v=14';
+import {blurInto} from './blur.js?v=14';
 export {products};
 
 // MediaPipe's contours. Eye openings and the mouth opening are never painted.
@@ -348,14 +349,6 @@ const FEATHER={foundation:.06,concealer:.05,contour:.07,blush:.07,highlighter:.0
 function makeCanvas(){return document.createElement('canvas');}
 function fit(canvas,w,h){if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;}}
 
-// Shadow blur is the one blur that works in Safari as well as Chromium. The source is
-// drawn a canvas-width off to the side so only its shadow lands.
-function blurInto(dst,src,box,radius){
-  const W=dst.canvas.width;
-  if(radius<.3){dst.drawImage(src,box.x,box.y,box.w,box.h,box.x,box.y,box.w,box.h);return;}
-  dst.save();dst.shadowColor='#fff';dst.shadowBlur=radius*2;dst.shadowOffsetX=W*2;
-  dst.drawImage(src,box.x,box.y,box.w,box.h,box.x-W*2,box.y,box.w,box.h);dst.restore();
-}
 function boundsOf(points,pad,W,H){
   let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;
   for(const q of points){if(q.x<x0)x0=q.x;if(q.y<y0)y0=q.y;if(q.x>x1)x1=q.x;if(q.y>y1)y1=q.y;}

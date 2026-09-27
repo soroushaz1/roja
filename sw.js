@@ -4,9 +4,10 @@
 //
 // Only this origin's own files are cached, and nothing from the camera ever passes
 // through here: frames never leave the page.
-const CACHE='roja-v13';
-const SHELL=['./','index.html','roja.css?v=13','app.js?v=13','catalog.js?v=13','makeup.js?v=13','stage.js?v=13',
-  'deform.js?v=13','procedures.js?v=13','debug.js?v=13','brush.js?v=13','measure.js?v=13','face-worker.js',
+const CACHE='roja-v14';
+const SHELL=['./','index.html','roja.css?v=14','app.js?v=14','catalog.js?v=14','makeup.js?v=14','stage.js?v=14',
+  'deform.js?v=14','procedures.js?v=14','debug.js?v=14','brush.js?v=14','measure.js?v=14','blur.js?v=14',
+  'face-worker.js?v=14','face-core.js?v=14',
   'fonts/Estedad-var.woff2','favicon.svg','manifest.webmanifest','icons/icon-192.png'];
 
 self.addEventListener('install',event=>{
