@@ -173,7 +173,11 @@ Keyboard: **B** brush, **[ ]** brush size, **Ctrl+Z** undo a stroke, **C** compa
   site's own shaders. The *Android app* workflow builds the
   APK and runs it on an emulator; each tested build of `main` is published as a release, so
   [`releases/latest/download/roja.apk`](https://github.com/soroushaz1/roja/releases/latest/download/roja.apk)
-  always downloads the newest one.
+  always downloads the newest one. The site offers it too: an *Android app* button in the
+  header opens a dialog with that link and, on a computer, a QR code of it to scan with
+  the phone (`icons/app-qr.svg`, made by `tools/app-qr.py`); on an Android phone a line
+  under the start buttons opens the same dialog. It is not offered on an iPhone or inside
+  the app.
 - **Install from the browser** — the site is also an installable web app
   (`manifest.webmanifest`). Once installed, `sw.js` keeps its files, including the face
   model after the first camera use, so it opens offline. The service worker is not
@@ -200,7 +204,10 @@ the mirror and its controls on one screen; that a photo opens the right way roun
 camera session; that a device without WebGL still gets working makeup; and that an
 iPhone-like browser — a worker that cannot run the tracker, a `video.play()` refused until
 a tap — still tracks the face on the page, offers a tap to start the picture, never hides the
-camera video, and shows makeup. Last, it runs the model on the GPU with frames handed over
+camera video, and shows makeup. It checks where the Android app is offered — with the QR
+code on a computer, under the start buttons and fitting the start box on an Android phone,
+nowhere on an iPhone or inside the app — and that the download points at the latest
+release. Last, it runs the model on the GPU with frames handed over
 as `VideoFrame`s, and on the CPU route iPhones take, each with frames shown in step with
 their landmarks: the picture must equal the camera's and makeup must appear. Point it at a
 deployed copy with `ROJA_URL`. Playwright is found through `PLAYWRIGHT_MODULE`, a normal
