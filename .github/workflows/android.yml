@@ -34,9 +34,11 @@ jobs:
           java-version: 17
       - uses: gradle/actions/setup-gradle@v4
 
-      - name: Debug APK
+      # The release build is shrunk by R8, so it is built even without a key to sign it:
+      # a failure shows up here, not first on the day the signing secrets are added.
+      - name: Debug APK, and a check that the release build compiles
         working-directory: android
-        run: ./gradlew --no-daemon assembleDebug
+        run: ./gradlew --no-daemon assembleDebug assembleRelease
 
       - name: Signed release APK and App Bundle
         if: env.HAS_KEYSTORE == 'true'
@@ -57,6 +59,7 @@ jobs:
           path: |
             android/app/build/outputs/apk/**/*.apk
             android/app/build/outputs/bundle/**/*.aab
+            !android/app/build/outputs/apk/**/*-unsigned.apk
           if-no-files-found: error
 
   device:
@@ -98,7 +101,9 @@ jobs:
 
   release:
     name: Publish the APK
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # A push to main, or a run started by hand on main (say, right after adding the
+    # signing secrets).
+    if: github.ref == 'refs/heads/main'
     needs: [apk, device]
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -132,12 +137,14 @@ jobs:
             else
               echo "این نسخه با کلید موقت امضا شده است: اگر نسخهٔ دیگری از رُژا نصب است، اول آن را حذف کن."
             fi
+            subject=${MESSAGE%%$'\n'*}
             echo
-            echo "Built from ${GITHUB_SHA::7}: ${MESSAGE%%$'\n'*}"
+            echo "Built from ${GITHUB_SHA::7}${subject:+: $subject}"
           } > notes.md
           tag="v$VERSION"
           if gh release view "$tag" >/dev/null 2>&1; then
             gh release upload "$tag" roja.apk --clobber
+            gh release edit "$tag" --notes-file notes.md
           else
             gh release create "$tag" roja.apk --target "$GITHUB_SHA" --title "Roja $VERSION" \
               --notes-file notes.md --latest

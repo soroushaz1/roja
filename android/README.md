@@ -64,7 +64,10 @@ then carry the signed release APK instead:
 2. In the repository's *Settings → Secrets and variables → Actions*, add
    `ROJA_KEYSTORE_BASE64` (the output of `base64 -w0 roja.jks`), `ROJA_KEYSTORE_PASSWORD`,
    `ROJA_KEY_ALIAS` (`roja`) and `ROJA_KEY_PASSWORD`.
-3. The next run also produces a signed `app-release.apk` and an `app-release.aab` for Play.
+3. The next run also produces a signed `app-release.apk` and an `app-release.aab` for Play,
+   and the next release carries the signed APK. To publish one straight away, run the
+   workflow by hand on `main` (*Actions → Android app → Run workflow*). Anyone who installed
+   a debug-signed release uninstalls it once; from then on updates install in place.
 
 The application id is `com.roja.mirror`. Change it in `app/build.gradle.kts` before the first
 upload to Google Play if you want another one; after that it cannot change.
