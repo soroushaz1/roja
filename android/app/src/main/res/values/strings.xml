@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">رُژا</string>
+    <string name="camera_denied">اجازهٔ دوربین داده نشد. می‌توانی از تنظیمات برنامه اجازه بدهی یا با یک عکس کار کنی.</string>
+    <string name="saved">ذخیره شد.</string>
+    <string name="save_failed">ذخیره نشد.</string>
+</resources>

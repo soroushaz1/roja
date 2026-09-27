@@ -1,0 +1,93 @@
+# Builds the Android app (android/) and runs it on an emulator.
+#
+# The APK is attached to every run as the "roja-android" artifact. With the signing
+# secrets set (see android/README.md) the run also produces a signed release APK and
+# an App Bundle for Google Play.
+name: Android app
+
+# Every push, on any branch: a pull request from this repository shows the checks
+# of its branch's latest push, and work in progress gets an APK before it is merged.
+on:
+  push:
+  workflow_dispatch:
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    name: Build the APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      HAS_KEYSTORE: ${{ secrets.ROJA_KEYSTORE_BASE64 != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Debug APK
+        working-directory: android
+        run: ./gradlew --no-daemon assembleDebug
+
+      - name: Signed release APK and App Bundle
+        if: env.HAS_KEYSTORE == 'true'
+        working-directory: android
+        env:
+          ROJA_KEYSTORE_BASE64: ${{ secrets.ROJA_KEYSTORE_BASE64 }}
+          ROJA_KEYSTORE_PASSWORD: ${{ secrets.ROJA_KEYSTORE_PASSWORD }}
+          ROJA_KEY_ALIAS: ${{ secrets.ROJA_KEY_ALIAS }}
+          ROJA_KEY_PASSWORD: ${{ secrets.ROJA_KEY_PASSWORD }}
+        run: |
+          echo "$ROJA_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/roja.jks"
+          ROJA_KEYSTORE="$RUNNER_TEMP/roja.jks" ./gradlew --no-daemon assembleRelease bundleRelease
+          rm -f "$RUNNER_TEMP/roja.jks"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: roja-android
+          path: |
+            android/app/build/outputs/apk/**/*.apk
+            android/app/build/outputs/bundle/**/*.aab
+          if-no-files-found: error
+
+  device:
+    name: Run on an Android emulator
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Instrumented tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          # An emulated front and back camera, so the camera test has one to open.
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-front emulated -camera-back emulated
+          disable-animations: true
+          working-directory: android
+          script: ./gradlew --no-daemon connectedDebugAndroidTest
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: device-test-report
+          path: android/app/build/reports/androidTests/
+          if-no-files-found: ignore
