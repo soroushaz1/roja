@@ -79,14 +79,17 @@ class NativeMirror(
     }
     private var feeder: ScheduledFuture<*>? = null
     private var provider: ProcessCameraProvider? = null
-    private var session = 0
+    // Changed on the main thread, read on the worker.
+    @Volatile private var session = 0
 
     private val smoother = Smoother()
     private val pool = ArrayBlockingQueue<MirrorRenderer.Frame>(POOL)
     private var poolBytes = 0
     private var input: Bitmap? = null
     private var lastTime = 0L
-    private var started = false
+    /** The session whose first frame has been announced to the page. */
+    private var startedIn = 0
+    private val started get() = startedIn == session
     private var lastSent = 0L
 
     // Stats for the page's readout.
@@ -104,7 +107,6 @@ class NativeMirror(
     fun start() {
         if (running) return
         running = true
-        started = false
         images = 0
         val token = ++session
         Log.i(TAG, "start (${if (still != null) "still picture" else "camera"})")
@@ -333,6 +335,12 @@ class NativeMirror(
             }
             return
         }
+        // Stopped (and perhaps started again) while this frame was being measured: it
+        // belongs to a session that is over.
+        if (token != session) {
+            pool.offer(frame)
+            return
+        }
         inferMs = inferMs * .85f + (SystemClock.elapsedRealtimeNanos() - begin) / 1e6f * .15f
         tracked++
         val face = result.faceLandmarks().firstOrNull()
@@ -350,8 +358,8 @@ class NativeMirror(
 
         renderer.submit(frame)
         view.requestRender()
-        if (!started) {
-            started = true
+        if (startedIn != token) {
+            startedIn = token
             Log.i(TAG, "first frame: ${w}x$h turned ${frame.rotation}, face ${landmarks != null}, ${inferMs.roundToInt()} ms")
             activity.runOnUiThread { if (token == session) events.onStart(fw, fh) }
         }
