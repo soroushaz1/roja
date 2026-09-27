@@ -11,3 +11,7 @@
 -dontwarn com.google.protobuf.**
 -dontwarn com.google.auto.value.**
 -dontwarn javax.annotation.**
+# AutoValue ships inside MediaPipe with its code generator (javapoet), which refers to
+# javax.lang.model; that only exists in a compiler, and nothing here runs it.
+-dontwarn javax.lang.model.**
+-dontwarn autovalue.shaded.**

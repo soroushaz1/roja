@@ -216,8 +216,10 @@ class NativeMirror(
             repeat(POOL) { pool.offer(MirrorRenderer.Frame(bytes)) }
             poolBytes = bytes
         }
-        // All frames busy: this one is dropped, the next will do.
-        val frame = pool.poll() ?: return null
+        // All frames busy: this one is dropped, the next will do. A frame of the old size
+        // that came back after a change of size is replaced.
+        var frame = pool.poll() ?: return null
+        if (frame.pixels.capacity() != bytes) frame = MirrorRenderer.Frame(bytes)
         frame.width = w
         frame.height = h
         return frame

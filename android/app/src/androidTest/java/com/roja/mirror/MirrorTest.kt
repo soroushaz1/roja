@@ -1,24 +1,35 @@
 package com.roja.mirror
 
 import android.Manifest
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Matrix
 import android.util.Base64
 import android.util.Log
 import androidx.test.ext.junit.rules.ActivityScenarioRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.rule.GrantPermissionRule
+import org.json.JSONArray
+import org.json.JSONObject
+import org.json.JSONTokener
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.io.ByteArrayOutputStream
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import kotlin.math.abs
 
 /**
  * The site as the app carries it, on a real Android WebView: served from the APK with
  * no network permission, the face model loading in its worker, the camera reaching
- * the page through the app, and a photo tracked and drawn on the WebGL stage.
+ * the page through the app, and a photo tracked and drawn on the WebGL stage. Then the
+ * native mirror: the camera running natively, and a face tracked by MediaPipe and drawn
+ * with makeup by the native renderer, the right way up whichever way the sensor sends it.
  */
 @RunWith(AndroidJUnit4::class)
 class MirrorTest {
@@ -48,6 +59,63 @@ class MirrorTest {
     @Before
     fun pageIsUp() = waitFor("document.documentElement.dataset.ready||''", "\"1\"", 90)
 
+    /** A script's result as the value it is (evaluateJavascript hands back JSON). */
+    private fun value(script: String): Any? = JSONTokener(js(script)).nextValue()
+
+    private fun state(): JSONObject = JSONObject(value("JSON.stringify(window.rojaState())") as String)
+
+    /** The test portrait as the camera would send it: turned [degrees] (clockwise), as PNG in base64. */
+    private fun portrait(degrees: Float): String {
+        val bytes = InstrumentationRegistry.getInstrumentation().context.assets.open("face-test.png").use { it.readBytes() }
+        var picture = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+        if (degrees != 0f) picture = Bitmap.createBitmap(picture, 0, 0, picture.width, picture.height, Matrix().apply { postRotate(degrees) }, true)
+        val out = ByteArrayOutputStream()
+        picture.compress(Bitmap.CompressFormat.PNG, 100, out)
+        return Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
+    }
+
+    /** Starts the native mirror on a still picture and waits for the face. */
+    private fun startOnStill(png: String, rotation: Int): JSONObject {
+        js("RojaAndroid.mirrorTestFrames('$png',$rotation);document.querySelector('#start').click();'started'")
+        waitFor("(()=>{const s=window.rojaState();return s.native&&s.face})()", "true", 180)
+        return state()
+    }
+
+    private fun stopMirror() {
+        js("document.querySelector('#stop').click();RojaAndroid.mirrorTestFrames('',0);'stopped'")
+        waitFor("window.rojaState().native", "false", 20)
+    }
+
+    /**
+     * The native renderer's picture, read back, as the mean colour around some landmarks:
+     * [[r, g, b], ...] in the order of [ids].
+     */
+    private fun sample(ids: List<Int>): JSONArray {
+        js("""window.__sample=null;(async()=>{
+            const url=await new Promise(done=>{const was=rojaNative.onSnapshot;
+              rojaNative.onSnapshot=u=>{rojaNative.onSnapshot=was;was(u);done(u);};RojaAndroid.mirrorSnapshot();});
+            const image=new Image();image.src=url;await image.decode();
+            const c=document.createElement('canvas');c.width=image.width;c.height=image.height;
+            const x=c.getContext('2d');x.drawImage(image,0,0);
+            const s=rojaState();
+            window.__sample=JSON.stringify(${ids}.map(i=>{
+              const cx=Math.round(s.points[i][0]*c.width),cy=Math.round(s.points[i][1]*c.height);
+              const d=x.getImageData(cx-2,cy-2,5,5).data;let r=0,g=0,b=0;
+              for(let k=0;k<d.length;k+=4){r+=d[k];g+=d[k+1];b+=d[k+2];}
+              return [r/25,g/25,b/25];}));
+          })();'sampling'""")
+        val until = System.currentTimeMillis() + 30_000
+        while (System.currentTimeMillis() < until) {
+            val got = value("window.__sample")
+            if (got is String) return JSONArray(got)
+            Thread.sleep(200)
+        }
+        throw AssertionError("the native mirror gave no picture")
+    }
+
+    private fun difference(a: JSONArray, b: JSONArray): Double =
+        (0 until 3).sumOf { abs(a.getDouble(it) - b.getDouble(it)) }
+
     @Test
     fun theAppServesTheSite() {
         assertEquals("true", js("!!window.RojaAndroid"))
@@ -73,6 +141,61 @@ class MirrorTest {
             s=>{window.__camera='live '+s.getVideoTracks().length;s.getTracks().forEach(t=>t.stop());},
             e=>{window.__camera='error '+e.name;});'asked'""")
         waitFor("window.__camera", "\"live 1\"", 60)
+    }
+
+    @Test
+    fun theNativeCameraRuns() {
+        assertEquals("true", js("RojaAndroid.nativeMirror()"))
+        js("document.querySelector('#start').click();'started'")
+        // The emulator's camera shows a room, not a face: frames flow and are tracked,
+        // with nothing found.
+        waitFor("window.rojaState().native", "true", 120)
+        waitFor("(window.rojaState().info.hz||0)>0", "true", 30)
+        Log.i("RojaTest", "native camera: " + state().getJSONObject("info"))
+        stopMirror()
+    }
+
+    @Test
+    fun theNativeMirrorDrawsMakeupOnAStill() {
+        val upright = startOnStill(portrait(0f), 0)
+        val points = upright.getJSONArray("points")
+        fun x(i: Int) = points.getJSONArray(i).getDouble(0)
+        fun y(i: Int) = points.getJSONArray(i).getDouble(1)
+        assertTrue("the eyes are not above the nose", y(33) < y(1) && y(263) < y(1))
+        assertTrue("the nose is not above the mouth", y(1) < y(13))
+        assertTrue("the face came out mirrored", x(33) < x(263))
+        // The lipstick that is on at the start colours the lips, and only the lips.
+        val lips = listOf(14, 17)
+        val elsewhere = listOf(234, 50, 1, 10, 152)
+        val withLipstick = sample(lips + elsewhere)
+        js("document.querySelector('#clear-look').click();'cleared'")
+        Thread.sleep(1500)
+        val bare = sample(lips + elsewhere)
+        val lipChange = lips.indices.maxOf { difference(withLipstick.getJSONArray(it), bare.getJSONArray(it)) }
+        assertTrue("the lipstick did not colour the lips ($lipChange)", lipChange > 20)
+        for (k in elsewhere.indices) {
+            val d = difference(withLipstick.getJSONArray(lips.size + k), bare.getJSONArray(lips.size + k))
+            assertTrue("the lipstick changed landmark ${elsewhere[k]} ($d)", d < 6)
+        }
+        stopMirror()
+
+        // The same face as a sensor turned a quarter turn would send it: the landmarks and
+        // the picture must come out the same way up.
+        val turned = startOnStill(portrait(-90f), 90)
+        assertEquals(upright.getInt("width"), turned.getInt("width"))
+        assertEquals(upright.getInt("height"), turned.getInt("height"))
+        val moved = turned.getJSONArray("points")
+        for (i in listOf(1, 33, 263, 13, 152)) {
+            val dx = abs(moved.getJSONArray(i).getDouble(0) - x(i))
+            val dy = abs(moved.getJSONArray(i).getDouble(1) - y(i))
+            assertTrue("landmark $i moved by ($dx, $dy) when the sensor turned", dx < .03 && dy < .03)
+        }
+        val turnedBare = sample(lips + elsewhere)
+        for (k in 0 until lips.size + elsewhere.size) {
+            val d = difference(bare.getJSONArray(k), turnedBare.getJSONArray(k))
+            assertTrue("the turned picture differs at sample $k ($d)", d < 30)
+        }
+        stopMirror()
     }
 
     @Test
