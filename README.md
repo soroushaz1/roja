@@ -1,21 +1,23 @@
 # رُژا · Roja
 
-A live mirror that runs entirely in the browser. Pick a lipstick shade and see it on your
-own face, or pick a cosmetic procedure and see an approximation of the shape change.
+A live mirror that runs entirely in the browser. Try makeup on your own face before you
+buy it — foundation matched to your skin, blush, contour, eyeshadow, liner, mascara,
+brows and lips — then blend, fade or erase it by hand with a brush, compare two shades
+side by side, or pick a cosmetic procedure and see an approximation of the shape change.
 Everything happens on the device: the camera frame becomes a GPU texture and is never
-read back, uploaded or stored, and no asset is fetched from anywhere but this repository.
+uploaded or stored, and no asset is fetched from anywhere but this repository.
 
 **[Open the mirror →](https://YOUR-USERNAME.github.io/roja/)**
 
-> آینه‌ای زنده که کاملاً داخل مرورگر اجرا می‌شود. یک رنگ آرایش را روی صورت خودت امتحان
-> کن، یا نتیجهٔ تقریبی یک عمل زیبایی را ببین. تصویر دوربین روی همان دستگاه پردازش می‌شود
-> و هیچ‌جا فرستاده یا ذخیره نمی‌شود.
+> آینه‌ای زنده که کاملاً داخل مرورگر اجرا می‌شود. آرایش را پیش از خرید روی صورت خودت
+> امتحان کن، با براش پخش یا محوش کن، دو رنگ را کنار هم ببین، یا نتیجهٔ تقریبی یک عمل
+> زیبایی را ببین. تصویر دوربین روی همان دستگاه پردازش می‌شود و هیچ‌جا فرستاده یا ذخیره نمی‌شود.
 
 The interface is in Persian and laid out right-to-left.
 
-| makeup | procedures |
-|---|---|
-| ![Trying a lipstick shade on a live camera feed](screenshots/makeup.png) | ![A rhinoplasty preview with the before/after seam across the face](screenshots/procedures.png) |
+| makeup | procedures | debug |
+|---|---|---|
+| ![A full evening look on a live camera feed](screenshots/makeup.png) | ![A rhinoplasty preview with the before/after seam and the measurements](screenshots/procedures.png) | ![The debug overlay: tracking mesh, contours, the displacement field and live stats](screenshots/debug.png) |
 
 ---
 
@@ -23,42 +25,96 @@ The interface is in Persian and laid out right-to-left.
 
 The procedure view is a **visual simulation of a shape change, nothing more**. It does not
 model swelling, bruising, healing, scarring, skin thickness, or what any particular surgeon
-would actually achieve, and it is not a prediction of a result. Colours are samples on a
-screen, not measured product matches — ambient light, the camera and natural skin tone all
-move what you see. For any medical decision, talk to a qualified doctor.
+would actually achieve, and it is not a prediction of a result. The "lasts" and "recovery"
+notes are general, commonly quoted ranges, not advice. Colours are samples on a screen, not
+measured product matches — ambient light, the camera and natural skin tone all move what
+you see. For any medical decision, talk to a qualified doctor.
 
 ## What is in it
 
-**آرایش — makeup.** Seven products in Roja's own range (76 shades): velvet and matte
-lipsticks, gloss, powder and cream blush, single eyeshadows and four-pan palettes. Colour
-is drawn onto contours the face model reports, with adjustable intensity and edge feather,
-and an option to blend with the skin's own texture.
+**آرایش — makeup.** Sixteen products in Roja's own range (121 shades), grouped as face,
+eyes and lips: matte foundation and a light skin tint, concealer, contour, powder and cream
+blush, highlighter, single eyeshadows and four-pan palettes, liquid liner in four shapes
+(thin, classic, winged, smudged), mascara (lengthening or volumising), brow pencil, lip
+liner, velvet and liquid-matte lipsticks, and gloss that layers over a lipstick. Every
+product has intensity (or coverage) and edge-feather controls, a finish (matte, velvet,
+satin, cream, gloss, shimmer, metallic, dewy) and a sample price.
 
-**عمل‌های زیبایی — procedures.** Eight named procedures, each a set of weights over a
-shared field of localised deformers: rhinoplasty, lip and cheek filler, buccal fat removal,
-jaw contouring, chin implant, eyelid surgery, brow lift. Several can be combined. Drag the
-brass seam across your face to compare before and after.
+- **Brush — پخش‌کن، محوکن، پاک‌کن، بازگردانی.** Paint on the mirror to *blend* colour out
+  softly, *fade* it a little at a time, *erase* it, or *restore* whatever you changed. Each
+  stroke works on all makeup or on the current product only, can be undone, and is pinned
+  to the face rather than the screen, so it stays put when you move. Freeze the camera
+  frame for precise work.
+- **Shade finder.** Reads the colour of your cheeks, forehead and chin for a moment and
+  suggests the nearest foundation, skin tint and concealer shades, with an undertone
+  estimate. Looks that include a skin product use it automatically.
+- **Looks.** Six ready-made combinations (natural, office, evening, smoky, bridal, bold lip)
+  in one tap; each product can then be changed on its own.
+- **Compare.** A seam across the face: with and without makeup, or — after pinning a
+  shade — two shades of the same product side by side.
+- **Lighting preview.** See the look under window daylight, golden-hour sun, office
+  fluorescent light, a warm evening room or a camera flash.
+- **Photos.** Use a photo instead of the camera (pick a file or drop it on the mirror), and
+  take snapshots of the mirror to compare two of them later or save them. Snapshots stay
+  in the page's memory until you save them.
+- **Sample cart** with quantities, prices and a total; "add the whole look" puts every
+  product on the face in the cart. No order is ever placed.
+
+**عمل‌های زیبایی — procedures.** Seventeen procedures in six regions, each a set of weights
+over a shared field of localised deformers: rhinoplasty (natural, semi-fantasy or fantasy),
+lip filler (balanced, upper-lip or full), lip lift, lip-corner lift, cheek filler, buccal fat
+removal, temple filler, jaw contouring (masseter Botox or surgery), chin implant or filler,
+V-line, face lift, eyelid surgery, fox-eye thread or canthoplasty, brow lift, Botox for the
+forehead and crow's feet, under-eye filler and skin resurfacing — the last three change skin
+texture rather than shape. Each shows its kind, how long it typically lasts and its usual
+recovery. Several can be combined, the current makeup can stay on during the preview, and a
+measurements table shows what the preview changed — nose width, lip thickness and ratio,
+eye opening and canthal tilt, jaw and chin width, facial thirds — before and after. Drag the
+brass seam across your face to compare. Twenty-six region controls are available for fine
+tuning.
 
 **حالت دیباگ — debug overlay.** Every landmark the model returns, numbered, with the ones
-driving the current selection picked out in a second colour — the lip contour while a
-lipstick is on, the nose anchors while rhinoplasty is applied. Label size is adjustable and
-the view can be narrowed to just the active points.
+driving the current selection picked out in a second colour. Optional layers: the tracking
+mesh, the named contours, the face-local axes every size is measured in, the makeup masks,
+the displacement field of the procedures and the brush strokes. Find a landmark by number,
+or point at the mirror to inspect the nearest one. Live stats (renderer, frame size, frame
+rate, tracking rate and latency, mask and draw cost, head pose, symmetry, expression
+scores) in the panel or on the mirror, and an export of all of it as JSON.
 
 ## How it works
 
-- **Face tracking** — MediaPipe Face Landmarker, 468 points, running in a Web Worker so the
-  interface never blocks. The model and its WebAssembly runtime are served from this repo.
-- **Makeup** — 2D canvas. Contours are drawn as quadratic mid-point curves so no straight
-  mesh segments show, eye openings are always excluded, and edges are feathered with a
-  shadow pass that works in Safari as well as Chromium.
-- **Procedures** — WebGL. The frame is carried through a 64×48 grid mesh displaced by a sum
-  of smoothstep-falloff deformers anchored on landmarks. Every radius and axis is expressed
-  in a face-local frame, so edits track head tilt, distance and rotation. Displacement
-  decays to zero away from each anchor, so the background is never touched and an all-zero
-  setting is a pixel-exact copy of the camera frame.
-- **Before/after** — one extra `gl.scissor` pass redrawing the untouched mesh on one side.
+- **Face tracking** — MediaPipe Face Landmarker, 478 points with head pose and expression
+  scores, running in a Web Worker so the interface never blocks. The model and its
+  WebAssembly runtime are served from this repo.
+- **Makeup** — each product is a soft mask drawn from the landmarks on a 2D canvas, then a
+  WebGL pass that recolours the camera texture under it. The colour is scaled to the light
+  on the face and modulated by each pixel's brightness relative to the region's mean, so
+  lip creases, shading and skin texture show through it as they do with real product.
+  Finish decides how glints behave: matte flattens them, gloss sharpens them, shimmer
+  scatters specks. Foundation adds edge-preserving smoothing that stays on skin. Broad
+  masks are painted at half resolution and every pass is scissored to its layer, so a full
+  look stays cheap. Without WebGL, the same masks are painted in flat colour on a 2D
+  overlay.
+- **Brush** — every stroke point is stored as barycentric weights over the three landmarks
+  around it, and the strokes are replayed into coverage maps each time the face moves. A
+  stroke is one path, so going over the same spot twice in one stroke does not double it.
+- **Procedures** — the frame is carried through a 64×48 grid mesh displaced by a sum of
+  smoothstep-falloff deformers anchored on landmarks. Every radius and axis is expressed in
+  a face-local frame, so edits track head tilt, distance and rotation. Displacement decays
+  to zero away from each anchor, so the background is never touched and an all-zero
+  setting is a pixel-exact copy of the camera frame. The measurements move the landmarks
+  through the same field.
+- **Before/after** — a second composite drawn through a `gl.scissor` on one side of the
+  seam.
 
 No build step, no framework, no bundler. Plain ES modules served as files.
+
+## Privacy
+
+The camera frame, or the photo you pick, is processed on the device and never sent or
+stored. The only pixels read back are the ones you ask for: a snapshot you take (kept in the
+page until you save it or close the page) and, while the shade finder runs, a few small skin
+patches that the face worker averages into one colour.
 
 ## Running it locally
 
@@ -73,7 +129,10 @@ the browser.
 
 The camera works on `127.0.0.1` and `localhost` because browsers treat them as secure
 contexts. It will **not** work over a plain-HTTP LAN address such as `192.168.x.x` — that
-needs HTTPS.
+needs HTTPS. A photo works anywhere.
+
+Keyboard: **B** brush, **[ ]** brush size, **Ctrl+Z** undo a stroke, **C** compare,
+**F** freeze the frame, **S** snapshot.
 
 ## Tests
 
@@ -82,13 +141,21 @@ node tools/preview.cjs       # in one terminal
 node tools/roja-check.cjs    # in another
 ```
 
-A Playwright run against a simulated camera. It checks that a zero-strength procedure
-reproduces the camera frame pixel-exactly, that every procedure moves pixels in its own
-region and resets cleanly, that the before/after seam sits on the cut it draws, that losing
-the face leaves nothing stale on screen, that the mirror never resizes when the panel's
-content changes, that the phone layout keeps the mirror and its controls on one screen, and
-that a device without WebGL still gets working makeup. Point it at a deployed copy with
-`ROJA_URL`.
+A Playwright run against a simulated camera. It checks that a bare face and a zero-strength
+procedure both reproduce the camera frame pixel-exactly; that every product colours the
+face without touching the eye openings or anything off the face; that a red reads as red and
+the finish and texture controls change the result; that the brush erases, fades, restores
+and blends — and that an erased area follows the face when it moves; both compare modes;
+every look, the shade finder, the lighting preview and snapshots; that every procedure moves
+pixels in its own region and resets cleanly, variants differ and the measurements register
+the change; that the before/after seam sits on the cut it draws; that losing the face leaves
+nothing stale on screen; every debug layer, the landmark search, the stats and the export;
+that the mirror never resizes when the panel's content changes; that the phone layout keeps
+the mirror and its controls on one screen; that a photo opens the right way round after a
+camera session; and that a device without WebGL still gets working makeup. Point it at a
+deployed copy with `ROJA_URL`. Playwright is found through `PLAYWRIGHT_MODULE`, a normal
+`require` or the global npm folder, and the browser through `ROJA_CHROMIUM`, an installed
+Chrome or Playwright's own Chromium.
 
 ## First load
 

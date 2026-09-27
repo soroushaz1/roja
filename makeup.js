@@ -1,114 +1,473 @@
-import {products} from './catalog.js?v=7';
+// Where each product goes on the face, drawn as a soft white mask from the landmarks.
+//
+// The WebGL stage (stage.js) uploads each mask and decides how the colour meets the
+// skin. Without WebGL, renderFallback() paints the same masks in flat colour on the 2D
+// overlay, so makeup still works on a device that cannot run the stage.
+import {products,layerOrder} from './catalog.js?v=13';
 export {products};
 
-// MediaPipe's lip and eye contours. Eye interiors are never filled.
+// MediaPipe's contours. Eye openings and the mouth opening are never painted.
 const lipOuter=[61,185,40,39,37,0,267,269,270,409,291,375,321,405,314,17,84,181,91,146];
 const lipInner=[78,191,80,81,82,13,312,311,310,415,308,324,318,402,317,14,87,178,88,95];
 const faceOval=[10,338,297,332,284,251,389,356,454,323,361,288,397,365,379,378,400,377,152,148,176,149,150,136,172,58,132,93,234,127,162,21,54,103,67,109];
+// Per eye, listed outer corner first: the upper and lower lid, the lower and upper
+// edge of the brow, and the side of the face the eye is on.
 const eyes=[
-  {upper:[33,246,161,160,159,158,157,173,133],lower:[133,155,154,153,145,144,163,7,33],brow:[46,53,52,65,55]},
-  {upper:[263,466,388,387,386,385,384,398,362],lower:[362,382,381,380,374,373,390,249,263],brow:[276,283,282,295,285]}
+  {upper:[33,246,161,160,159,158,157,173,133],lower:[133,155,154,153,145,144,163,7,33],
+   brow:[46,53,52,65,55],browTop:[70,63,105,66,107]},
+  {upper:[263,466,388,387,386,385,384,398,362],lower:[362,382,381,380,374,373,390,249,263],
+   brow:[276,283,282,295,285],browTop:[300,293,334,296,336]}
 ];
-// Every landmark this module reads, for the debug overlay to pick out. The loose
-// numbers are the blush anchors and the ear-to-ear pair used for face width;
-// roja-check.cjs re-reads this file and fails if any of them drifts out of step.
-// Which landmarks each product type actually drives, so the debug overlay can pick
-// out the ones in play right now. Blush is placed from the eye, mouth corner and side
-// of the face, with the nose and outer eye corners setting its size and angle.
+// Loose anchors, per side: blush (lower lid, mouth corner, face edge), highlighter
+// (cheekbone), contour (cheek hollow, side of the nose).
 const blushAnchors=[145,374,61,291,234,454,1,33,263];
+const highlightAnchors=[116,117,118,123,345,346,347,352,6,195,0];
+const contourAnchors=[132,361,61,291,122,126,351,355];
+const foreheadAnchors=[54,103,67,109,10,338,297,332,284,9];
+
+// Which landmarks each layer reads, so the debug overlay can pick out the ones in
+// play. roja-check.cjs re-reads every p(N) in this file and fails if one is missing.
 export const frameLandmarks=[234,454];
+const eyeUpper=eyes.flatMap(e=>e.upper), eyeLower=eyes.flatMap(e=>e.lower);
+const browAll=eyes.flatMap(e=>[...e.brow,...e.browTop]);
 export const landmarksByType={
-  lipstick:[...lipOuter,...lipInner],
+  foundation:[...faceOval,...eyeUpper,...eyeLower,...browAll,...lipOuter],
+  concealer:[...eyeLower],
+  contour:[...contourAnchors],
   blush:[...blushAnchors],
-  eyeshadow:[...eyes.flatMap(e=>[...e.upper,...e.brow])]
+  highlighter:[...highlightAnchors],
+  eyeshadow:[...eyeUpper,...eyes.flatMap(e=>e.brow)],
+  eyeliner:[...eyeUpper,...eyeLower],
+  mascara:[...eyeUpper,...eyeLower],
+  brow:[...browAll],
+  lipliner:[...lipOuter],
+  lipstick:[...lipOuter,...lipInner],
+  gloss:[...lipOuter,...lipInner],
+  texture:[...faceOval,...foreheadAnchors,...eyeUpper,...eyeLower]
 };
 
+/* ---- geometry helpers --------------------------------------------------- */
 const mix=(a,b,t)=>({x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t});
+const add=(a,v,k=1)=>({x:a.x+v.x*k,y:a.y+v.y*k});
+const sub=(a,b)=>({x:a.x-b.x,y:a.y-b.y});
+const unit=v=>{const l=Math.hypot(v.x,v.y)||1;return {x:v.x/l,y:v.y/l};};
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+const scaleAbout=(pts,c,k)=>pts.map(q=>mix(c,q,k));
+const centroid=pts=>pts.reduce((s,q)=>({x:s.x+q.x/pts.length,y:s.y+q.y/pts.length}),{x:0,y:0});
+
+// Quadratic mid-point contours avoid visible straight mesh segments.
 function polygon(ctx,points){
-  // Quadratic mid-point contours avoid visible straight mesh segments.
   const mid=mix(points[points.length-1],points[0],.5);ctx.moveTo(mid.x,mid.y);
-  points.forEach((p,i)=>{const next=mix(p,points[(i+1)%points.length],.5);ctx.quadraticCurveTo(p.x,p.y,next.x,next.y);});ctx.closePath();
+  points.forEach((q,i)=>{const next=mix(q,points[(i+1)%points.length],.5);ctx.quadraticCurveTo(q.x,q.y,next.x,next.y);});
+  ctx.closePath();
 }
+function curve(ctx,points){
+  ctx.moveTo(points[0].x,points[0].y);
+  for(let i=1;i<points.length-1;i++){const next=mix(points[i],points[i+1],.5);ctx.quadraticCurveTo(points[i].x,points[i].y,next.x,next.y);}
+  const last=points[points.length-1];ctx.lineTo(last.x,last.y);
+}
+export function hexToRgb(hex){const n=parseInt(hex.slice(1),16);return [(n>>16)/255,((n>>8)&255)/255,(n&255)/255];}
 function rgba(hex,alpha){const n=parseInt(hex.slice(1),16);return `rgba(${n>>16},${(n>>8)&255},${n&255},${alpha})`;}
+const white=a=>`rgba(255,255,255,${Math.max(0,Math.min(1,a))})`;
 
-function renderLayer(ctx,landmarks,states,before=false){
-  const {width,height}=ctx.canvas;
-  ctx.clearRect(0,0,width,height);
-  if(before||!landmarks||landmarks.length<468)return;
-  const p=i=>({x:landmarks[i].x*width,y:landmarks[i].y*height});
-  const layers=Object.fromEntries(['lipstick','blush','eyeshadow'].map(type=>{const item=products.find(p=>p.type===type && states[p.id]?.enabled);return [type,item ? {...states[item.id],color:item.shades.find(s=>s.id===states[item.id].shade).color} : {enabled:false}];}));
-  ctx.save();
-  ctx.beginPath();polygon(ctx,faceOval.map(p));ctx.clip();
+// The face-local frame every size is measured in, so a mask keeps its proportions
+// whatever the distance to the camera and the tilt of the head.
+function faceFrame(p){
+  const left=p(234),right=p(454);
+  const ex=unit(sub(right,left)),ey={x:-ex.y,y:ex.x};
+  return {face:distance(left,right)||1,ex,ey,up:{x:-ey.x,y:-ey.y}};
+}
 
-  if(layers.blush.enabled){
-    const color=layers.blush.color,alpha=layers.blush.intensity/100;
-    // Cheek placement follows the lower eye, mouth corner and side of the face.
+// The line a fraction k of the way from the lash line to the lower edge of the brow,
+// bowed so it meets the lash line again at both corners.
+function lidLine(lash,brow,k,power=1){
+  return lash.map((q,i)=>{
+    const t=i/(lash.length-1),b=t*(brow.length-1),j=Math.min(brow.length-2,Math.floor(b));
+    return mix(q,mix(brow[j],brow[j+1],b-j),k*Math.pow(Math.sin(Math.PI*t),power));
+  });
+}
+// Per lash point, the direction away from the eye.
+function lidNormals(lash,up){
+  return lash.map((q,i)=>{
+    const a=lash[Math.max(0,i-1)],b=lash[Math.min(lash.length-1,i+1)];
+    let n=unit({x:-(b.y-a.y),y:b.x-a.x});
+    if(n.x*up.x+n.y*up.y<0)n={x:-n.x,y:-n.y};
+    return unit(add(n,up,.6));
+  });
+}
+function ellipse(ctx,center,rx,ry,angle,stops){
+  ctx.save();ctx.translate(center.x,center.y);ctx.rotate(angle);ctx.scale(rx,ry);
+  const g=ctx.createRadialGradient(0,0,0,0,0,1);
+  for(const [at,alpha] of stops)g.addColorStop(at,white(alpha));
+  ctx.fillStyle=g;ctx.fillRect(-1,-1,2,2);ctx.restore();
+}
+
+/* ---- the shape of each layer --------------------------------------------
+   Each draws in white on a clear canvas and returns the points that bound it, so
+   the blur that feathers it only has to touch that part of the frame. */
+const shapes={
+  lipstick(ctx,p){
+    const outer=lipOuter.map(p);
+    ctx.fillStyle='#fff';ctx.beginPath();polygon(ctx,outer);polygon(ctx,lipInner.map(p));ctx.fill('evenodd');
+    return outer;
+  },
+  gloss(ctx,p){return shapes.lipstick(ctx,p);},
+  lipliner(ctx,p,f){
+    const outer=lipOuter.map(p);
+    ctx.strokeStyle='#fff';ctx.lineWidth=Math.max(1,f.face*.013);ctx.lineJoin='round';
+    ctx.beginPath();polygon(ctx,outer);ctx.stroke();
+    return outer;
+  },
+  foundation(ctx,p,f){
+    const oval=faceOval.map(p),c=centroid(oval);
+    // Pull the outline in, most of all at the top, where the hairline or a fringe
+    // usually sits inside the model's oval.
+    const inner=oval.map(q=>{const d=unit(sub(q,c)),lift=Math.max(0,d.x*f.up.x+d.y*f.up.y);return mix(c,q,.965-.085*lift);});
+    ctx.fillStyle='#fff';ctx.beginPath();polygon(ctx,inner);ctx.fill();
+    ctx.globalCompositeOperation='destination-out';ctx.beginPath();
+    for(const eye of eyes){
+      const lid=[...eye.upper,...eye.lower].map(p);polygon(ctx,scaleAbout(lid,centroid(lid),1.3));
+      const brow=[...eye.browTop,...eye.brow.slice().reverse()].map(p);polygon(ctx,scaleAbout(brow,centroid(brow),1.12));
+    }
+    const lips=lipOuter.map(p);polygon(ctx,scaleAbout(lips,centroid(lips),1.06));
+    ctx.fill();ctx.globalCompositeOperation='source-over';
+    return oval;
+  },
+  concealer(ctx,p,f){
+    const pts=[];
+    ctx.fillStyle='#fff';ctx.beginPath();
+    for(const eye of eyes){
+      const lower=eye.lower.map(p);                     // inner corner first
+      const width=distance(lower[0],lower[lower.length-1]);
+      const top=lower.map(q=>add(q,f.ey,width*.07));
+      const bottom=lower.map((q,i)=>{const t=i/(lower.length-1);
+        return add(q,f.ey,width*(.12+.5*Math.pow(Math.sin(Math.PI*(.15+.7*t)),.8)));});
+      const shape=[...top,...bottom.reverse()];polygon(ctx,shape);pts.push(...shape);
+    }
+    ctx.fill();return pts;
+  },
+  contour(ctx,p,f){
+    const pts=[];
+    for(const side of [{ear:132,mouth:61,top:122,bottom:126},{ear:361,mouth:291,top:351,bottom:355}]){
+      const ear=p(side.ear),mouth=p(side.mouth);
+      const len=distance(ear,mouth),angle=Math.atan2(mouth.y-ear.y,mouth.x-ear.x);
+      const center=mix(ear,mouth,.3);
+      ellipse(ctx,center,len*.36,f.face*.055,angle,[[0,.95],[.55,.7],[1,0]]);
+      pts.push(add(center,f.ex,-len*.4),add(center,f.ex,len*.4),add(center,f.ey,f.face*.08),add(center,f.up,f.face*.08));
+      // A thinner line down each side of the nose.
+      const a=p(side.top),b=p(side.bottom);
+      ctx.save();ctx.strokeStyle=white(.55);ctx.lineCap='round';ctx.lineWidth=f.face*.03;
+      ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();ctx.restore();
+      pts.push(a,b);
+    }
+    return pts;
+  },
+  blush(ctx,p,f){
+    const pts=[];
+    const tilt=Math.atan2(p(263).y-p(33).y,p(263).x-p(33).x);
     for(const side of [{eye:145,mouth:61,edge:234},{eye:374,mouth:291,edge:454}]){
       const eye=p(side.eye),mouth=p(side.mouth),edge=p(side.edge);
       const center=mix(mix(eye,mouth,.57),edge,.24);
-      const eyeLineA=p(33),eyeLineB=p(263);
       const rx=Math.max(1,distance(p(1),edge)*.39),ry=Math.max(1,distance(eye,mouth)*.40);
-      ctx.save();ctx.translate(center.x,center.y);ctx.rotate(Math.atan2(eyeLineB.y-eyeLineA.y,eyeLineB.x-eyeLineA.x));ctx.scale(rx,ry);
-      const gradient=ctx.createRadialGradient(0,0,0,0,0,1);
-      gradient.addColorStop(0,rgba(color,alpha*.70));gradient.addColorStop(.4,rgba(color,alpha*.46));gradient.addColorStop(1,rgba(color,0));
-      ctx.fillStyle=gradient;ctx.fillRect(-1,-1,2,2);ctx.restore();
+      ellipse(ctx,center,rx,ry,tilt,[[0,1],[.4,.66],[1,0]]);
+      pts.push({x:center.x-rx,y:center.y-rx},{x:center.x+rx,y:center.y+rx});
     }
-  }
-
-  if(layers.eyeshadow.enabled){
-    const color=layers.eyeshadow.color,alpha=layers.eyeshadow.intensity/100;
+    return pts;
+  },
+  highlighter(ctx,p,f){
+    const pts=[];
+    for(const side of [{under:118,edge:116,bone:117,low:123},{under:347,edge:345,bone:346,low:352}]){
+      const center=mix(p(side.bone),p(side.low),.42);
+      const dir=sub(p(side.edge),p(side.under));
+      ellipse(ctx,center,f.face*.11,f.face*.035,Math.atan2(dir.y,dir.x),[[0,1],[.5,.7],[1,0]]);
+      pts.push({x:center.x-f.face*.12,y:center.y-f.face*.12},{x:center.x+f.face*.12,y:center.y+f.face*.12});
+    }
+    const a=p(6),b=p(195);
+    ctx.save();ctx.strokeStyle=white(.7);ctx.lineCap='round';ctx.lineWidth=f.face*.02;
+    ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();ctx.restore();
+    const bow=add(p(0),f.up,f.face*.018);
+    ellipse(ctx,bow,f.face*.035,f.face*.012,Math.atan2(f.ex.y,f.ex.x),[[0,.6],[1,0]]);
+    pts.push(a,b,add(bow,f.up,f.face*.03),add(bow,f.ey,f.face*.03));
+    return pts;
+  },
+  eyeshadow(ctx,p,f,spec){
+    const zone=spec.zone||'single';
+    const pts=[];
     for(const eye of eyes){
-      const lash=eye.upper.map(p);
-      const brow=eye.brow.map(p);
-      const cap=lash.map((point,i)=>{
-        const t=i/(lash.length-1),b=t*(brow.length-1),j=Math.min(brow.length-2,Math.floor(b));
-        const target=mix(brow[j],brow[j+1],b-j);
-        return mix(point,target,.65*Math.sin(Math.PI*t));
-      });
+      const lash=eye.upper.map(p),brow=eye.brow.map(p);
+      const outer=lash[0],inner=lash[lash.length-1],width=distance(outer,inner);
+      const reach={single:.68,lid:.52,crease:.8,outer:.7,highlight:.96}[zone];
+      const cap=lidLine(lash,brow,reach);
       ctx.save();ctx.beginPath();polygon(ctx,[...lash,...cap.slice().reverse()]);ctx.clip();
-      const center=lash[4],top=cap[4];
-      const gradient=ctx.createLinearGradient(center.x,center.y,top.x,top.y);
-      gradient.addColorStop(0,rgba(color,alpha*.85));gradient.addColorStop(.55,rgba(color,alpha*.55));gradient.addColorStop(1,rgba(color,0));
-      ctx.fillStyle=gradient;ctx.fillRect(0,0,width,height);ctx.restore();
+      const mid=lash[4],top=cap[4];
+      if(zone==='single'||zone==='lid'){
+        const g=ctx.createLinearGradient(mid.x,mid.y,top.x,top.y);
+        g.addColorStop(0,white(zone==='lid'?1:.85));g.addColorStop(.55,white(zone==='lid'?.8:.55));g.addColorStop(1,white(0));
+        ctx.fillStyle=g;ctx.fillRect(0,0,ctx.canvas.width,ctx.canvas.height);
+      }else if(zone==='crease'){
+        const g=ctx.createLinearGradient(mid.x,mid.y,top.x,top.y);
+        g.addColorStop(0,white(0));g.addColorStop(.45,white(.9));g.addColorStop(.75,white(.65));g.addColorStop(1,white(0));
+        ctx.fillStyle=g;ctx.fillRect(0,0,ctx.canvas.width,ctx.canvas.height);
+        // Deepest towards the outer corner.
+        ctx.globalCompositeOperation='destination-in';
+        const h=ctx.createLinearGradient(outer.x,outer.y,inner.x,inner.y);
+        h.addColorStop(0,white(1));h.addColorStop(1,white(.3));
+        ctx.fillStyle=h;ctx.fillRect(0,0,ctx.canvas.width,ctx.canvas.height);
+      }else if(zone==='outer'){
+        const c=mix(outer,cap[2],.35);
+        const g=ctx.createRadialGradient(c.x,c.y,0,c.x,c.y,width*.62);
+        g.addColorStop(0,white(1));g.addColorStop(.5,white(.75));g.addColorStop(1,white(0));
+        ctx.fillStyle=g;ctx.fillRect(0,0,ctx.canvas.width,ctx.canvas.height);
+      }else if(zone==='highlight'){
+        // Under the brow, and a touch at the inner corner.
+        const band=lidLine(lash,brow,.74);
+        ctx.beginPath();polygon(ctx,[...band,...cap.slice().reverse()]);
+        ctx.fillStyle=white(.75);ctx.fill();
+        const g=ctx.createRadialGradient(inner.x,inner.y,0,inner.x,inner.y,width*.24);
+        g.addColorStop(0,white(1));g.addColorStop(1,white(0));
+        ctx.fillStyle=g;ctx.fillRect(0,0,ctx.canvas.width,ctx.canvas.height);
+      }
+      ctx.restore();
+      if(zone==='highlight'){
+        const g=ctx.createRadialGradient(inner.x,inner.y,0,inner.x,inner.y,width*.2);
+        g.addColorStop(0,white(.9));g.addColorStop(1,white(0));
+        ctx.fillStyle=g;ctx.beginPath();ctx.arc(inner.x,inner.y,width*.2,0,Math.PI*2);ctx.fill();
+      }
+      pts.push(...lash,...cap);
     }
+    return pts;
+  },
+  eyeliner(ctx,p,f,spec){
+    const style=spec.style||'classic';
+    const pts=[];
+    ctx.fillStyle='#fff';
+    for(const eye of eyes){
+      const lash=eye.upper.map(p),normal=lidNormals(lash,f.up);
+      const outer=lash[0],inner=lash[lash.length-1],width=distance(outer,inner);
+      const thick={thin:[.022,.022],classic:[.035,.055],wing:[.035,.06],smudge:[.06,.05]}[style];
+      const edge=lash.map((q,i)=>{const t=i/(lash.length-1);return add(q,normal[i],width*(thick[0]+thick[1]*(1-t)));});
+      ctx.beginPath();polygon(ctx,[...lash,...edge.slice().reverse()]);ctx.fill();
+      if(style==='wing'){
+        const out=unit(add(unit(sub(outer,inner)),f.up,.5));
+        const tip=add(outer,out,width*.34);
+        ctx.beginPath();ctx.moveTo(lash[1].x,lash[1].y);ctx.lineTo(tip.x,tip.y);ctx.lineTo(edge[2].x,edge[2].y);ctx.closePath();ctx.fill();
+        pts.push(tip);
+      }
+      if(style==='smudge'){
+        const lower=eye.lower.map(p);
+        const under=lower.map(q=>add(q,f.ey,width*.05));
+        ctx.save();ctx.globalAlpha=.7;ctx.beginPath();polygon(ctx,[...lower,...under.slice().reverse()]);ctx.fill();ctx.restore();
+        pts.push(...under);
+      }
+      pts.push(...lash,...edge);
+    }
+    return pts;
+  },
+  mascara(ctx,p,f,spec){
+    const volume=spec.style==='volume';
+    const pts=[];
+    ctx.strokeStyle='#fff';ctx.lineCap='round';
+    // A fixed scatter, so the lashes do not shimmer from frame to frame.
+    const jitter=k=>{const v=Math.sin(k*12.9898)*43758.5453;return v-Math.floor(v)-.5;};
+    for(const eye of eyes){
+      const lash=eye.upper.map(p),normal=lidNormals(lash,f.up);
+      const outer=lash[0],inner=lash[lash.length-1],width=distance(outer,inner);
+      const outward=unit(sub(outer,inner));
+      // Mostly, mascara darkens and thickens the lash line; individual lashes are
+      // short, curled and irregular, longest at the outer corner.
+      ctx.lineWidth=width*(volume?.038:.024);ctx.beginPath();curve(ctx,lash);ctx.stroke();
+      ctx.save();ctx.globalAlpha=.85;
+      ctx.lineWidth=Math.max(.6,width*(volume?.014:.009));
+      const count=volume?24:17;
+      for(let k=0;k<count;k++){
+        const s=.06+.9*k/(count-1)+jitter(k)*.02,at=Math.max(0,Math.min(1,s))*(lash.length-1),j=Math.min(lash.length-2,Math.floor(at));
+        const root=mix(lash[j],lash[j+1],at-j),n=unit(mix(normal[j],normal[j+1],at-j));
+        const dir=unit(add(add(n,outward,.7*(1-s)),outward,jitter(k+7)*.25));
+        const length=width*(.085+.075*Math.pow(1-s,.7))*(volume?1:1.3)*(1+jitter(k+3)*.3);
+        const tip=add(add(root,dir,length),f.up,length*.25),bend=add(root,dir,length*.6);
+        ctx.beginPath();ctx.moveTo(root.x,root.y);ctx.quadraticCurveTo(bend.x,bend.y,tip.x,tip.y);ctx.stroke();
+        pts.push(tip);
+      }
+      ctx.restore();
+      // A few short lower lashes.
+      const lower=eye.lower.map(p);
+      ctx.save();ctx.globalAlpha=.4;ctx.lineWidth=Math.max(.5,width*.007);
+      for(let k=3;k<lower.length-1;k+=1){
+        const q=lower[k],tip=add(add(q,f.ey,width*.045),outward,width*.02);
+        ctx.beginPath();ctx.moveTo(q.x,q.y);ctx.lineTo(tip.x,tip.y);ctx.stroke();pts.push(tip);
+      }
+      ctx.restore();
+      pts.push(...lash);
+    }
+    return pts;
+  },
+  brow(ctx,p,f){
+    const pts=[];
+    ctx.fillStyle='#fff';ctx.strokeStyle='#fff';ctx.lineWidth=f.face*.008;ctx.lineJoin='round';
+    for(const eye of eyes){
+      const shape=[...eye.browTop,...eye.brow.slice().reverse()].map(p);
+      ctx.beginPath();polygon(ctx,shape);ctx.fill();ctx.stroke();
+      pts.push(...shape);
+    }
+    return pts;
+  },
+  // Skin-texture areas for the non-surgical procedures.
+  texture(ctx,p,f,spec){
+    if(spec.zone==='skin')return shapes.foundation(ctx,p,f);
+    ctx.fillStyle='#fff';
+    if(spec.zone==='forehead'){
+      // Across the top from one temple to the other, then back along the brows.
+      const top=foreheadAnchors.slice(0,9).map(p);
+      const brows=[...eyes[1].browTop.map(p),p(9),...eyes[0].browTop.slice().reverse().map(p)];
+      const c=centroid(top);
+      const shape=[...scaleAbout(top,c,.92),...brows.map(q=>add(q,f.up,f.face*.02))];
+      ctx.beginPath();polygon(ctx,shape);ctx.fill();
+      return shape;
+    }
+    if(spec.zone==='eyes'){
+      const pts=[];
+      for(const eye of eyes){
+        const outer=p(eye.upper[0]),inner=p(eye.upper[eye.upper.length-1]),width=distance(outer,inner);
+        const away=unit(sub(outer,inner));
+        const c=add(outer,away,width*.3);
+        ellipse(ctx,c,width*.32,width*.42,Math.atan2(f.ex.y,f.ex.x),[[0,1],[.6,.75],[1,0]]);
+        pts.push(add(c,f.ex,-width*.5),add(c,f.ex,width*.5),add(c,f.ey,width*.5),add(c,f.up,width*.5));
+      }
+      return [...pts,...shapes.concealer(ctx,p,f)];
+    }
+    if(spec.zone==='undereye')return shapes.concealer(ctx,p,f);
+    return [];
   }
+};
 
-  if(layers.lipstick.enabled){ctx.save();ctx.beginPath();polygon(ctx,lipOuter.map(p));polygon(ctx,lipInner.map(p));ctx.fillStyle=layers.lipstick.color;ctx.globalAlpha=layers.lipstick.intensity/100;ctx.fill('evenodd');ctx.restore();}
-  // Exclude the eye openings even when the face rotates or the cheeks lift.
-  ctx.globalCompositeOperation='destination-out';
-  ctx.beginPath();for(const eye of eyes)polygon(ctx,[...eye.upper,...eye.lower].map(p));ctx.fill();
-  ctx.restore();
+/* ---- masks -------------------------------------------------------------- */
+// How far each layer's edge is feathered at 100% on the fade slider, in face widths.
+const FEATHER={foundation:.06,concealer:.05,contour:.07,blush:.07,highlighter:.045,eyeshadow:.02,
+  eyeliner:.012,mascara:.004,brow:.02,lipliner:.012,lipstick:.024,gloss:.024,texture:.05};
+
+function makeCanvas(){return document.createElement('canvas');}
+function fit(canvas,w,h){if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;}}
+
+// Shadow blur is the one blur that works in Safari as well as Chromium. The source is
+// drawn a canvas-width off to the side so only its shadow lands.
+function blurInto(dst,src,box,radius){
+  const W=dst.canvas.width;
+  if(radius<.3){dst.drawImage(src,box.x,box.y,box.w,box.h,box.x,box.y,box.w,box.h);return;}
+  dst.save();dst.shadowColor='#fff';dst.shadowBlur=radius*2;dst.shadowOffsetX=W*2;
+  dst.drawImage(src,box.x,box.y,box.w,box.h,box.x-W*2,box.y,box.w,box.h);dst.restore();
+}
+function boundsOf(points,pad,W,H){
+  let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;
+  for(const q of points){if(q.x<x0)x0=q.x;if(q.y<y0)y0=q.y;if(q.x>x1)x1=q.x;if(q.y>y1)y1=q.y;}
+  if(!points.length)return {x:0,y:0,w:W,h:H};
+  x0=Math.max(0,Math.floor(x0-pad));y0=Math.max(0,Math.floor(y0-pad));
+  x1=Math.min(W,Math.ceil(x1+pad));y1=Math.min(H,Math.ceil(y1+pad));
+  return {x:x0,y:y0,w:Math.max(1,x1-x0),h:Math.max(1,y1-y0)};
 }
 
-// Reuse two buffers. Shadow blur works on Safari as well as Chromium, without
-// depending on CanvasRenderingContext2D.filter or reading camera pixels.
-let layerCanvas,softCanvas;
-export function renderMakeup(ctx,landmarks,states,before=false){
+// Broad, soft layers are painted at half resolution: their edges are feathered far
+// wider than a pixel anyway, and a quarter of the pixels is a quarter of the work.
+// Thin ones (liner, lashes, lip liner, brows, lipstick edges) keep every pixel.
+const HALF=new Set(['foundation','concealer','contour','blush','highlighter','texture']);
+
+// One painter per renderer. It owns its scratch canvases and returns the same mask
+// canvas each time, so the caller must use (or upload) it before the next paint.
+// The mask may be smaller than the frame; draw or sample it stretched to the frame.
+export function createMaskPainter(){
+  const mask=makeCanvas(),shape=makeCanvas(),spread=makeCanvas(),union=makeCanvas();
+  const opts={willReadFrequently:false};
+  let lastBox=null;
+  const mctx=mask.getContext('2d',opts),sctx=shape.getContext('2d',opts);
+  const bctx=spread.getContext('2d',opts),uctx=union.getContext('2d',opts);
+
+  function paint(spec,landmarks,W,H,brush){
+    const scale=HALF.has(spec.type)?.5:1;
+    const w=Math.max(1,Math.round(W*scale)),h=Math.max(1,Math.round(H*scale));
+    for(const c of [mask,shape,spread,union])fit(c,w,h);
+    const p=i=>({x:landmarks[i].x*w,y:landmarks[i].y*h});
+    const f=faceFrame(p);
+    const draw=shapes[spec.type];
+    sctx.clearRect(0,0,w,h);mctx.clearRect(0,0,w,h);
+    sctx.save();const points=draw(sctx,p,f,spec)||[];sctx.restore();
+    const radius=f.face*(FEATHER[spec.type]||.03)*Math.max(0,Math.min(100,spec.fade??45))/100;
+    let box=boundsOf(points,radius*3+4,w,h);
+    blurInto(mctx,shape,box,radius);
+
+    // The brush: blend spreads the colour, fade and erase take it away. The maps are
+    // frame-sized, so they are drawn stretched to this mask.
+    if(brush){
+      const blend=[brush.blend.get('all'),brush.blend.get(spec.type)].filter(Boolean);
+      if(blend.length){
+        box={x:0,y:0,w,h};                                  // the spread can reach past the shape
+        uctx.clearRect(0,0,w,h);for(const b of blend)uctx.drawImage(b,0,0,w,h);
+        bctx.clearRect(0,0,w,h);blurInto(bctx,mask,box,f.face*.045);
+        bctx.globalCompositeOperation='destination-in';bctx.drawImage(union,0,0);bctx.globalCompositeOperation='source-over';
+        mctx.globalCompositeOperation='destination-out';mctx.drawImage(union,0,0);
+        mctx.globalCompositeOperation='lighter';mctx.drawImage(spread,0,0);
+        mctx.globalCompositeOperation='source-over';
+      }
+      for(const e of [brush.erase.get('all'),brush.erase.get(spec.type)]){
+        if(!e)continue;
+        mctx.globalCompositeOperation='destination-out';mctx.drawImage(e,0,0,w,h);mctx.globalCompositeOperation='source-over';
+      }
+    }
+
+    // Keep everything on the face and out of the eye and mouth openings, whatever
+    // the blur and the brush did. Nothing lies outside the box, so only it is touched.
+    mctx.save();
+    mctx.beginPath();mctx.rect(box.x,box.y,box.w,box.h);mctx.clip();
+    mctx.globalCompositeOperation='destination-in';mctx.beginPath();polygon(mctx,faceOval.map(p));mctx.fill();
+    mctx.globalCompositeOperation='destination-out';mctx.beginPath();
+    polygon(mctx,lipInner.map(p));for(const eye of eyes)polygon(mctx,[...eye.upper,...eye.lower].map(p));mctx.fill();
+    mctx.restore();
+    lastBox={x:box.x/w,y:box.y/h,w:box.w/w,h:box.h/h};
+    return mask;
+  }
+  // `box` bounds the last mask painted, as fractions of the frame.
+  return {paint,canvas:mask,get box(){return lastBox;}};
+}
+
+/* ---- what is on the face ------------------------------------------------ */
+// The layers to paint, in order, for the current makeup state. A palette becomes four
+// layers, one per pan; every other product is one.
+export function layerSpecs(states){
+  const out=[];
+  for(const type of layerOrder){
+    const item=products.find(p=>p.type===type&&states[p.id]?.enabled);
+    if(!item)continue;
+    const state=states[item.id];
+    const shade=item.shades.find(s=>s.id===state.shade)||item.shades[0];
+    const base={product:item.id,type,mode:item.mode,intensity:state.intensity,fade:state.fade,
+      style:state.style||item.styles?.[0]?.id,finish:shade.finish||item.finish,shade:shade.id};
+    if(shade.colors){
+      // light under the brow and at the inner corner, the middle shade in the crease,
+      // the deepest at the outer corner, the accent on the lid.
+      const zones=[['highlight',0,.75],['crease',1,.9],['outer',2,.95],['lid',3,.9]];
+      for(const [zone,pan,weight] of zones)
+        out.push({...base,key:`${item.id}:${zone}`,zone,color:shade.colors[pan],intensity:state.intensity*weight,
+          finish:zone==='lid'?'shimmer':base.finish});
+    }else out.push({...base,key:item.id,color:shade.color});
+  }
+  return out;
+}
+
+/* ---- fallback: flat colour on the 2D overlay ----------------------------- */
+let tint;
+export function renderFallback(ctx,specs,landmarks,painter,brush){
   const {width,height}=ctx.canvas;ctx.clearRect(0,0,width,height);
-  if(before||!landmarks||landmarks.length<468)return;
-  if(!layerCanvas){layerCanvas=document.createElement('canvas');softCanvas=document.createElement('canvas');}
-  for(const c of [layerCanvas,softCanvas])if(c.width!==width||c.height!==height){c.width=width;c.height=height;}
-  const layer=layerCanvas.getContext('2d'),soft=softCanvas.getContext('2d');
-  const faceWidth=distance(landmarks[234],landmarks[454])*width;
-  for(const item of products){
-    const state=states[item.id];if(!state?.enabled)continue;
-    const isolated=Object.fromEntries(products.map(p=>[p.id,{...states[p.id],enabled:p.id===item.id}]));
-    renderLayer(layer,landmarks,isolated);
-    const fade=Math.max(0,Math.min(100,state.fade??45))/100;
-    const radius=faceWidth*({lipstick:.024,blush:.07,eyeshadow:.035}[item.type])*fade;
-    if(radius<.1){ctx.drawImage(layerCanvas,0,0);continue;}
-    soft.clearRect(0,0,width,height);soft.save();
-    soft.shadowColor=selectedColor(item,state);soft.shadowBlur=radius*2;
-    soft.shadowOffsetX=width*2;soft.drawImage(layerCanvas,-width*2,0);soft.restore();
-    ctx.drawImage(softCanvas,0,0);
+  if(!landmarks||landmarks.length<468||!specs.length)return;
+  if(!tint)tint=makeCanvas();fit(tint,width,height);
+  const tctx=tint.getContext('2d');
+  for(const spec of specs){
+    const mask=painter.paint(spec,landmarks,width,height,brush);
+    tctx.clearRect(0,0,width,height);tctx.globalCompositeOperation='source-over';tctx.drawImage(mask,0,0,width,height);
+    tctx.globalCompositeOperation='source-in';tctx.fillStyle=spec.color;tctx.fillRect(0,0,width,height);
+    tctx.globalCompositeOperation='source-over';
+    const soften={foundation:.55,concealer:.5,texture:0,highlighter:.6}[spec.type]??1;
+    ctx.globalAlpha=Math.min(1,spec.intensity/100*soften);ctx.drawImage(tint,0,0);ctx.globalAlpha=1;
   }
-  const p=i=>({x:landmarks[i].x*width,y:landmarks[i].y*height});
-  ctx.save();ctx.globalCompositeOperation='destination-in';ctx.beginPath();polygon(ctx,faceOval.map(p));ctx.fill();
-  ctx.globalCompositeOperation='destination-out';ctx.beginPath();
-  polygon(ctx,lipInner.map(p));for(const eye of eyes)polygon(ctx,[...eye.upper,...eye.lower].map(p));ctx.fill();ctx.restore();
 }
-function selectedColor(item,state){return item.shades.find(s=>s.id===state.shade)?.color||'#000';}
+export const colorOf=rgba;
 
 export function smoothLandmarks(previous,next){
   if(!next)return null;
@@ -116,6 +475,5 @@ export function smoothLandmarks(previous,next){
   const movement=distance(previous[1],next[1]);
   if(movement>.10)return next; // Do not drag a stale mask onto a reacquired face.
   const amount=Math.min(.88,.48+movement*12);
-  return next.map((p,i)=>({...p,x:previous[i].x+(p.x-previous[i].x)*amount,y:previous[i].y+(p.y-previous[i].y)*amount}));
+  return next.map((q,i)=>({...q,x:previous[i].x+(q.x-previous[i].x)*amount,y:previous[i].y+(q.y-previous[i].y)*amount}));
 }
-
