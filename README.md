@@ -167,8 +167,10 @@ Keyboard: **B** brush, **[ ]** brush size, **Ctrl+Z** undo a stroke, **C** compa
 
 ## Android and installing
 
-- **Android app** — [`android/`](android/README.md) wraps this site in a native app with
-  every file inside the APK and no network permission. The *Android app* workflow builds the
+- **Android app** — [`android/`](android/README.md) carries this site as its interface, with
+  every file inside the APK and no network permission, and does the live mirror natively
+  under it: CameraX, MediaPipe on the GPU and an OpenGL ES renderer that compiles this
+  site's own shaders. The *Android app* workflow builds the
   APK and runs it on an emulator; each tested build of `main` is published as a release, so
   [`releases/latest/download/roja.apk`](https://github.com/soroushaz1/roja/releases/latest/download/roja.apk)
   always downloads the newest one.
