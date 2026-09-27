@@ -16,6 +16,9 @@ The ES-module WebAssembly variant and the source maps that ship with the package
 removed; this app loads the classic runtime, in a worker or, where a worker cannot run it,
 on the page through `vision_bundle.mjs`.
 
+`facemesh.js` holds MediaPipe's canonical face mesh (point positions and triangles), read
+out of `face_landmarker.task` by `tools/facemesh.cjs`; it is under the same licence.
+
 ## Estedad — `fonts/`
 
 The Estedad variable Persian typeface, by the Estedad Project Authors.

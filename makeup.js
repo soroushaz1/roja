@@ -3,8 +3,8 @@
 // The WebGL stage (stage.js) uploads each mask and decides how the colour meets the
 // skin. Without WebGL, renderFallback() paints the same masks in flat colour on the 2D
 // overlay, so makeup still works on a device that cannot run the stage.
-import {products,layerOrder} from './catalog.js?v=14';
-import {blurInto} from './blur.js?v=14';
+import {products,layerOrder} from './catalog.js?v=15';
+import {blurInto} from './blur.js?v=15';
 export {products};
 
 // MediaPipe's contours. Eye openings and the mouth opening are never painted.
@@ -462,11 +462,28 @@ export function renderFallback(ctx,specs,landmarks,painter,brush){
 }
 export const colorOf=rgba;
 
-export function smoothLandmarks(previous,next){
-  if(!next)return null;
-  if(!previous||previous.length!==next.length)return next;
-  const movement=distance(previous[1],next[1]);
-  if(movement>.10)return next; // Do not drag a stale mask onto a reacquired face.
-  const amount=Math.min(.88,.48+movement*12);
-  return next.map((q,i)=>({...q,x:previous[i].x+(q.x-previous[i].x)*amount,y:previous[i].y+(q.y-previous[i].y)*amount}));
+// Steadies the landmarks without making the makeup trail a moving face: a One Euro
+// filter, one gain for the whole face so its shape is never bent. At rest the cutoff
+// is low and the jitter of the model is smoothed away; the faster the face moves,
+// the higher the cutoff, so the smoothing, and its lag, fade out.
+export function createSmoother({minCutoff=1.5,beta=20,dCutoff=1}={}){
+  let prev=null,prevT=0,speed=0;
+  const gain=(cutoff,dt)=>1/(1+1/(2*Math.PI*cutoff*dt));
+  const probes=[1,10,152,234,454];
+  return {
+    reset(){prev=null;},
+    // `t` in milliseconds: when the frame these landmarks came from was taken.
+    smooth(next,t){
+      if(!next){prev=null;return null;}
+      if(!prev||prev.length!==next.length){prev=next;prevT=t;speed=0;return next;}
+      const dt=Math.max(.001,(t-prevT)/1000);prevT=t;
+      let move=0;for(const i of probes)move+=distance(prev[i],next[i])/probes.length;
+      // Do not drag a stale mask onto a reacquired face.
+      if(move>.1){prev=next;speed=0;return next;}
+      speed+=gain(dCutoff,dt)*(move/dt-speed);
+      const a=gain(minCutoff+beta*speed,dt);
+      prev=next.map((q,i)=>({...q,x:prev[i].x+(q.x-prev[i].x)*a,y:prev[i].y+(q.y-prev[i].y)*a}));
+      return prev;
+    }
+  };
 }

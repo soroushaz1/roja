@@ -1,11 +1,12 @@
-import {products,categories,finishes,looks,byProduct} from './catalog.js?v=14';
-import {layerSpecs,createMaskPainter,renderFallback,smoothLandmarks,landmarksByType,frameLandmarks,hexToRgb} from './makeup.js?v=14';
-import {createStage,layerModes} from './stage.js?v=14';
-import {controls,regions,controlLandmarks,controlRange,deformers,textureLayers} from './deform.js?v=14';
-import {procedures,byId,amountsFor,resolve,kinds} from './procedures.js?v=14';
-import {renderDebug,nearest} from './debug.js?v=14';
-import {createBrush,brushModes} from './brush.js?v=14';
-import {metrics,measure,points as placed,symmetry,pose as poseOf} from './measure.js?v=14';
+import {products,categories,finishes,looks,byProduct} from './catalog.js?v=15';
+import {layerSpecs,createMaskPainter,renderFallback,createSmoother,landmarksByType,frameLandmarks,hexToRgb} from './makeup.js?v=15';
+import {createStage,layerModes} from './stage.js?v=15';
+import {controls,regions,controlLandmarks,controlRange,deformers,textureLayers} from './deform.js?v=15';
+import {procedures,byId,amountsFor,resolve,kinds} from './procedures.js?v=15';
+import {renderDebug,nearest} from './debug.js?v=15';
+import {createBrush,brushModes} from './brush.js?v=15';
+import {metrics,measure,points as placed,symmetry,pose as poseOf} from './measure.js?v=15';
+import {CANON,CANON_ASPECT,TRIANGLES} from './facemesh.js?v=15';
 
 const $=id=>document.getElementById(id);
 const fa=new Intl.NumberFormat('fa-IR');
@@ -31,6 +32,10 @@ const video=$('video'), photo=$('photo'), overlay=$('overlay'), octx=overlay.get
 // Inside the Android app (android/), the page talks to the app through this bridge:
 // saving files, and keeping the screen on while the mirror is live.
 const native=window.RojaAndroid||null;
+// In the app the live camera is native (android/…/NativeMirror.kt): the camera, the
+// tracking on the GPU and the drawing happen under the page, which shows through a hole
+// where the mirror is. The page stays the interface and paints the masks.
+let nativeMirror=(()=>{try{return !!native?.nativeMirror?.();}catch{return false;}})();
 // Every browser on an iPhone is WebKit underneath; Chrome and Firefox there only change
 // the settings screen that grants the camera. In-app browsers (Instagram, Telegram…)
 // often have no camera at all.
@@ -38,6 +43,7 @@ const ua=navigator.userAgent;
 const iOS=/iPad|iPhone|iPod/.test(ua)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
 const inApp=/Instagram|FBAN|FBAV|Telegram|Line\/|WhatsApp|Snapchat/i.test(ua);
 function cameraHelp(){
+  if(native)return 'در تنظیمات اندروید، بخش برنامه‌ها › رُژا › مجوزها، دوربین را روشن کن.';
   if(iOS&&/CriOS/.test(ua))return 'در تنظیمات آیفون، بخش Chrome، دسترسی Camera را روشن کن و صفحه را دوباره باز کن.';
   if(iOS&&/FxiOS/.test(ua))return 'در تنظیمات آیفون، بخش Firefox، دسترسی Camera را روشن کن و صفحه را دوباره باز کن.';
   if(iOS)return 'در Safari روی «aA» کنار نشانی بزن، «تنظیمات وب‌سایت» و بعد «دوربین» را روی «اجازه» بگذار.';
@@ -82,7 +88,7 @@ const debug={on:false,points:true,mesh:false,contours:false,axes:false,masks:fal
   labelSize:10,highlight:true,onlyActive:false,find:null,hud:false,inspect:false};
 let topology=null, maskView=null;
 const maskTint=document.createElement('canvas');
-const perf={frames:0,fps:0,since:0,detections:0,hz:0,latency:0,lastHud:0,maskMs:0,drawMs:0,lastError:'',trackerNote:''};
+const perf={frames:0,fps:0,since:0,draws:0,drawn:0,detections:0,hz:0,latency:0,inferMs:0,lastHud:0,maskMs:0,drawMs:0,lastError:'',trackerNote:''};
 const ema=(old,v)=>old?old*.85+v*.15:v;
 let finder={state:'idle',samples:[],tries:0,result:null};
 let wantSkin=false;
@@ -408,7 +414,7 @@ function seamLabels(){
   return ['بدون آرایش','با آرایش'];
 }
 function updateSeam(){
-  seamOn=!!source&&!!stage&&(mode==='procedure'?anyProcedure():(compare||!!pin));
+  seamOn=!!source&&(!!stage||!!source.native)&&(mode==='procedure'?anyProcedure():(compare||!!pin));
   $('seam').hidden=!seamOn;
   $('seam').classList.toggle('passive',brushActive());
   if(seamOn){
@@ -556,11 +562,11 @@ function stageLayer(spec,face){
   return {key:spec.key,color:hexToRgb(spec.color),amount,
     mode:layerModes[spec.mode],detail,gloss:(f.gloss||0)*glossy,matte:f.matte||0,
     shimmer:(f.shimmer||0)*Math.min(1,intensity*1.6),
-    smooth:spec.mode==='foundation'?(f.smooth??.4)*Math.min(1,.45+intensity):0,radius:Math.max(2,face*.03)};
+    smooth:spec.mode==='foundation'?(f.smooth??.4)*Math.min(1,.45+intensity):0,radius:Math.max(2,face*.03),radiusK:.03};
 }
 function textureLayer(t,face){
   return {key:t.key,color:[1,1,1],amount:1,mode:layerModes.smooth,detail:0,gloss:0,matte:0,shimmer:0,
-    smooth:t.smooth,bright:t.bright||0,radius:Math.max(2,face*.035)};
+    smooth:t.smooth,bright:t.bright||0,radius:Math.max(2,face*.035),radiusK:.035};
 }
 // What the stage should draw right now: the "after" side, and the "before" side
 // when the seam is showing.
@@ -578,30 +584,61 @@ function plan(){
 }
 const TYPE_COLOR={foundation:'#E0B48C',concealer:'#F5D7B2',contour:'#8E6E5E',blush:'#FF6F91',highlighter:'#FFF1B8',
   eyeshadow:'#B388FF',eyeliner:'#40C4FF',mascara:'#00E5FF',brow:'#FFAB40',lipliner:'#FF5252',lipstick:'#FF1744',gloss:'#FF80AB',texture:'#69F0AE'};
-function rebuildMasks(p){
-  const {w,h}=frameSize();
-  const maps=brush.maps(landmarks,w,h);
+// Masks are painted in the face's own front-on space (facemesh.js) and the stage
+// carries them onto the live face each frame, so they are repainted only when what is
+// on the face changes (a product, a setting, a brush stroke), never because it moved.
+const FACE_W=768, FACE_H=Math.round(FACE_W*CANON_ASPECT);
+const canonLandmarks=Array.from({length:CANON.length/2},(_,i)=>({x:CANON[i*2],y:CANON[i*2+1]}));
+const maskCrop=document.createElement('canvas');
+function maskSpecs(p){
   const specs=new Map();
   for(const s of [...p.after,...(p.before||[])])specs.set(s.key,s);
   for(const t of p.textures)specs.set(t.key,{key:t.key,type:'texture',zone:t.zone,fade:60});
-  if(debug.on&&debug.masks){
-    if(!maskView)maskView=document.createElement('canvas');
-    maskView.width=w;maskView.height=h;
-  }
-  const mv=debug.on&&debug.masks?maskView.getContext('2d'):null;
-  if(mv&&(maskTint.width!==w||maskTint.height!==h)){maskTint.width=w;maskTint.height=h;}
+  return specs;
+}
+function rebuildMasks(p){
+  const maps=brush.maps(canonLandmarks,FACE_W,FACE_H);
+  const specs=maskSpecs(p);
+  const cx=maskCrop.getContext('2d',{willReadFrequently:!!source?.native});
   for(const spec of specs.values()){
-    const canvas=painter.paint(spec,landmarks,w,h,spec.type==='texture'?null:maps);
-    stage.setMask(spec.key,canvas,painter.box);
-    if(mv){
-      const t=maskTint.getContext('2d');
-      t.globalCompositeOperation='source-over';t.clearRect(0,0,w,h);t.drawImage(canvas,0,0,w,h);
-      t.globalCompositeOperation='source-in';t.fillStyle=TYPE_COLOR[spec.type]||'#fff';t.fillRect(0,0,w,h);
-      mv.drawImage(maskTint,0,0);
-    }
+    const canvas=painter.paint(spec,canonLandmarks,FACE_W,FACE_H,spec.type==='texture'?null:maps);
+    // Only the painted part is uploaded; the stage treats the rest as empty.
+    const b=painter.box,W=canvas.width,H=canvas.height;
+    const x0=Math.floor(b.x*W),y0=Math.floor(b.y*H),x1=Math.ceil((b.x+b.w)*W),y1=Math.ceil((b.y+b.h)*H);
+    const cw=Math.max(1,x1-x0),ch=Math.max(1,y1-y0);
+    maskCrop.width=cw;maskCrop.height=ch;
+    cx.drawImage(canvas,x0,y0,cw,ch,0,0,cw,ch);
+    const uv={x:x0/W,y:y0/H,w:cw/W,h:ch/H};
+    if(source?.native)sendMask(spec.key,cx,cw,ch,uv);
+    else stage.setMask(spec.key,maskCrop,uv);
   }
-  stage.dropMasks(new Set(specs.keys()));
+  if(source?.native)native.mirrorKeep(JSON.stringify([...specs.keys()]));
+  else stage.dropMasks(new Set(specs.keys()));
   masksDirty=false;
+}
+// A mask for the native renderer: one byte a pixel (its coverage), base64.
+function sendMask(key,cx,w,h,uv){
+  const rgba=cx.getImageData(0,0,w,h).data,alpha=new Uint8Array(w*h);
+  for(let i=0;i<alpha.length;i++)alpha[i]=rgba[i*4+3];
+  let text='';
+  for(let i=0;i<alpha.length;i+=0x8000)text+=String.fromCharCode.apply(null,alpha.subarray(i,i+0x8000));
+  native.mirrorMask(key,JSON.stringify([uv.x,uv.y,uv.w,uv.h]),w,h,btoa(text));
+}
+// The debug overlay's view of the masks, on the frame: painted the slow way, from the
+// live landmarks, and only while that view is open.
+function paintMaskView(p){
+  const {w,h}=frameSize();
+  if(!maskView)maskView=document.createElement('canvas');
+  maskView.width=w;maskView.height=h;
+  if(maskTint.width!==w||maskTint.height!==h){maskTint.width=w;maskTint.height=h;}
+  const mv=maskView.getContext('2d'),t=maskTint.getContext('2d');
+  const maps=brush.maps(landmarks,w,h);
+  for(const spec of maskSpecs(p).values()){
+    const canvas=painter.paint(spec,landmarks,w,h,spec.type==='texture'?null:maps);
+    t.globalCompositeOperation='source-over';t.clearRect(0,0,w,h);t.drawImage(canvas,0,0,w,h);
+    t.globalCompositeOperation='source-in';t.fillStyle=TYPE_COLOR[spec.type]||'#fff';t.fillRect(0,0,w,h);
+    mv.drawImage(maskTint,0,0);
+  }
 }
 // Both cheeks, the forehead and the chin: where the light on the face is read.
 function probes(){
@@ -611,20 +648,25 @@ function draw(now=performance.now()){
   if(!source){ctxClear();return;}
   const {w,h}=frameSize();
   if(overlay.width!==w||overlay.height!==h){overlay.width=w;overlay.height=h;}
-  const gl=ensureStage();
   const p=plan();
+  if(source.native){drawNative(p);return;}
+  const gl=ensureStage();
   const face=faceWidthPx();
   if(gl){
-    if(masksDirty&&landmarks){const t=performance.now();rebuildMasks(p);perf.maskMs=ema(perf.maskMs,performance.now()-t);}
+    if(debug.on&&debug.masks&&landmarks&&(dirty||masksDirty))paintMaskView(p);
+    if(masksDirty){const t=performance.now();rebuildMasks(p);perf.maskMs=ema(perf.maskMs,performance.now()-t);}
     const t=performance.now();
+    const sync=source.kind==='camera'&&syncing();
     const ok=gl.draw({
-      source:source.el,width:w,height:h,version:source.version,live:source.live,landmarks,
+      source:sync?shown:source.el,width:w,height:h,
+      version:sync?`s${shownVersion}`:source.version,live:source.live&&!sync,landmarks,
       after:{layers:[...p.after.map(s=>stageLayer(s,face)),...p.textures.map(t=>textureLayer(t,face))],amounts:p.amounts},
       before:p.before?{layers:p.before.map(s=>stageLayer(s,face)),amounts:null}:null,
       seam:seamOn?1-seam:null,grade:lights.find(l=>l.id===light).grade,
       probes:landmarks?probes():null,time:now/1000
     });
-    perf.drawMs=ema(perf.drawMs,performance.now()-t);
+    perf.drawMs=ema(perf.drawMs,performance.now()-t);perf.draws++;
+    if(!ok&&sync){stepBroken=true;perf.lastError='in step: the frame could not be drawn';dirty=true;return;}
     if(ok){
       // The canvas covers the video exactly. The video stays visible underneath: iOS
       // pauses a muted video it thinks is hidden, which froze the camera on its first
@@ -726,12 +768,15 @@ function debugStats(){
   const pts=landmarks?placed(landmarks,w,h):null;
   const top=(blendshapes||[]).filter(([n])=>n!=='_neutral').sort((a,b)=>b[1]-a[1]).slice(0,3);
   return [
-    ['مسیر نمایش',stage?'WebGL':stageBroken?'2D canvas':'—'],
+    ['مسیر نمایش',source?.native?`native · ${nativeInfo.gpu||'OpenGL ES'}`:stage?'WebGL':stageBroken?'2D canvas':'—'],
     ['منبع',source?(source.kind==='photo'?'photo':frozen?'camera (frozen)':'camera'):'—'],
     ['فریم',source?`${w}×${h}`:'—'],
-    ['نمایش',`${perf.fps} fps`],
-    ['ردیابی',`${perf.hz} Hz · ${Math.round(perf.latency)} ms · ${tracker?(tracker.kind==='worker'?'worker':'main thread'):trackerStarting?'starting':'—'}`],
-    ['هزینهٔ هر فریم',`masks ${perf.maskMs.toFixed(1)} ms · draw ${perf.drawMs.toFixed(1)} ms`],
+    ['نمایش',source?.native?`${nativeInfo.fps||0} fps (native)`:`${perf.drawn} fps (حلقه ${perf.fps})`],
+    ['ردیابی',source?.native?`${nativeInfo.hz||0} Hz · native · ${nativeInfo.delegate||'—'}`
+      :`${perf.hz} Hz · ${Math.round(perf.latency)} ms · ${tracker?(tracker.kind==='worker'?'worker':'main thread'):trackerStarting?'starting':'—'}${delegate?' · '+delegate:''}`],
+    ['مدل',`${perf.inferMs.toFixed(1)} ms هر فریم${source?.native?(nativeInfo.note?' · '+nativeInfo.note.slice(0,60):''):gpuError?' · GPU: '+gpuError.slice(0,60):''}`],
+    ['هماهنگی',source?.kind==='camera'?(source.native||syncing()?'فریم و نقاط هم‌زمان':'تصویر زنده'):'—'],
+    ['هزینهٔ هر فریم',`masks ${perf.maskMs.toFixed(1)} ms · draw ${(source?.native?nativeInfo.draw||0:perf.drawMs).toFixed(1)} ms`],
     ['نقاط',landmarks?String(landmarks.length):'0'],
     ['پهنای صورت',landmarks?`${Math.round(faceWidthPx())} px`:'—'],
     ['زاویهٔ سر',poseAngles?`yaw ${poseAngles.yaw.toFixed(1)}° · pitch ${poseAngles.pitch.toFixed(1)}° · roll ${poseAngles.roll.toFixed(1)}°`:'—'],
@@ -744,7 +789,13 @@ function debugStats(){
 }
 function updateHud(now){
   perf.frames++;
-  if(now-perf.since>=1000){perf.fps=Math.round(perf.frames*1000/(now-perf.since));perf.hz=Math.round(perf.detections*1000/(now-perf.since));perf.frames=0;perf.detections=0;perf.since=now;}
+  if(now-perf.since>=1000){
+    const k=1000/(now-perf.since);
+    perf.fps=Math.round(perf.frames*k);perf.hz=Math.round(perf.detections*k);perf.drawn=Math.round(perf.draws*k);
+    perf.frames=0;perf.detections=0;perf.draws=0;perf.since=now;
+    // In step from 16 tracked frames a second, back to live below 12.
+    inStep=source?.kind==='camera'&&(alwaysInStep||(inStep?perf.hz>=12:perf.hz>=16));
+  }
   if(!debug.on&&!$('debug-panel').open)return;
   if(now-perf.lastHud<250)return;
   perf.lastHud=now;
@@ -774,6 +825,39 @@ let stream=null,tracker=null,trackerStarting=false,trackerGeneration=0,ready=fal
 let generation=0,raf=0,lastSent=0,sentAt=0,sentGen=-1,initTimer;
 let photoPasses=0,sourceVersion=0;
 const PHOTO_PASSES=8;
+const smoother=createSmoother();
+// The model on the GPU, off iPhones (where MediaPipe's GPU path is not dependable in
+// WebKit); the tracker falls back to the CPU by itself if the GPU fails. ?gpu=0 keeps
+// it on the CPU, ?gpu=force insists on the GPU, for comparing the two.
+const params=new URLSearchParams(location.search),gpuParam=params.get('gpu');
+// ?sync=always shows frames in step whatever the tracker's pace (for testing).
+const alwaysInStep=params.get('sync')==='always';
+const gpuQuery=gpuParam==='0'?'':gpuParam==='force'?'&gpu=force':iOS?'':'&gpu=1';
+let delegate='', gpuError='';
+// The fast path: a camera frame goes to the worker as a VideoFrame, with no copy.
+let fastFrames=!iOS&&typeof VideoFrame==='function';
+// Either way a copy of the frame sent is kept, and when its landmarks come back that
+// very frame is shown with them: the makeup sits exactly on the face in the picture
+// instead of trailing the live video by one tracking round-trip. The picture then
+// moves at the tracker's pace, so this is done only while the tracker keeps up;
+// below that, the live video with the latest landmarks looks better.
+let inFlight=null, shown=null, shownAt=0, shownVersion=0, inStep=false;
+// A camera frame that has not been measured yet (requestVideoFrameCallback), so the
+// model never runs twice on the same picture.
+let freshFrame=false, watching=0;
+function watchFrames(){
+  if(!video.requestVideoFrameCallback)return;
+  const token=++watching;
+  const tick=()=>{if(token!==watching||source?.kind!=='camera')return;freshFrame=true;video.requestVideoFrameCallback(tick);};
+  video.requestVideoFrameCallback(tick);
+}
+function dropFrames(){
+  inFlight?.close();inFlight=null;
+  shown?.close();shown=null;
+}
+// A WebGL that cannot take the kept frame as a texture turns showing in step off.
+let stepBroken=false;
+const syncing=()=>inStep&&!stepBroken&&!!shown&&performance.now()-shownAt<400;
 
 // The tracker runs in a worker. Where a worker cannot start MediaPipe (iPhones before
 // iOS 17 have no WebGL inside workers) the same code runs on the page instead: a
@@ -781,12 +865,18 @@ const PHOTO_PASSES=8;
 function onTracker(d){
   if(d.type==='ready'){
     clearTimeout(initTimer);ready=true;topology=d.topology;
+    delegate=d.delegate||'CPU';if(d.gpuError)gpuError=d.gpuError;
+    if(delegate!=='GPU')fastFrames=false;
     if(source){status(statusText());enableTools(true);}
+  }else if(d.type==='skip'){
+    busy=false;inFlight?.close();inFlight=null;
   }else if(d.type==='result'){
     busy=false;
-    if(sentGen!==generation||!source)return;
-    perf.detections++;perf.latency=performance.now()-sentAt;
-    landmarks=smoothLandmarks(landmarks,d.landmarks);
+    const frame=inFlight;inFlight=null;
+    if(sentGen!==generation||!source){frame?.close();return;}
+    perf.detections++;perf.latency=performance.now()-sentAt;perf.inferMs=ema(perf.inferMs,d.ms||0);
+    if(frame){shown?.close();shown=frame;shownAt=performance.now();shownVersion++;}
+    landmarks=smoother.smooth(d.landmarks,sentAt);
     if(source.kind==='photo')photoPasses++;
     poseAngles=d.landmarks?poseOf(d.matrix):null;
     if(d.blendshapes)blendshapes=d.blendshapes;
@@ -794,10 +884,11 @@ function onTracker(d){
     else if(wantSkin&&!d.landmarks)onSkin(null);
     $('guide').hidden=!!landmarks;
     status(landmarks||source.kind==='photo'?statusText():'صورت پیدا نشد. کمی روبه‌روی دوربین و در نور بیشتر قرار بگیر.');
-    invalidate({masks:true,measure:true});
+    invalidate({measure:true});
   }else if(d.type==='error'){
-    busy=false;
+    busy=false;inFlight?.close();inFlight=null;
     perf.lastError=`${d.stage||'tracker'}: ${d.message||''}`;
+    if(d.recoverable){gpuError=d.message;fastFrames=false;return;}
     if(!ready&&tracker?.kind==='worker')useTracker('page',d.message);
     else shutdown('آینه روی این مرورگر آماده نشد. آخرین نسخهٔ مرورگر را امتحان کن.'+code({message:d.message}));
   }
@@ -805,7 +896,7 @@ function onTracker(d){
 function ensureTracker(){
   if(tracker||trackerStarting)return;
   let w=null;
-  try{w=new Worker(new URL('face-worker.js?v=14',import.meta.url));}catch(e){perf.lastError=`worker: ${e.message}`;}
+  try{w=new Worker(new URL(`face-worker.js?v=15${gpuQuery}`,import.meta.url));}catch(e){perf.lastError=`worker: ${e.message}`;}
   if(!w){useTracker('page','no worker');return;}
   ready=false;busy=false;
   tracker={kind:'worker',post:(m,transfer)=>w.postMessage(m,transfer),close:()=>w.terminate()};
@@ -825,7 +916,7 @@ async function useTracker(kind,reason){
   const token=++trackerGeneration;
   try{
     const Vision=await import('./vendor/vision_bundle.mjs');
-    await import('./face-core.js?v=14');
+    await import('./face-core.js?v=15');
     const core=self.rojaFaceCore(Vision,new URL('./',import.meta.url).href);
     const found=await core.init();
     if(token!==trackerGeneration){core.close();return;}
@@ -836,7 +927,7 @@ async function useTracker(kind,reason){
       onTracker(out);
     },0),close:()=>core.close()};
     trackerStarting=false;
-    onTracker({type:'ready',topology:found});
+    onTracker({type:'ready',topology:found,delegate:found.delegate});
   }catch(e){
     trackerStarting=false;
     if(token===trackerGeneration)shutdown('آینه روی این مرورگر آماده نشد. آخرین نسخهٔ Safari یا Chrome را امتحان کن.'+code(e));
@@ -858,15 +949,17 @@ function goLive(){
   $('badge').hidden=mode!=='procedure';
   landmarks=null;poseAngles=null;photoPasses=0;
   overlay.width=source.width;overlay.height=source.height;
-  enableTools(ready);
-  ensureTracker();
+  enableTools(ready||!!source.native);
+  if(!source.native)ensureTracker();
   native?.keepScreenOn?.(true);
   cancelAnimationFrame(raf);raf=requestAnimationFrame(frame);
   updateSeam();invalidate({masks:true,measure:true});
 }
 
 function stop(message='دوربین خاموش شد.'){
-  generation++;activeSource=false;busy=false;
+  if(source?.native||nativeStarting){try{native.mirrorStop();}catch{}}
+  nativeStarting=false;document.documentElement.classList.remove('native-live');lastPlan='';
+  generation++;activeSource=false;busy=false;watching++;dropFrames();smoother.reset();
   cancelAnimationFrame(raf);
   if(stream)stream.getTracks().forEach(t=>t.stop());
   stream=null;video.srcObject=null;
@@ -897,10 +990,16 @@ async function start(){
   activeSource=true;
   const token=++generation;
   $('start').disabled=true;$('start').lastChild.textContent='در حال آماده‌سازی…';
+  if(nativeMirror){
+    status('در حال روشن‌کردن دوربین…');
+    nativeStarting=true;nativeToken=token;
+    native.mirrorStart();
+    return;
+  }
   status('اجازهٔ دوربین را در مرورگر تأیید کن.');
   try{
     if(!window.isSecureContext||!navigator.mediaDevices?.getUserMedia)throw new Error('UNSUPPORTED');
-    const acquired=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:'user',width:{ideal:640},height:{ideal:480},frameRate:{ideal:24,max:30}}});
+    const acquired=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:'user',width:{ideal:640},height:{ideal:480},frameRate:{ideal:30,max:30}}});
     if(token!==generation){acquired.getTracks().forEach(t=>t.stop());return;}
     stream=acquired;video.srcObject=stream;
     const playing=await video.play().then(()=>true,()=>false);
@@ -908,27 +1007,132 @@ async function start(){
     if(token!==generation)return;
     if(!video.videoWidth||!video.videoHeight)throw Object.assign(new Error('the camera sent no picture'),{name:'NoVideo'});
     source={kind:'camera',el:video,width:video.videoWidth,height:video.videoHeight,live:true,version:++sourceVersion};
+    freshFrame=true;watchFrames();
     status(ready?'صورتت را روبه‌روی دوربین نگه دار.':'آماده‌سازی آینه. بار اول ممکن است کمی طول بکشد.');
     goLive();
     if(!playing)$('tap-start').hidden=false;
     stream.getVideoTracks()[0].onended=()=>stop();
   }catch(e){
     if(token!==generation)return;
-    perf.lastError=`camera: ${e?.name||''} ${e?.message||''}`;
-    const errors={
-      NotAllowedError:'اجازهٔ دوربین داده نشد. '+cameraHelp()+' یا یک عکس انتخاب کن.',
-      SecurityError:'اجازهٔ دوربین داده نشد. '+cameraHelp(),
-      NotFoundError:'دوربینی پیدا نشد. می‌توانی به‌جای آن یک عکس انتخاب کنی.',
-      OverconstrainedError:'دوربین این دستگاه تنظیم خواسته‌شده را ندارد. یک عکس انتخاب کن.',
-      NotReadableError:'دوربین در دسترس نیست. برنامه‌های دیگری که از آن استفاده می‌کنند را ببند.',
-      NoVideo:'دوربین روشن شد اما تصویری نفرستاد. صفحه را دوباره باز کن.'
-    };
-    stop((errors[e.name]||(e.message==='UNSUPPORTED'
-      ?(inApp?'این صفحه در مرورگر داخلی یک برنامه باز شده که به دوربین دسترسی ندارد. آن را در Safari یا Chrome باز کن، یا یک عکس انتخاب کن.'
-        :'این مرورگر دوربین را پشتیبانی نمی‌کند. سایت را با HTTPS در Safari یا Chrome باز کن، یا یک عکس انتخاب کن.')
-      :'دوربین باز نشد. دوباره امتحان کن.'))+code(e));
+    cameraFailed(e);
   }
 }
+// Why the camera did not start, in words, with where to allow it and an error code.
+function cameraFailed(e){
+  perf.lastError=`camera: ${e?.name||''} ${e?.message||''}`;
+  const errors={
+    NotAllowedError:'اجازهٔ دوربین داده نشد. '+cameraHelp()+' یا یک عکس انتخاب کن.',
+    SecurityError:'اجازهٔ دوربین داده نشد. '+cameraHelp(),
+    NotFoundError:'دوربینی پیدا نشد. می‌توانی به‌جای آن یک عکس انتخاب کنی.',
+    OverconstrainedError:'دوربین این دستگاه تنظیم خواسته‌شده را ندارد. یک عکس انتخاب کن.',
+    NotReadableError:'دوربین در دسترس نیست. برنامه‌های دیگری که از آن استفاده می‌کنند را ببند.',
+    NoVideo:'دوربین روشن شد اما تصویری نفرستاد. صفحه را دوباره باز کن.',
+    TrackerError:'ردیابی چهره روی این گوشی آماده نشد.'
+  };
+  stop((errors[e.name]||(e.message==='UNSUPPORTED'
+    ?(inApp?'این صفحه در مرورگر داخلی یک برنامه باز شده که به دوربین دسترسی ندارد. آن را در Safari یا Chrome باز کن، یا یک عکس انتخاب کن.'
+      :'این مرورگر دوربین را پشتیبانی نمی‌کند. سایت را با HTTPS در Safari یا Chrome باز کن، یا یک عکس انتخاب کن.')
+    :'دوربین باز نشد. دوباره امتحان کن.'))+code(e));
+}
+
+/* ---------- the native mirror (inside the Android app) --------------------- */
+let nativeStarting=false, nativeToken=0, nativeInfo={}, lastPlan='', nativeSkin=false, nativeExtras=false;
+let snapWaiters=[];
+// The mirror mesh, for the debug overlay (the browser tracker would supply it).
+const meshTopology=(()=>{
+  const seen=new Set(),pairs=[];
+  for(let t=0;t<TRIANGLES.length;t+=3)for(const [a,b] of [[0,1],[1,2],[2,0]]){
+    const i=TRIANGLES[t+a],j=TRIANGLES[t+b],key=i<j?i*1000+j:j*1000+i;
+    if(!seen.has(key)){seen.add(key);pairs.push([i,j]);}
+  }
+  return {tesselation:pairs,contours:{}};
+})();
+// Where the mirror is, for the renderer under the page, in device pixels; and the hole
+// the page leaves there so it shows through.
+function placeNative(){
+  if(!source?.native)return;
+  const rect=viewport.getBoundingClientRect(),box=videoBox(),dpr=devicePixelRatio||1,r=Math.round;
+  const radius=parseFloat(getComputedStyle(viewport).borderTopLeftRadius)||0;
+  native.mirrorPlace(JSON.stringify({x:r(rect.left*dpr),y:r(rect.top*dpr),w:r(rect.width*dpr),h:r(rect.height*dpr),r:radius*dpr,
+    px:r((rect.left+box.left)*dpr),py:r((rect.top+box.top)*dpr),pw:r(box.width*dpr),ph:r(box.height*dpr)}));
+  const root=document.documentElement.style;
+  root.setProperty('--hole-x',rect.left+'px');root.setProperty('--hole-y',rect.top+'px');
+  root.setProperty('--hole-w',rect.width+'px');root.setProperty('--hole-h',rect.height+'px');
+}
+new ResizeObserver(()=>placeNative()).observe(viewport);
+window.addEventListener('resize',()=>placeNative());
+// What the renderer should draw, sent only when it changes.
+function drawNative(p){
+  if(masksDirty){const t=performance.now();rebuildMasks(p);perf.maskMs=ema(perf.maskMs,performance.now()-t);}
+  const json=JSON.stringify({
+    after:[...p.after.map(s=>stageLayer(s,0)),...p.textures.map(t=>textureLayer(t,0))],amounts:p.amounts,
+    before:p.before?p.before.map(s=>stageLayer(s,0)):null,
+    seam:seamOn?1-seam:null,grade:lights.find(l=>l.id===light).grade
+  });
+  if(json!==lastPlan){native.mirrorPlan(json);lastPlan=json;}
+  octx.clearRect(0,0,overlay.width,overlay.height);
+  dirty=false;
+}
+function nativePicture(){
+  return new Promise(resolve=>{snapWaiters.push(resolve);native.mirrorSnapshot();}).then(url=>{
+    if(!url)return null;
+    const image=new Image();image.src=url;
+    return image.decode().then(()=>image,()=>null);
+  });
+}
+window.rojaNative={
+  onStart(width,height){
+    if(!nativeStarting||nativeToken!==generation){try{native.mirrorStop();}catch{}return;}
+    nativeStarting=false;
+    source={kind:'camera',native:true,el:null,width,height,live:true,version:++sourceVersion};
+    ready=true;topology=meshTopology;lastPlan='';masksDirty=true;
+    $('stage').width=width;$('stage').height=height;
+    document.documentElement.classList.add('native-live');
+    status('صورتت را روبه‌روی دوربین نگه دار.');
+    goLive();
+    placeNative();
+  },
+  onFrame(d){
+    if(!source?.native)return;
+    nativeInfo=d.st||nativeInfo;
+    perf.detections++;perf.inferMs=nativeInfo.infer||0;
+    if(d.size&&(d.size[0]!==source.width||d.size[1]!==source.height)){
+      // The phone turned: the frame did too.
+      source.width=d.size[0];source.height=d.size[1];
+      $('stage').width=source.width;$('stage').height=source.height;
+      overlay.width=source.width;overlay.height=source.height;
+      placeNative();if(seamOn)placeSeam();
+    }
+    const lm=d.lm;
+    landmarks=lm?Array.from({length:lm.length/3},(_,i)=>({x:lm[i*3],y:lm[i*3+1],z:lm[i*3+2]})):null;
+    poseAngles=landmarks&&d.m?poseOf(d.m):null;
+    if(d.bs)blendshapes=d.bs;
+    if('skin' in d)onSkin(d.skin);
+    if(wantSkin!==nativeSkin){nativeSkin=wantSkin;native.mirrorSkin(wantSkin);}
+    const extras=debug.on||$('debug-panel').open;
+    if(extras!==nativeExtras){nativeExtras=extras;native.mirrorExtras(extras);}
+    $('guide').hidden=!!landmarks;
+    status(landmarks?statusText():'صورت پیدا نشد. کمی روبه‌روی دوربین و در نور بیشتر قرار بگیر.');
+    invalidate({measure:true});
+  },
+  onError(name,message){
+    if(!nativeStarting&&!source?.native)return;
+    // A phone the native tracker cannot run on still has the browser's: carry on there.
+    if(name==='TrackerError'){
+      perf.lastError=`native tracker: ${message}`;nativeMirror=false;
+      stop('');start();return;
+    }
+    const token=generation;
+    stop('');
+    if(token+1===generation)cameraFailed(Object.assign(new Error(message||name),{name}));
+  },
+  onStop(){if(source?.native)stop('با خارج‌شدن از برنامه، دوربین خاموش شد.');},
+  onSnapshot(url){const waiting=snapWaiters;snapWaiters=[];waiting.forEach(done=>done(url));}
+};
+// For the app's device tests: what the mirror is showing.
+window.rojaState=()=>({kind:source?.kind||null,native:!!source?.native,width:source?.width||0,height:source?.height||0,
+  face:!!landmarks,points:landmarks?landmarks.map(q=>[+q.x.toFixed(4),+q.y.toFixed(4)]):null,info:nativeInfo});
+
 // The stream's size can arrive a moment after the stream itself.
 function videoSize(v,ms=5000){
   if(v.videoWidth&&v.videoHeight)return Promise.resolve();
@@ -980,40 +1184,61 @@ function frame(now){
   if(!source)return;
   raf=requestAnimationFrame(frame);
   detect(now);
-  if(source.live||dirty||masksDirty||hasShimmer())draw(now);
+  // In step with the tracker, a frame is drawn when its landmarks arrive (which marks
+  // the mirror dirty), not on every display refresh. Natively, the page only sends
+  // what changed.
+  if(source.native?(dirty||masksDirty):((source.live&&!syncing())||dirty||masksDirty||hasShimmer()))draw(now);
   drawDebug();
   renderMeasure(now);
   updateHud(now);
 }
 function hasShimmer(){return plan().after.some(s=>(FINISH[s.finish]?.shimmer||0)>0);}
 function detect(now){
-  if(!ready||busy||!tracker||!source)return;
+  if(!ready||busy||!tracker||!source||source.native)return;
   if(source.kind==='camera'){
-    if(frozen&&landmarks&&!wantSkin)return;
-    // On the page itself, a little less often, so the interface stays responsive.
-    if(now-lastSent<(tracker.kind==='page'?110:60)||video.readyState<2)return;
+    if(video.readyState<2)return;
+    if(frozen){
+      if(landmarks&&!wantSkin)return;
+      if(now-lastSent<100)return;
+    }else{
+      // Each camera frame once, as soon as the last one is measured. Without
+      // requestVideoFrameCallback, at the camera's pace at most.
+      if(!video.requestVideoFrameCallback)freshFrame=now-lastSent>=30;
+      if(!freshFrame)return;
+      // On the page itself a little less often, so the interface stays responsive.
+      if(tracker.kind==='page'&&now-lastSent<80)return;
+    }
   }else{
     if(photoPasses>=PHOTO_PASSES&&!wantSkin)return;
     if(now-lastSent<30)return;
   }
-  busy=true;lastSent=now;sentAt=performance.now();sentGen=generation;
+  busy=true;freshFrame=false;lastSent=now;sentAt=performance.now();sentGen=generation;
   const token=generation;
-  grabFrame().then(({frame,transfer})=>{
-    if(token!==generation||!tracker){frame.close?.();busy=false;return;}
-    tracker.post({type:'frame',frame,timestamp:now,extras:debug.on||$('debug-panel').open,sample:wantSkin},transfer);
+  grabFrame().then(({frame,transfer,keep})=>{
+    if(token!==generation||!tracker){frame.close?.();keep?.close();busy=false;return;}
+    inFlight?.close();inFlight=keep||null;
+    tracker.post({type:'frame',frame,timestamp:sentAt,extras:debug.on||$('debug-panel').open,sample:wantSkin},transfer);
   }).catch(e=>{busy=false;perf.lastError=`frame: ${e?.message||e}`;
     if(token===generation)stop('پردازش تصویر روی این مرورگر انجام نشد. مرورگر دیگری را امتحان کن.'+code(e));});
 }
-// The frame the tracker measures, 480 px wide. Drawing the video into a 2D canvas works
+// The frame the tracker measures, at most 640 px wide. Drawing the video into a 2D canvas works
 // the same everywhere; createImageBitmap straight from a camera video, with resizing,
 // does not (WebKit on iPhone was the trouble). No createImageBitmap at all: ImageData.
 const frameCanvas=document.createElement('canvas');
 function grabFrame(){
-  const w=480,h=Math.max(1,Math.round(480*source.height/source.width));
+  if(fastFrames&&source.kind==='camera'&&tracker.kind==='worker'&&!frozen){
+    try{
+      const frame=new VideoFrame(video,{timestamp:Math.round(sentAt*1000)});
+      return Promise.resolve({frame,transfer:[frame],keep:frame.clone()});
+    }catch(e){fastFrames=false;perf.lastError=`VideoFrame: ${e?.message||e}`;}
+  }
+  const scale=Math.min(1,640/source.width);
+  const w=Math.max(1,Math.round(source.width*scale)),h=Math.max(1,Math.round(source.height*scale));
   if(frameCanvas.width!==w||frameCanvas.height!==h){frameCanvas.width=w;frameCanvas.height=h;}
   const x=frameCanvas.getContext('2d',{willReadFrequently:!window.createImageBitmap});
   x.drawImage(source.el,0,0,w,h);
-  if(window.createImageBitmap)return createImageBitmap(frameCanvas).then(frame=>({frame,transfer:[frame]}));
+  if(window.createImageBitmap)return Promise.all([createImageBitmap(frameCanvas),
+    source.kind==='camera'&&!frozen?createImageBitmap(frameCanvas):null]).then(([frame,keep])=>({frame,transfer:[frame],keep}));
   const frame=x.getImageData(0,0,w,h);
   return Promise.resolve({frame,transfer:[frame.data.buffer]});
 }
@@ -1060,25 +1285,30 @@ function toggleCompare(){
   if(mode!=='makeup')return;
   if(pin){pin=null;updatePinButton();compare=false;}
   else compare=!compare;
-  if(!stage)toast(compare?'نمایش بدون آرایش':'نمایش با آرایش');
+  if(!stage&&!source?.native)toast(compare?'نمایش بدون آرایش':'نمایش با آرایش');
   updateSeam();invalidate({masks:true});status(statusText());
 }
 function toggleFreeze(){
   if(source?.kind!=='camera')return;
   frozen=!frozen;
   $('freeze').setAttribute('aria-pressed',String(frozen));
-  if(frozen)video.pause();else video.play().catch(()=>{});
+  if(source.native)native.mirrorFreeze(frozen);
+  else if(frozen)video.pause();else video.play().catch(()=>{});
   status(statusText());
 }
 
-function snapshot(){
+async function snapshot(){
   if(!source)return;
   const {w,h}=frameSize();
+  // Natively, the picture comes from the renderer, as drawn.
+  const picture=source.native?await nativePicture():null;
+  if(source.native&&!picture){toast('عکس گرفته نشد. دوباره امتحان کن.');return;}
   const c=document.createElement('canvas');c.width=w;c.height=h;
   const x=c.getContext('2d');
   // Saved as seen: the preview is mirrored, so the saved picture is too.
   x.save();x.translate(w,0);x.scale(-1,1);
-  if(stage&&!$('stage').hidden)x.drawImage($('stage'),0,0,w,h);
+  if(picture)x.drawImage(picture,0,0,w,h);
+  else if(stage&&!$('stage').hidden)x.drawImage($('stage'),0,0,w,h);
   else{
     x.drawImage(source.el,0,0,w,h);
     if($('natural-blend').checked)x.globalCompositeOperation='multiply';

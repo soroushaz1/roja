@@ -3,132 +3,32 @@
 // result is carried through a grid mesh displaced by deform.js for the procedures.
 // The frame is never read back, sent or stored.
 //
+// Masks are painted once, in the face's own front-on space (facemesh.js), whenever a
+// product or setting changes. Every frame the face mesh, placed on the live landmarks,
+// carries each one onto the face: a few hundred triangles on the GPU instead of
+// repainting every mask on the CPU each time the face moves.
+//
 // With no layers and an all-zero displacement field the output is a pixel-exact copy
 // of the camera frame.
-import {deformers,displace} from './deform.js?v=14';
-
-// Full precision wherever the GPU offers it. On iPhones mediump really is 16-bit, which
-// overflows the shimmer noise and blurs fine detail; on most desktops it is 32-bit
-// anyway, so a bug there never shows on a laptop.
-const PRECISION=`#ifdef GL_FRAGMENT_PRECISION_HIGH
-precision highp float;
-#else
-precision mediump float;
-#endif
-`;
+import {deformers,displace} from './deform.js?v=15';
+import {CANON,TRIANGLES} from './facemesh.js?v=15';
+import * as GLSL from './shaders.js?v=15';
 
 const COLS=64, ROWS=48;          // resolves the smallest anchor radius
 const GRID=(COLS+1)*(ROWS+1);
 const LANDMARKS=468;
 
-const MESH_VERT=`attribute vec2 a_pos;attribute vec2 a_uv;varying vec2 v_uv;
-void main(){v_uv=a_uv;gl_Position=vec4(a_pos,0.,1.);}`;
-// A grade of (1,1,1) multiplies by exactly one, so the plain view stays exact.
-const OUT_FRAG=`${PRECISION}uniform sampler2D u_tex;uniform vec3 u_grade;varying vec2 v_uv;
-void main(){vec4 c=texture2D(u_tex,v_uv);gl_FragColor=vec4(c.rgb*u_grade,c.a);}`;
-
-// Full-frame passes map texture space onto itself, so every intermediate texture has
-// the camera texture's orientation and all of them are sampled at the same v_uv.
-const QUAD_VERT=`attribute vec2 a_pos;varying vec2 v_uv;
-void main(){v_uv=a_pos*.5+.5;gl_Position=vec4(a_pos,0.,1.);}`;
-
-// 4 bilinear taps over a 4×4 block: a box filter for the local-mean pyramid.
-const DOWN_FRAG=`${PRECISION}uniform sampler2D u_tex;uniform vec2 u_step;varying vec2 v_uv;
-void main(){
-  gl_FragColor=.25*(texture2D(u_tex,v_uv+u_step*vec2(-1.,-1.))+texture2D(u_tex,v_uv+u_step*vec2(1.,-1.))
-                  +texture2D(u_tex,v_uv+u_step*vec2(-1.,1.))+texture2D(u_tex,v_uv+u_step*vec2(1.,1.)));
-}`;
-
-// One texel per layer: the mean colour of the frame under the layer's mask (from the
-// low-resolution copy), and in alpha the brightness of the cheeks and forehead, which
-// stands in for how much light is on the face.
-const STATS_FRAG=`${PRECISION}
-uniform sampler2D u_low;uniform sampler2D u_mask;uniform vec4 u_box;uniform vec4 u_probeA;uniform vec4 u_probeB;
-float luma(vec3 c){return dot(c,vec3(.299,.587,.114));}
-void main(){
-  vec3 sum=vec3(0.);float w=0.;
-  for(int j=0;j<6;j++)for(int i=0;i<6;i++){
-    vec2 uv=mix(u_box.xy,u_box.zw,vec2((float(i)+.5)/6.,(float(j)+.5)/6.));
-    float m=texture2D(u_mask,uv).a;
-    sum+=texture2D(u_low,uv).rgb*m;w+=m;
+// The triangles of the face mesh that reach into a box of face space, and their corners.
+export function trianglesIn(uv){
+  const x0=uv.x,y0=uv.y,x1=uv.x+uv.w,y1=uv.y+uv.h,tris=[],verts=new Set();
+  for(let t=0;t<TRIANGLES.length;t+=3){
+    const a=TRIANGLES[t],b=TRIANGLES[t+1],c=TRIANGLES[t+2];
+    const ax=CANON[a*2],bx=CANON[b*2],cx=CANON[c*2],ay=CANON[a*2+1],by=CANON[b*2+1],cy=CANON[c*2+1];
+    if(Math.max(ax,bx,cx)<x0||Math.min(ax,bx,cx)>x1||Math.max(ay,by,cy)<y0||Math.min(ay,by,cy)>y1)continue;
+    tris.push(a,b,c);verts.add(a);verts.add(b);verts.add(c);
   }
-  vec3 mean=w>.05?sum/w:texture2D(u_low,(u_box.xy+u_box.zw)*.5).rgb;
-  float face=.25*(luma(texture2D(u_low,u_probeA.xy).rgb)+luma(texture2D(u_low,u_probeA.zw).rgb)
-                 +luma(texture2D(u_low,u_probeB.xy).rgb)+luma(texture2D(u_low,u_probeB.zw).rgb));
-  gl_FragColor=vec4(mean,face);
-}`;
-
-// How a colour meets the skin. The colour is scaled to the light on the face, then
-// modulated by how bright each pixel is relative to the region's mean, so lip creases,
-// the shadow under the lower lip and the texture of the skin all show through the
-// colour, as they do with real product. Finish then decides how the glints behave:
-// matte flattens them, gloss sharpens them, shimmer scatters specks.
-const LAYER_FRAG=`${PRECISION}
-varying vec2 v_uv;
-uniform sampler2D u_src;uniform sampler2D u_low;uniform sampler2D u_mask;uniform sampler2D u_stats;
-uniform vec3 u_color;uniform float u_amount;uniform float u_mode;
-uniform float u_detail;uniform float u_gloss;uniform float u_matte;uniform float u_shimmer;
-uniform float u_smooth;uniform float u_bright;uniform vec2 u_texel;uniform float u_radius;uniform float u_time;
-float luma(vec3 c){return dot(c,vec3(.299,.587,.114));}
-float hash(vec2 p){return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453);}
-vec3 smoothed(vec3 c0){
-  vec3 sum=c0;float wsum=1.;
-  for(int i=0;i<16;i++){
-    float fi=float(i),a=fi*2.39996,r=sqrt((fi+.5)/16.)*u_radius;
-    vec3 c=texture2D(u_src,v_uv+vec2(cos(a),sin(a))*r*u_texel).rgb;
-    vec3 d=c-c0;float w=exp(-dot(d,d)*90.);
-    sum+=c*w;wsum+=w;
-  }
-  return sum/wsum;
+  return {tris:new Uint16Array(tris),verts:Uint16Array.from(verts)};
 }
-void main(){
-  vec4 src=texture2D(u_src,v_uv);
-  float cover=texture2D(u_mask,v_uv).a;
-  if(cover<=0.){gl_FragColor=src;return;}
-  vec3 base=src.rgb;
-  vec4 stats=texture2D(u_stats,vec2(.5));
-  float Y=luma(base);
-  float Yl=max(luma(texture2D(u_low,v_uv).rgb),.03);
-  float Yr=max(luma(stats.rgb),.03);
-  float light=clamp(mix(1.,stats.a/.58,.5),.72,1.12);
-  float shade=clamp(Y/Yr,0.,2.5);
-  float glint=max(Y-Yl,0.);
-  vec3 col=u_color*light;
-  float m=cover*u_amount;
-  vec3 outc=base;
-  if(u_mode<.5){
-    float s=shade>1.?1.+(shade-1.)*(1.-.8*u_matte):shade;
-    outc=mix(base,col*mix(1.,s,u_detail),m);
-  }else if(u_mode<1.5){
-    float mx=max(max(u_color.r,u_color.g),max(u_color.b,.001));
-    outc=mix(base,base*(u_color/mx),m);
-  }else if(u_mode<2.5){
-    outc=mix(base,base*(u_color/max(luma(u_color),.05))*.78,m);
-  }else if(u_mode<3.5){
-    vec3 g=col*(.45+.55*smoothstep(.9,1.25,shade));
-    outc=mix(base,1.-(1.-base)*(1.-g*.85),m);
-  }else{
-    // Skin only: a pixel far darker or brighter than the region (hair, a fringe,
-    // a nostril) is left mostly alone.
-    float away=abs(Y-Yr)/Yr;
-    float skin=clamp(1.-(away-.3)*1.6,0.,1.);
-    vec3 even=mix(base,smoothed(base),clamp(u_smooth*cover*skin,0.,1.));
-    if(u_mode<4.5){
-      float s=clamp(luma(even)/Yr,0.,2.);
-      s=s>1.?1.+(s-1.)*(1.-.7*u_matte):s;
-      outc=mix(even,col*mix(1.,s,u_detail),m*skin);
-    }else{
-      outc=even*(1.+.24*u_bright*cover*skin);
-      outc.b*=1.-.05*u_bright*cover*skin;
-    }
-  }
-  outc+=u_gloss*cover*(smoothstep(.012,.18,glint)*.55*light+.045*shade);
-  if(u_shimmer>0.){
-    float n=hash(floor(gl_FragCoord.xy/1.5)+floor(u_time*5.));
-    outc+=u_shimmer*(step(.982,n)*.38*cover*cover+smoothstep(.95,1.3,shade)*.14*cover)*mix(vec3(1.),u_color*1.2,.45);
-  }
-  gl_FragColor=vec4(clamp(outc,0.,1.),1.);
-}`;
 
 export const layerModes={pigment:0,tint:1,shade:2,glow:3,foundation:4,smooth:5};
 
@@ -158,8 +58,10 @@ export function createStage(canvas) {
       for(let i=0;i<count;i++){const info=gl.getActiveUniform(program,i);uniforms[info.name]=gl.getUniformLocation(program,info.name);}
       return {program,uniforms,pos:gl.getAttribLocation(program,'a_pos'),uv:gl.getAttribLocation(program,'a_uv')};
     };
-    programs={out:link(MESH_VERT,OUT_FRAG),down:link(QUAD_VERT,DOWN_FRAG),
-      stats:link(QUAD_VERT,STATS_FRAG),layer:link(QUAD_VERT,LAYER_FRAG)};
+    const F=GLSL.PRECISION;
+    programs={out:link(GLSL.MESH_VERT,F+GLSL.OUT_FRAG),down:link(GLSL.QUAD_VERT,F+GLSL.DOWN_FRAG),
+      stats:link(GLSL.QUAD_VERT,F+GLSL.STATS_FRAG),layer:link(GLSL.QUAD_VERT,F+GLSL.LAYER_FRAG),
+      mask:link(GLSL.MASK_VERT,F+GLSL.MASK_FRAG)};
   }catch{return null;}
 
   /* ---- geometry ---- */
@@ -179,6 +81,12 @@ export function createStage(canvas) {
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,indexBuffer);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,indices,gl.STATIC_DRAW);
   const quadBuffer=gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER,quadBuffer);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
+  // The face mesh: live landmark positions (per frame) and face-space coordinates.
+  const facePos=new Float32Array(LANDMARKS*2);
+  const facePosBuffer=gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER,facePosBuffer);gl.bufferData(gl.ARRAY_BUFFER,facePos,gl.DYNAMIC_DRAW);
+  const canonBuffer=gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER,canonBuffer);gl.bufferData(gl.ARRAY_BUFFER,CANON,gl.STATIC_DRAW);
 
   /* ---- textures and targets ---- */
   // Nothing here is power-of-two, so clamp and skip mipmaps.
@@ -202,14 +110,14 @@ export function createStage(canvas) {
   function dropTarget(t){if(t){gl.deleteFramebuffer(t.fbo);gl.deleteTexture(t.tex);}}
 
   const camera=makeTexture(0,0);
-  const masks=new Map();                          // key -> {tex, box}
+  const masks=new Map();                          // key -> {tex, uv, tris, count, verts}
   let targets=null, size={w:0,h:0};
   const stats=makeTarget(1,1,gl.NEAREST);
   function ensureTargets(w,h){
     if(targets&&size.w===w&&size.h===h)return;
     if(targets)Object.values(targets).flat().forEach(dropTarget);
     targets={
-      a:[makeTarget(w,h),makeTarget(w,h)],b:[makeTarget(w,h),makeTarget(w,h)],
+      a:[makeTarget(w,h),makeTarget(w,h)],b:[makeTarget(w,h),makeTarget(w,h)],mask:makeTarget(w,h),
       low1:makeTarget(Math.max(1,Math.round(w/4)),Math.max(1,Math.round(h/4))),
       low2:makeTarget(Math.max(1,Math.round(w/8)),Math.max(1,Math.round(h/8)))
     };
@@ -249,17 +157,46 @@ export function createStage(canvas) {
     const X=Math.max(0,Math.floor(x0*size.w)-1),Y=Math.max(0,Math.floor(y0*size.h)-1);
     gl.scissor(X,Y,Math.min(size.w,Math.ceil(x1*size.w)+1)-X,Math.min(size.h,Math.ceil(y1*size.h)+1)-Y);
   }
+  // Where a mask lands on screen this frame: around the live corners of its triangles.
+  function screenBox(mask){
+    let x0=1,y0=1,x1=0,y1=0;
+    for(const i of mask.verts){const x=facePos[i*2],y=facePos[i*2+1];
+      if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y;}
+    // clip space to frame fractions, a pixel or two of room
+    const px=2/size.w,py=2/size.h;
+    x0=Math.max(0,(x0+1)/2-px);x1=Math.min(1,(x1+1)/2+px);y0=Math.max(0,(y0+1)/2-py);y1=Math.min(1,(y1+1)/2+py);
+    return x1>x0&&y1>y0?{x:x0,y:y0,w:x1-x0,h:y1-y0}:null;
+  }
+  // The mask for this frame, into the shared mask target (cleared whole, so nothing
+  // from the last layer's mask is left where this pass looks).
+  function renderMask(mask){
+    const t=targets.mask,p=programs.mask;
+    gl.bindFramebuffer(gl.FRAMEBUFFER,t.fbo);gl.viewport(0,0,t.w,t.h);
+    gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.useProgram(p.program);
+    gl.bindBuffer(gl.ARRAY_BUFFER,facePosBuffer);
+    gl.enableVertexAttribArray(p.pos);gl.vertexAttribPointer(p.pos,2,gl.FLOAT,false,0,0);
+    gl.bindBuffer(gl.ARRAY_BUFFER,canonBuffer);
+    gl.enableVertexAttribArray(p.uv);gl.vertexAttribPointer(p.uv,2,gl.FLOAT,false,0,0);
+    bindTex(0,mask.tex,p.uniforms.u_mask);
+    gl.uniform4f(p.uniforms.u_box,mask.uv.x,mask.uv.y,mask.uv.w,mask.uv.h);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,mask.tris);
+    gl.drawElements(gl.TRIANGLES,mask.count,gl.UNSIGNED_SHORT,0);
+    gl.disableVertexAttribArray(p.uv);
+  }
   function composite(layers,pair,probes,time){
     let input=camera,flip=0,passes=0,previous=null;
     for(const layer of layers){
       const mask=masks.get(layer.key);
-      if(!mask||!(layer.amount>0||layer.gloss>0||layer.shimmer>0))continue;
-      const box=mask.box||FULL;
-      // this layer's region statistics
+      if(!mask||!mask.count||!(layer.amount>0||layer.gloss>0||layer.shimmer>0))continue;
+      const box=screenBox(mask);
+      if(!box)continue;
       gl.disable(gl.SCISSOR_TEST);
+      renderMask(mask);
+      // this layer's region statistics
       let p=programs.stats;useQuad(p);
       gl.bindFramebuffer(gl.FRAMEBUFFER,stats.fbo);gl.viewport(0,0,1,1);
-      bindTex(0,targets.low2.tex,p.uniforms.u_low);bindTex(1,mask.tex,p.uniforms.u_mask);
+      bindTex(0,targets.low2.tex,p.uniforms.u_low);bindTex(1,targets.mask.tex,p.uniforms.u_mask);
       gl.uniform4f(p.uniforms.u_box,box.x,box.y,box.x+box.w,box.y+box.h);
       gl.uniform4f(p.uniforms.u_probeA,probes[0],probes[1],probes[2],probes[3]);
       gl.uniform4f(p.uniforms.u_probeB,probes[4],probes[5],probes[6],probes[7]);
@@ -269,7 +206,7 @@ export function createStage(canvas) {
       p=programs.layer;useQuad(p);
       gl.bindFramebuffer(gl.FRAMEBUFFER,out.fbo);gl.viewport(0,0,size.w,size.h);
       const u=p.uniforms;
-      bindTex(0,input,u.u_src);bindTex(1,targets.low2.tex,u.u_low);bindTex(2,mask.tex,u.u_mask);bindTex(3,stats.tex,u.u_stats);
+      bindTex(0,input,u.u_src);bindTex(1,targets.low2.tex,u.u_low);bindTex(2,targets.mask.tex,u.u_mask);bindTex(3,stats.tex,u.u_stats);
       gl.uniform3f(u.u_color,layer.color[0],layer.color[1],layer.color[2]);
       gl.uniform1f(u.u_amount,layer.amount);gl.uniform1f(u.u_mode,layer.mode);
       gl.uniform1f(u.u_detail,layer.detail);gl.uniform1f(u.u_gloss,layer.gloss);
@@ -311,18 +248,24 @@ export function createStage(canvas) {
   }
 
   return {
-    // Upload one layer's mask, at any resolution: it is sampled stretched over the
-    // frame. `box` bounds it, as fractions of the frame.
-    setMask(key,source,box){
+    // Upload one layer's mask, painted in face space (facemesh.js). `source` holds just
+    // the part `uv` bounds, as fractions of that space; everything outside it is empty.
+    // Only the triangles that reach into it are drawn.
+    setMask(key,source,uv){
       if(disposed)return;
       let entry=masks.get(key);
-      if(!entry){entry={tex:makeTexture(0,0),box:null};masks.set(key,entry);}
+      if(!entry){entry={tex:makeTexture(0,0),uv:null,tris:gl.createBuffer(),count:0,verts:null};masks.set(key,entry);}
       gl.bindTexture(gl.TEXTURE_2D,entry.tex);
       gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,source);
-      entry.box=box||FULL;
+      if(!entry.uv||entry.uv.x!==uv.x||entry.uv.y!==uv.y||entry.uv.w!==uv.w||entry.uv.h!==uv.h){
+        const {tris,verts}=trianglesIn(uv);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,entry.tris);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,tris,gl.STATIC_DRAW);
+        entry.count=tris.length;entry.verts=verts;
+      }
+      entry.uv={...uv};
     },
     dropMasks(keep){
-      for(const [key,entry] of masks)if(!keep||!keep.has(key)){gl.deleteTexture(entry.tex);masks.delete(key);}
+      for(const [key,entry] of masks)if(!keep||!keep.has(key)){gl.deleteTexture(entry.tex);gl.deleteBuffer(entry.tris);masks.delete(key);}
     },
     // after/before: {layers, landmarks, amounts}. `before` is drawn from `seam` (a
     // canvas-space fraction) to the far edge. The canvas is mirrored in CSS, so the
@@ -341,7 +284,12 @@ export function createStage(canvas) {
       }
       const face=landmarks&&landmarks.length>=LANDMARKS;
       const needs=face&&(after.layers.length||(before&&before.layers.length));
-      if(needs)buildLow();
+      if(needs){
+        // Texture row 0 is the top of the frame, and so is clip y = -1 in every target.
+        for(let i=0;i<LANDMARKS;i++){facePos[i*2]=landmarks[i].x*2-1;facePos[i*2+1]=landmarks[i].y*2-1;}
+        gl.bindBuffer(gl.ARRAY_BUFFER,facePosBuffer);gl.bufferSubData(gl.ARRAY_BUFFER,0,facePos);
+        buildLow();
+      }
       const probe=probes||[.5,.5,.5,.5,.5,.5,.5,.5];
       const afterTex=face&&after.layers.length?composite(after.layers,targets.a,probe,time):camera;
       const beforeTex=before?(face&&before.layers.length?composite(before.layers,targets.b,probe,time):camera):null;
@@ -367,9 +315,9 @@ export function createStage(canvas) {
     dispose(){
       if(disposed)return;
       disposed=true;
-      for(const handle of [posBuffer,uvBuffer,indexBuffer,quadBuffer])gl.deleteBuffer(handle);
+      for(const handle of [posBuffer,uvBuffer,indexBuffer,quadBuffer,facePosBuffer,canonBuffer])gl.deleteBuffer(handle);
       gl.deleteTexture(camera);
-      for(const entry of masks.values())gl.deleteTexture(entry.tex);
+      for(const entry of masks.values()){gl.deleteTexture(entry.tex);gl.deleteBuffer(entry.tris);}
       if(targets)Object.values(targets).flat().forEach(dropTarget);
       dropTarget(stats);
       for(const p of Object.values(programs))gl.deleteProgram(p.program);

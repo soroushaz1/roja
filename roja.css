@@ -37,11 +37,24 @@
 
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
-body{
+html:not(.native-live){background:var(--bg)}
+/* The page's ground is a layer of its own, so inside the Android app it can leave a
+   hole where the native mirror, drawn under the page, shows through. */
+body::before{
+  content:'';position:fixed;inset:0;z-index:-1;pointer-events:none;
   background:
     radial-gradient(1200px 600px at 50% -10%,#3A162944,transparent 70%),
     radial-gradient(900px 500px at 100% 110%,#2A142033,transparent 60%),
     var(--bg);
+}
+html.native-live body::before{
+  -webkit-mask:linear-gradient(#000 0 0) var(--hole-x,0) var(--hole-y,0)/var(--hole-w,0) var(--hole-h,0) no-repeat,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;
+  mask:linear-gradient(#000 0 0) var(--hole-x,0) var(--hole-y,0)/var(--hole-w,0) var(--hole-h,0) no-repeat exclude,linear-gradient(#000 0 0);
+}
+html.native-live .stage{background:transparent}
+html.native-live .stage video,html.native-live #stage{visibility:hidden}
+body{
   color:var(--text);
   font-family:var(--font);
   font-size:15px;

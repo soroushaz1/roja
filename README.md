@@ -84,22 +84,40 @@ scores) in the panel or on the mirror, and an export of all of it as JSON.
 ## How it works
 
 - **Face tracking** — MediaPipe Face Landmarker, 478 points with head pose and expression
-  scores, running in a Web Worker so the interface never blocks. Where a worker cannot
-  run it (iPhones before iOS 17 have no WebGL in workers) the same code, `face-core.js`,
-  runs on the page instead. The model and its WebAssembly runtime are served from this repo.
-- **Makeup** — each product is a soft mask drawn from the landmarks on a 2D canvas, then a
-  WebGL pass that recolours the camera texture under it. The colour is scaled to the light
+  scores, running in a Web Worker so the interface never blocks. The model runs on the GPU
+  wherever the browser has a real one (not on iPhones, and not where WebGL is only emulated
+  in software); otherwise, or if the GPU fails, on the CPU. Each camera frame is measured
+  once, as soon as the last result is back, and on the fast path it reaches the worker as a
+  `VideoFrame`, with no copy. Where a worker cannot run the model at all (iPhones before
+  iOS 17 have no WebGL in workers) the same code, `face-core.js`, runs on the page instead.
+  The model and its WebAssembly runtime are served from this repo.
+- **In step** — a copy of each frame sent to the tracker is kept, and when its landmarks
+  come back that very frame is shown with them, so the makeup sits on the face in the
+  picture instead of trailing the live video by a tracking round-trip. The picture then
+  moves at the tracker's pace, so this is done only while it keeps up (16 frames a second
+  or more); below that the live video is shown with the latest landmarks. Landmarks are
+  steadied by a One Euro filter: jitter is smoothed away while the face is still, and the
+  smoothing fades out as it moves, so it adds no lag to a turn of the head.
+- **Makeup** — each product is a soft mask, painted once in a front-on view of MediaPipe's
+  canonical face (`facemesh.js`, read out of the face model by `tools/facemesh.cjs`)
+  whenever a product or setting changes. Every frame the face mesh, placed on the live
+  landmarks, carries it onto the face: a few hundred triangles on the GPU instead of
+  repainting on the CPU each time the face moves, and a mask that bends with a smile or a
+  blink. The mesh's triangles across the eye and mouth openings are left out, so colour is
+  never stretched over open lips or an open eye. A WebGL pass then recolours the camera
+  texture under the mask. The colour is scaled to the light
   on the face and modulated by each pixel's brightness relative to the region's mean, so
   lip creases, shading and skin texture show through it as they do with real product.
   Finish decides how glints behave: matte flattens them, gloss sharpens them, shimmer
   scatters specks. Foundation adds edge-preserving smoothing that stays on skin. Soft edges
   come from a blur built only from `drawImage` scaling (`blur.js`), which every browser
   draws the same way; canvas shadows and filters do not, on iPhones above all. Broad
-  masks are painted at half resolution and every pass is scissored to its layer, so a full
-  look stays cheap. Without WebGL, the same masks are painted in flat colour on a 2D
-  overlay.
+  masks are painted at half resolution, only the painted part of each is uploaded, and
+  every pass is scissored to its layer, so a full look stays cheap. Without WebGL, the same
+  masks are painted from the live landmarks in flat colour on a 2D overlay.
 - **Brush** — every stroke point is stored as barycentric weights over the three landmarks
-  around it, and the strokes are replayed into coverage maps each time the face moves. A
+  around it, and the strokes are replayed into coverage maps in the face's own space, so a
+  stroke stays on the skin where it was drawn however the face moves. A
   stroke is one path, so going over the same spot twice in one stroke does not double it.
 - **Procedures** — the frame is carried through a 64×48 grid mesh displaced by a sum of
   smoothstep-falloff deformers anchored on landmarks. Every radius and axis is expressed in
@@ -149,8 +167,10 @@ Keyboard: **B** brush, **[ ]** brush size, **Ctrl+Z** undo a stroke, **C** compa
 
 ## Android and installing
 
-- **Android app** — [`android/`](android/README.md) wraps this site in a native app with
-  every file inside the APK and no network permission. The *Android app* workflow builds the
+- **Android app** — [`android/`](android/README.md) carries this site as its interface, with
+  every file inside the APK and no network permission, and does the live mirror natively
+  under it: CameraX, MediaPipe on the GPU and an OpenGL ES renderer that compiles this
+  site's own shaders. The *Android app* workflow builds the
   APK and runs it on an emulator; each tested build of `main` is published as a release, so
   [`releases/latest/download/roja.apk`](https://github.com/soroushaz1/roja/releases/latest/download/roja.apk)
   always downloads the newest one.
@@ -180,10 +200,18 @@ the mirror and its controls on one screen; that a photo opens the right way roun
 camera session; that a device without WebGL still gets working makeup; and that an
 iPhone-like browser — a worker that cannot run the tracker, a `video.play()` refused until
 a tap — still tracks the face on the page, offers a tap to start the picture, never hides the
-camera video, and shows makeup. Point it at a
+camera video, and shows makeup. Last, it runs the model on the GPU with frames handed over
+as `VideoFrame`s, and on the CPU route iPhones take, each with frames shown in step with
+their landmarks: the picture must equal the camera's and makeup must appear. Point it at a
 deployed copy with `ROJA_URL`. Playwright is found through `PLAYWRIGHT_MODULE`, a normal
 `require` or the global npm folder, and the browser through `ROJA_CHROMIUM`, an installed
 Chrome or Playwright's own Chromium.
+
+`node tools/roja-perf.cjs` prints the app's own numbers (pictures and tracked frames a
+second, tracking latency, the model's time per frame, mask and draw cost) for a few looks.
+Headless Chromium only emulates a GPU, so compare runs with each other; on a phone, open the
+debug panel for the same numbers. `?gpu=0` keeps the model on the CPU and `?gpu=force` puts
+it on the GPU regardless, for comparing the two.
 
 ## First load
 

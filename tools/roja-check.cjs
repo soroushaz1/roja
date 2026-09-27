@@ -795,6 +795,129 @@ const LIPS=[61,0,291,17,40,270,91,321];
       await phone.close();
     }
 
+    /* ---- the fast path, and frames in step ---- */
+    // The model on the GPU, camera frames handed over as VideoFrames, and each frame
+    // shown with its own landmarks; then the same showing-in-step on the CPU route
+    // iPhones take, where the frame kept is an ImageBitmap. This browser only emulates
+    // a GPU, so the tracker would rightly choose the CPU: ?gpu=force makes it take the
+    // GPU anyway, and ?sync=always shows frames in step although the tracker here is
+    // too slow for that to be chosen. What is checked is that both work.
+    report.inStep={};
+    let recorded=null;                  // landmarks from a real run, for the app's stand-in below
+    for(const [name,query,engine] of [['gpu','?gpu=force&sync=always','GPU'],['cpu','?gpu=0&sync=always','CPU']]){
+      const fast=await browser.newPage({viewport:{width:1280,height:800}});
+      const fastErrors=[];fast.on('pageerror',e=>fastErrors.push(e.message));
+      await fast.addInitScript(fakeCamera,{data:fixture});
+      await fast.goto(origin+'/index.html'+query,{waitUntil:'domcontentloaded',timeout:60000});
+      await fast.locator('#start').click();
+      await fast.waitForFunction(()=>document.querySelector('#guide').hidden&&!document.querySelector('#stage').hidden,null,{timeout:180000});
+      await fast.evaluate(()=>document.querySelector('#debug-panel').open=true);
+      await fast.waitForTimeout(1800);
+      const stats=await fast.locator('#debug-stats').textContent();
+      assert(stats.includes(engine),`${name}: the model is not on the ${engine}: ${stats}`);
+      assert(stats.includes('فریم و نقاط هم‌زمان'),`${name}: frames are not shown with their own landmarks: ${stats}`);
+      // With nothing on, the shown frame is the camera's picture.
+      await fast.locator('#clear-look').click();await fast.waitForTimeout(1200);
+      const plain=await fast.evaluate(probe,{GX,GY});
+      assert(plain.diff<.5,`${name}: the frame shown differs from the camera by ${plain.diff.toFixed(2)}`);
+      await fast.locator('#shades .shade').nth(7).click();
+      await fast.waitForTimeout(1500);
+      const cells=changed(null,await fast.evaluate(probe,{GX,GY}),1).count;
+      assert(cells>0,`${name}: no makeup with frames in step`);
+      assert.deepEqual(fastErrors,[],`${name}: page errors with frames in step`);
+      report.inStep[name]={makeupCells:cells,plainDiff:+plain.diff.toFixed(3)};
+      recorded=recorded||await fast.evaluate(()=>window.testLandmarks?.flatMap(q=>[q.x,q.y,q.z||0])||null);
+      await fast.close();
+    }
+
+    /* ---- the Android app's native mirror, from the page's side ---- */
+    // Inside the app the live camera, the tracking and the drawing are native, under
+    // the page. Here a stand-in bridge answers as the app does, with landmarks from a
+    // real tracking run, and records what the page sends it.
+    {
+      const lm=recorded;
+      assert(lm&&lm.length>=468*3,'no landmarks recorded for the app stand-in');
+      const app=await browser.newPage({viewport:{width:1280,height:800}});
+      const appErrors=[];app.on('pageerror',e=>appErrors.push(e.message));
+      await app.addInitScript(({lm})=>{
+        const calls=window.nativeCalls={start:0,stop:0,place:[],plan:[],masks:{},keep:[],freeze:[],snap:0,skin:[],extras:[]};
+        let timer=null;
+        window.RojaAndroid={
+          saveFile(){return 'saved';},keepScreenOn(){},version(){return 'test';},
+          nativeMirror(){return true;},
+          mirrorStart(){calls.start++;setTimeout(()=>{window.rojaNative.onStart(640,480);
+            timer=setInterval(()=>window.rojaNative.onFrame({lm,size:[640,480],st:{hz:30,fps:30,infer:12,draw:3,delegate:'GPU',note:'',gpu:'Test GPU'}}),50);},100);},
+          mirrorStop(){calls.stop++;clearInterval(timer);},
+          mirrorFreeze(on){calls.freeze.push(on);},
+          mirrorPlace(json){calls.place.push(JSON.parse(json));},
+          mirrorPlan(json){calls.plan.push(JSON.parse(json));},
+          mirrorMask(key,box,w,h,alpha){calls.masks[key]={box:JSON.parse(box),w,h,bytes:atob(alpha).length};},
+          mirrorKeep(json){calls.keep.push(JSON.parse(json));},
+          mirrorSkin(on){calls.skin.push(on);},mirrorExtras(on){calls.extras.push(on);},
+          mirrorSnapshot(){calls.snap++;const c=document.createElement('canvas');c.width=640;c.height=480;
+            c.getContext('2d').fillRect(0,0,10,10);setTimeout(()=>window.rojaNative.onSnapshot(c.toDataURL()),30);}
+        };
+      },{lm});
+      await app.goto(origin+'/index.html',{waitUntil:'domcontentloaded',timeout:60000});
+      await app.locator('#start').click();
+      await app.waitForFunction(()=>document.querySelector('#guide').hidden&&window.rojaState?.().native,null,{timeout:20000});
+      await app.waitForTimeout(400);
+      const calls=()=>app.evaluate(()=>window.nativeCalls);
+      let c=await calls();
+      assert.equal(c.start,1,'the page did not start the native camera');
+      assert.equal(await app.evaluate(()=>document.documentElement.classList.contains('native-live')),true,'no hole left for the native mirror');
+      assert.notEqual(await app.evaluate(()=>getComputedStyle(document.body,'::before').webkitMaskImage||getComputedStyle(document.body,'::before').maskImage),'none','the page ground has no hole');
+      const place=c.place[c.place.length-1];
+      assert(place&&place.w>100&&place.pw>100&&place.pw<=place.w&&place.ph<=place.h,'the mirror was not placed: '+JSON.stringify(place));
+      const lip=Object.entries(c.masks).find(([k])=>k==='velvet');
+      assert(lip&&lip[1].bytes===lip[1].w*lip[1].h&&lip[1].box[2]>0,'the lipstick mask did not reach the app whole');
+      const last=()=>c.plan[c.plan.length-1];
+      assert(last().after.some(l=>l.key==='velvet'&&l.radiusK>0),'the plan has no lipstick layer');
+      assert.equal(last().before,null,'a before side with nothing to compare');
+      // Compare: a before side and a seam.
+      await app.locator('#compare').click();await app.waitForTimeout(300);c=await calls();
+      assert(Array.isArray(last().before)&&typeof last().seam==='number','compare sent no before side and seam');
+      await app.locator('#compare').click();
+      // A procedure: amounts for the renderer's warp.
+      await app.locator('#mode-procedure').click();
+      await app.locator('[data-procedure="rhinoplasty"]').click();
+      await setSlider(app,'#strength',100);await app.waitForTimeout(300);c=await calls();
+      assert(Object.entries(last().amounts||{}).some(([k,v])=>k.startsWith('nose')&&v!==0),'the procedure sent no amounts');
+      await app.locator('#mode-makeup').click();
+      // Snapshot, freeze and the readout go through the app.
+      await app.locator('#snap').click();
+      await app.waitForFunction(()=>document.querySelector('#shots-count').textContent==='۱',null,{timeout:5000});
+      await app.locator('#freeze').click();await app.waitForTimeout(100);c=await calls();
+      assert.deepEqual(c.freeze,[true],'freeze did not reach the app');
+      await app.locator('#freeze').click();
+      await app.evaluate(()=>document.querySelector('#debug-panel').open=true);await app.waitForTimeout(400);
+      assert((await app.locator('#debug-stats').textContent()).includes('native'),'the stats do not say the mirror is native');
+      await app.locator('#stop').click();await app.waitForTimeout(200);c=await calls();
+      assert(c.stop>=1,'stopping did not stop the native camera');
+      assert.equal(await app.evaluate(()=>document.documentElement.classList.contains('native-live')),false,'the hole stayed after stopping');
+      assert.deepEqual(appErrors,[],'page errors with the native mirror');
+      report.nativeMirror={masks:Object.keys(c.masks).length,plans:c.plan.length,placed:c.place.length};
+      await app.close();
+
+      // A phone the native tracker cannot run on: the page carries on with the
+      // browser's camera and tracker.
+      const fallback=await browser.newPage({viewport:{width:1280,height:800}});
+      const fallbackErrors=[];fallback.on('pageerror',e=>fallbackErrors.push(e.message));
+      await fallback.addInitScript(fakeCamera,{data:fixture});
+      await fallback.addInitScript(()=>{
+        window.RojaAndroid={saveFile(){return 'saved';},keepScreenOn(){},version(){return 'test';},
+          nativeMirror(){return true;},mirrorStop(){},
+          mirrorStart(){setTimeout(()=>window.rojaNative.onError('TrackerError','no native tracker here'),50);}};
+      });
+      await fallback.goto(origin+'/index.html',{waitUntil:'domcontentloaded',timeout:60000});
+      await fallback.locator('#start').click();
+      await fallback.waitForFunction(()=>document.querySelector('#guide').hidden&&!document.querySelector('#stage').hidden,null,{timeout:120000});
+      assert.equal(await fallback.evaluate(()=>window.rojaState().native),false,'the page stayed on the broken native mirror');
+      assert.deepEqual(fallbackErrors,[],'page errors falling back from the native mirror');
+      report.nativeMirror.fallback='browser camera';
+      await fallback.close();
+    }
+
     report.errors=[];
     console.log(JSON.stringify(report,null,1));
   }finally{await browser.close();}
