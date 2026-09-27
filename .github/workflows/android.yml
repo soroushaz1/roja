@@ -90,7 +90,12 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-front emulated -camera-back emulated
           disable-animations: true
           working-directory: android
-          script: ./gradlew --no-daemon connectedDebugAndroidTest
+          # A failure puts the device's own account of it in the job log: the test results,
+          # and logcat's warnings, errors and crashes. A crash in the WebView or the
+          # emulator's graphics shows up only there.
+          script: |
+            $ANDROID_HOME/platform-tools/adb logcat -c
+            ./gradlew --no-daemon connectedDebugAndroidTest || { find app/build/outputs/androidTest-results -name '*.xml' -exec cat {} +; $ANDROID_HOME/platform-tools/adb logcat -d -v threadtime '*:W' Roja:D RojaTest:I | tail -n 600; exit 1; }
 
       - uses: actions/upload-artifact@v4
         if: always()
