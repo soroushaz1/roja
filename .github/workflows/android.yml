@@ -3,6 +3,10 @@
 # The APK is attached to every run as the "roja-android" artifact. With the signing
 # secrets set (see android/README.md) the run also produces a signed release APK and
 # an App Bundle for Google Play.
+#
+# A push to main that passes the emulator tests is published as a GitHub release, with
+# the APK always named roja.apk, so this link always downloads the newest build:
+#   https://github.com/<owner>/<repo>/releases/latest/download/roja.apk
 name: Android app
 
 # Every push, on any branch: a pull request from this repository shows the checks
@@ -91,3 +95,50 @@ jobs:
           name: device-test-report
           path: android/app/build/reports/androidTests/
           if-no-files-found: ignore
+
+  release:
+    name: Publish the APK
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [apk, device]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: roja-android
+          path: out
+
+      # The signed release APK when the signing secrets are set, the debug APK otherwise.
+      # A re-run of the same run replaces the APK of the release it already made.
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: 1.0.${{ github.run_number }}
+          MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          signed=$(find out -name app-release.apk | head -n1)
+          apk=${signed:-$(find out -name app-debug.apk | head -n1)}
+          test -n "$apk"
+          cp "$apk" roja.apk
+          {
+            echo "**دانلود:** فایل \`roja.apk\` در بخش Assets پایین همین صفحه (اندروید ۸ و بالاتر)."
+            echo
+            echo "روی گوشی بازش کن و اگر اندروید پرسید، اجازهٔ نصب از این منبع را بده."
+            if [ -n "$signed" ]; then
+              echo "روی نسخهٔ قبلی نصب می‌شود."
+            else
+              echo "این نسخه با کلید موقت امضا شده است: اگر نسخهٔ دیگری از رُژا نصب است، اول آن را حذف کن."
+            fi
+            echo
+            echo "Built from ${GITHUB_SHA::7}: ${MESSAGE%%$'\n'*}"
+          } > notes.md
+          tag="v$VERSION"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" roja.apk --clobber
+          else
+            gh release create "$tag" roja.apk --target "$GITHUB_SHA" --title "Roja $VERSION" \
+              --notes-file notes.md --latest
+          fi

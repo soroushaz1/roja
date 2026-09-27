@@ -1,9 +1,10 @@
 # رُژا برای اندروید · Roja for Android
 
-> **نصب:** فایل APK را از بخش Actions همین مخزن بردار (اجرای آخرِ «Android app»، بخش
-> Artifacts، فایل `roja-android`). آن را روی گوشی باز کن و اگر اندروید پرسید، اجازهٔ نصب از
-> این منبع را بده. برنامه به اینترنت دسترسی ندارد: تمام سایت داخل خود برنامه است و تصویر
-> دوربین از گوشی بیرون نمی‌رود.
+> **دانلود:** https://github.com/soroushaz1/roja/releases/latest/download/roja.apk
+>
+> این لینک همیشه تازه‌ترین نسخه را می‌دهد. فایل را روی گوشی باز کن و اگر اندروید پرسید، اجازهٔ
+> نصب از این منبع را بده. برنامه به اینترنت دسترسی ندارد: تمام سایت داخل خود برنامه است و
+> تصویر دوربین از گوشی بیرون نمی‌رود.
 
 The same mirror as the website, as an installable Android app (Android 8.0 and later).
 It is a thin native shell: the site at the root of this repository is copied into the
@@ -46,9 +47,17 @@ Open the `android` folder in Android Studio to run it on a phone directly.
 
 ## Publishing
 
-A debug APK is signed with a throw-away key, so each CI build installs as a different
-signer: uninstall the old one before installing a newer build. For updates that install in
-place, and for Google Play, sign with your own key:
+Every push to `main` that passes the emulator tests becomes a
+[release](https://github.com/soroushaz1/roja/releases) named after its version
+(`v1.0.<run number>`), with the APK attached as `roja.apk`. So
+`https://github.com/soroushaz1/roja/releases/latest/download/roja.apk` always downloads the
+newest build, and needs no GitHub account. Other branches get an APK in their run's
+artifacts but no release.
+
+Without a signing key the release carries the debug APK, which is signed with a throw-away
+key: each build installs as a different signer, so the old one has to be uninstalled first.
+For updates that install in place, and for Google Play, sign with your own key; releases
+then carry the signed release APK instead:
 
 1. Create a key once, and keep it safe — losing it means you cannot update the app:
    `keytool -genkeypair -v -keystore roja.jks -keyalg RSA -keysize 4096 -validity 10000 -alias roja`
