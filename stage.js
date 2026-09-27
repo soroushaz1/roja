@@ -5,7 +5,17 @@
 //
 // With no layers and an all-zero displacement field the output is a pixel-exact copy
 // of the camera frame.
-import {deformers,displace} from './deform.js?v=13';
+import {deformers,displace} from './deform.js?v=14';
+
+// Full precision wherever the GPU offers it. On iPhones mediump really is 16-bit, which
+// overflows the shimmer noise and blurs fine detail; on most desktops it is 32-bit
+// anyway, so a bug there never shows on a laptop.
+const PRECISION=`#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;
+#else
+precision mediump float;
+#endif
+`;
 
 const COLS=64, ROWS=48;          // resolves the smallest anchor radius
 const GRID=(COLS+1)*(ROWS+1);
@@ -14,7 +24,7 @@ const LANDMARKS=468;
 const MESH_VERT=`attribute vec2 a_pos;attribute vec2 a_uv;varying vec2 v_uv;
 void main(){v_uv=a_uv;gl_Position=vec4(a_pos,0.,1.);}`;
 // A grade of (1,1,1) multiplies by exactly one, so the plain view stays exact.
-const OUT_FRAG=`precision mediump float;uniform sampler2D u_tex;uniform vec3 u_grade;varying vec2 v_uv;
+const OUT_FRAG=`${PRECISION}uniform sampler2D u_tex;uniform vec3 u_grade;varying vec2 v_uv;
 void main(){vec4 c=texture2D(u_tex,v_uv);gl_FragColor=vec4(c.rgb*u_grade,c.a);}`;
 
 // Full-frame passes map texture space onto itself, so every intermediate texture has
@@ -23,7 +33,7 @@ const QUAD_VERT=`attribute vec2 a_pos;varying vec2 v_uv;
 void main(){v_uv=a_pos*.5+.5;gl_Position=vec4(a_pos,0.,1.);}`;
 
 // 4 bilinear taps over a 4×4 block: a box filter for the local-mean pyramid.
-const DOWN_FRAG=`precision mediump float;uniform sampler2D u_tex;uniform vec2 u_step;varying vec2 v_uv;
+const DOWN_FRAG=`${PRECISION}uniform sampler2D u_tex;uniform vec2 u_step;varying vec2 v_uv;
 void main(){
   gl_FragColor=.25*(texture2D(u_tex,v_uv+u_step*vec2(-1.,-1.))+texture2D(u_tex,v_uv+u_step*vec2(1.,-1.))
                   +texture2D(u_tex,v_uv+u_step*vec2(-1.,1.))+texture2D(u_tex,v_uv+u_step*vec2(1.,1.)));
@@ -32,7 +42,7 @@ void main(){
 // One texel per layer: the mean colour of the frame under the layer's mask (from the
 // low-resolution copy), and in alpha the brightness of the cheeks and forehead, which
 // stands in for how much light is on the face.
-const STATS_FRAG=`precision mediump float;
+const STATS_FRAG=`${PRECISION}
 uniform sampler2D u_low;uniform sampler2D u_mask;uniform vec4 u_box;uniform vec4 u_probeA;uniform vec4 u_probeB;
 float luma(vec3 c){return dot(c,vec3(.299,.587,.114));}
 void main(){
@@ -53,7 +63,7 @@ void main(){
 // the shadow under the lower lip and the texture of the skin all show through the
 // colour, as they do with real product. Finish then decides how the glints behave:
 // matte flattens them, gloss sharpens them, shimmer scatters specks.
-const LAYER_FRAG=`precision mediump float;
+const LAYER_FRAG=`${PRECISION}
 varying vec2 v_uv;
 uniform sampler2D u_src;uniform sampler2D u_low;uniform sampler2D u_mask;uniform sampler2D u_stats;
 uniform vec3 u_color;uniform float u_amount;uniform float u_mode;

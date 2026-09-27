@@ -30,7 +30,7 @@ abstract class CopyWebAssets : DefaultTask() {
 
 val siteFiles = listOf(
     "index.html", "*.js", "*.css", "favicon.svg", "fonts/**", "icons/**",
-    "vendor/vision_bundle.js", "vendor/wasm/**", "vendor/face_landmarker.task",
+    "vendor/vision_bundle.js", "vendor/vision_bundle.mjs", "vendor/wasm/**", "vendor/face_landmarker.task",
     "vendor/LICENSE-Apache-2.0.txt", "LICENSE", "THIRD-PARTY.md"
 )
 

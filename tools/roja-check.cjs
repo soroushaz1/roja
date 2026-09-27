@@ -753,6 +753,48 @@ const LIPS=[61,0,291,17,40,270,91,321];
     assert.deepEqual(plainErrors,[],'page errors in the fallback run');
     report.fallbackPixels=fallbackPixels;
 
+    /* ---- iPhone-like browsers ---- */
+    // Every iPhone browser is WebKit. Three things it does differently, simulated here:
+    // a worker that cannot start MediaPipe (no WebGL in workers before iOS 17), a
+    // video.play() refused without a fresh tap (seen in Chrome on iPhone), and a muted
+    // video that is paused as soon as it is hidden (so it must never be hidden).
+    {
+      const phone=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
+      const phoneErrors=[];phone.on('pageerror',e=>phoneErrors.push(e.message));
+      await phone.addInitScript(fakeCamera,{data:fixture});
+      await phone.addInitScript(()=>{
+        window.Worker=class{
+          constructor(){setTimeout(()=>this.onmessage?.({data:{type:'error',stage:'init',message:'no WebGL in workers'}}),30);}
+          postMessage(){}
+          terminate(){}
+        };
+        const play=HTMLMediaElement.prototype.play;let refused=false;
+        HTMLMediaElement.prototype.play=function(){
+          if(!refused){refused=true;return Promise.reject(new DOMException('needs a tap','NotAllowedError'));}
+          return play.call(this);
+        };
+      });
+      await phone.goto(origin,{waitUntil:'domcontentloaded',timeout:60000});
+      await phone.locator('#start').click();
+      await phone.waitForFunction(()=>document.querySelector('#welcome').hidden,null,{timeout:30000});
+      assert.equal(await phone.locator('#tap-start').isVisible(),true,'no tap-to-start when play() was refused');
+      await phone.locator('#tap-start').click();
+      await phone.waitForFunction(()=>document.querySelector('#tap-start').hidden,null,{timeout:10000});
+      // Tracked on the page itself: the guide goes when the face is found.
+      await phone.waitForFunction(()=>document.querySelector('#guide').hidden&&!document.querySelector('#stage').hidden,null,{timeout:120000});
+      assert.equal(await phone.evaluate(()=>getComputedStyle(document.querySelector('#video')).visibility),'visible','the camera video was hidden while live');
+      await phone.locator('#shades .shade').nth(7).click();              // a strong red
+      await phone.waitForTimeout(600);
+      const cells=changed(null,await phone.evaluate(probe,{GX,GY}),1).count;
+      assert(cells>0,'no makeup with tracking on the page itself');
+      await phone.evaluate(()=>document.querySelector('#debug-panel').open=true);
+      await phone.waitForTimeout(400);
+      assert((await phone.locator('#debug-stats').textContent()).includes('main thread'),'the stats do not say tracking fell back to the page');
+      assert.deepEqual(phoneErrors,[],'page errors in the iPhone-like run');
+      report.iphoneLike={makeupCells:cells,tracker:'main thread'};
+      await phone.close();
+    }
+
     report.errors=[];
     console.log(JSON.stringify(report,null,1));
   }finally{await browser.close();}

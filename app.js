@@ -1,11 +1,11 @@
-import {products,categories,finishes,looks,byProduct} from './catalog.js?v=13';
-import {layerSpecs,createMaskPainter,renderFallback,smoothLandmarks,landmarksByType,frameLandmarks,hexToRgb} from './makeup.js?v=13';
-import {createStage,layerModes} from './stage.js?v=13';
-import {controls,regions,controlLandmarks,controlRange,deformers,textureLayers} from './deform.js?v=13';
-import {procedures,byId,amountsFor,resolve,kinds} from './procedures.js?v=13';
-import {renderDebug,nearest} from './debug.js?v=13';
-import {createBrush,brushModes} from './brush.js?v=13';
-import {metrics,measure,points as placed,symmetry,pose as poseOf} from './measure.js?v=13';
+import {products,categories,finishes,looks,byProduct} from './catalog.js?v=14';
+import {layerSpecs,createMaskPainter,renderFallback,smoothLandmarks,landmarksByType,frameLandmarks,hexToRgb} from './makeup.js?v=14';
+import {createStage,layerModes} from './stage.js?v=14';
+import {controls,regions,controlLandmarks,controlRange,deformers,textureLayers} from './deform.js?v=14';
+import {procedures,byId,amountsFor,resolve,kinds} from './procedures.js?v=14';
+import {renderDebug,nearest} from './debug.js?v=14';
+import {createBrush,brushModes} from './brush.js?v=14';
+import {metrics,measure,points as placed,symmetry,pose as poseOf} from './measure.js?v=14';
 
 const $=id=>document.getElementById(id);
 const fa=new Intl.NumberFormat('fa-IR');
@@ -31,6 +31,19 @@ const video=$('video'), photo=$('photo'), overlay=$('overlay'), octx=overlay.get
 // Inside the Android app (android/), the page talks to the app through this bridge:
 // saving files, and keeping the screen on while the mirror is live.
 const native=window.RojaAndroid||null;
+// Every browser on an iPhone is WebKit underneath; Chrome and Firefox there only change
+// the settings screen that grants the camera. In-app browsers (Instagram, Telegram…)
+// often have no camera at all.
+const ua=navigator.userAgent;
+const iOS=/iPad|iPhone|iPod/.test(ua)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+const inApp=/Instagram|FBAN|FBAV|Telegram|Line\/|WhatsApp|Snapchat/i.test(ua);
+function cameraHelp(){
+  if(iOS&&/CriOS/.test(ua))return 'در تنظیمات آیفون، بخش Chrome، دسترسی Camera را روشن کن و صفحه را دوباره باز کن.';
+  if(iOS&&/FxiOS/.test(ua))return 'در تنظیمات آیفون، بخش Firefox، دسترسی Camera را روشن کن و صفحه را دوباره باز کن.';
+  if(iOS)return 'در Safari روی «aA» کنار نشانی بزن، «تنظیمات وب‌سایت» و بعد «دوربین» را روی «اجازه» بگذار.';
+  return 'از تنظیمات سایت در مرورگر، دسترسی دوربین را فعال کن.';
+}
+const code=e=>` (کد: ${e?.name&&e.name!=='Error'?e.name:e?.message||'نامشخص'})`;
 const debugCanvas=$('debug'), debugCtx=debugCanvas.getContext('2d');
 const viewport=$('viewport');
 
@@ -69,7 +82,7 @@ const debug={on:false,points:true,mesh:false,contours:false,axes:false,masks:fal
   labelSize:10,highlight:true,onlyActive:false,find:null,hud:false,inspect:false};
 let topology=null, maskView=null;
 const maskTint=document.createElement('canvas');
-const perf={frames:0,fps:0,since:0,detections:0,hz:0,latency:0,lastHud:0,maskMs:0,drawMs:0};
+const perf={frames:0,fps:0,since:0,detections:0,hz:0,latency:0,lastHud:0,maskMs:0,drawMs:0,lastError:'',trackerNote:''};
 const ema=(old,v)=>old?old*.85+v*.15:v;
 let finder={state:'idle',samples:[],tries:0,result:null};
 let wantSkin=false;
@@ -613,11 +626,10 @@ function draw(now=performance.now()){
     });
     perf.drawMs=ema(perf.drawMs,performance.now()-t);
     if(ok){
-      $('stage').hidden=false;
-      // The canvas covers the same rect as the video; hiding the element underneath
-      // removes the sub-pixel sliver that otherwise shows along its edge. It keeps
-      // playing, so it is still usable as a texture source.
-      video.style.visibility='hidden';photo.hidden=true;
+      // The canvas covers the video exactly. The video stays visible underneath: iOS
+      // pauses a muted video it thinks is hidden, which froze the camera on its first
+      // frame, so the face was never found and no makeup ever appeared.
+      $('stage').hidden=false;photo.hidden=true;
       octx.clearRect(0,0,w,h);overlay.classList.remove('natural');
     }
   }else{
@@ -718,14 +730,16 @@ function debugStats(){
     ['منبع',source?(source.kind==='photo'?'photo':frozen?'camera (frozen)':'camera'):'—'],
     ['فریم',source?`${w}×${h}`:'—'],
     ['نمایش',`${perf.fps} fps`],
-    ['ردیابی',`${perf.hz} Hz · ${Math.round(perf.latency)} ms`],
+    ['ردیابی',`${perf.hz} Hz · ${Math.round(perf.latency)} ms · ${tracker?(tracker.kind==='worker'?'worker':'main thread'):trackerStarting?'starting':'—'}`],
     ['هزینهٔ هر فریم',`masks ${perf.maskMs.toFixed(1)} ms · draw ${perf.drawMs.toFixed(1)} ms`],
     ['نقاط',landmarks?String(landmarks.length):'0'],
     ['پهنای صورت',landmarks?`${Math.round(faceWidthPx())} px`:'—'],
     ['زاویهٔ سر',poseAngles?`yaw ${poseAngles.yaw.toFixed(1)}° · pitch ${poseAngles.pitch.toFixed(1)}° · roll ${poseAngles.roll.toFixed(1)}°`:'—'],
     ['تقارن',pts?`${symmetry(pts).toFixed(0)} / 100`:'—'],
     ['لایه‌ها',`${specs.length} makeup · ${defs} deformers · ${brush.count} strokes`],
-    ['حالت چهره',top.length?top.map(([n,s])=>`${EXPRESSIONS[n]||n} ${s.toFixed(2)}`).join('، '):'—']
+    ['حالت چهره',top.length?top.map(([n,s])=>`${EXPRESSIONS[n]||n} ${s.toFixed(2)}`).join('، '):'—'],
+    ['مرورگر',`${iOS?'iOS · ':''}${(ua.match(/(CriOS|FxiOS|EdgiOS|Edg|OPR|Chrome|Firefox|Version)\/[\d.]+/)||[''])[0]}${inApp?' · in-app':''}`],
+    ['آخرین خطا',perf.lastError||'—']
   ];
 }
 function updateHud(now){
@@ -756,42 +770,80 @@ function exportData(){
 }
 
 /* ---------- sources: camera and photo ----------------------------------- */
-let stream=null,worker=null,ready=false,busy=false,activeSource=false;
+let stream=null,tracker=null,trackerStarting=false,trackerGeneration=0,ready=false,busy=false,activeSource=false;
 let generation=0,raf=0,lastSent=0,sentAt=0,sentGen=-1,initTimer;
 let photoPasses=0,sourceVersion=0;
 const PHOTO_PASSES=8;
 
-function ensureWorker(){
-  if(worker)return;
+// The tracker runs in a worker. Where a worker cannot start MediaPipe (iPhones before
+// iOS 17 have no WebGL inside workers) the same code runs on the page instead: a
+// little slower, but the mirror works.
+function onTracker(d){
+  if(d.type==='ready'){
+    clearTimeout(initTimer);ready=true;topology=d.topology;
+    if(source){status(statusText());enableTools(true);}
+  }else if(d.type==='result'){
+    busy=false;
+    if(sentGen!==generation||!source)return;
+    perf.detections++;perf.latency=performance.now()-sentAt;
+    landmarks=smoothLandmarks(landmarks,d.landmarks);
+    if(source.kind==='photo')photoPasses++;
+    poseAngles=d.landmarks?poseOf(d.matrix):null;
+    if(d.blendshapes)blendshapes=d.blendshapes;
+    if('skin' in d)onSkin(d.skin);
+    else if(wantSkin&&!d.landmarks)onSkin(null);
+    $('guide').hidden=!!landmarks;
+    status(landmarks||source.kind==='photo'?statusText():'صورت پیدا نشد. کمی روبه‌روی دوربین و در نور بیشتر قرار بگیر.');
+    invalidate({masks:true,measure:true});
+  }else if(d.type==='error'){
+    busy=false;
+    perf.lastError=`${d.stage||'tracker'}: ${d.message||''}`;
+    if(!ready&&tracker?.kind==='worker')useTracker('page',d.message);
+    else shutdown('آینه روی این مرورگر آماده نشد. آخرین نسخهٔ مرورگر را امتحان کن.'+code({message:d.message}));
+  }
+}
+function ensureTracker(){
+  if(tracker||trackerStarting)return;
+  let w=null;
+  try{w=new Worker(new URL('face-worker.js?v=14',import.meta.url));}catch(e){perf.lastError=`worker: ${e.message}`;}
+  if(!w){useTracker('page','no worker');return;}
   ready=false;busy=false;
-  worker=new Worker(new URL('face-worker.js',import.meta.url));
-  worker.onmessage=e=>{
-    const d=e.data;
-    if(d.type==='ready'){
-      clearTimeout(initTimer);ready=true;topology=d.topology;
-      if(source){status(statusText());enableTools(true);}
-    }else if(d.type==='result'){
-      busy=false;
-      if(sentGen!==generation||!source)return;
-      perf.detections++;perf.latency=performance.now()-sentAt;
-      landmarks=smoothLandmarks(landmarks,d.landmarks);
-      if(source.kind==='photo')photoPasses++;
-      poseAngles=d.landmarks?poseOf(d.matrix):null;
-      if(d.blendshapes)blendshapes=d.blendshapes;
-      if('skin' in d)onSkin(d.skin);
-      else if(wantSkin&&!d.landmarks)onSkin(null);
-      $('guide').hidden=!!landmarks;
-      status(landmarks||source.kind==='photo'?statusText():'صورت پیدا نشد. کمی روبه‌روی دوربین و در نور بیشتر قرار بگیر.');
-      invalidate({masks:true,measure:true});
-    }else if(d.type==='error'){
-      shutdown('آینه آماده نشد. دوباره امتحان کن یا از مرورگر دیگری استفاده کن.');
-    }
+  tracker={kind:'worker',post:(m,transfer)=>w.postMessage(m,transfer),close:()=>w.terminate()};
+  w.onmessage=e=>onTracker(e.data);
+  w.onerror=e=>{
+    e.preventDefault?.();
+    if(!ready)useTracker('page',e.message||'worker failed');
+    else shutdown('بارگذاری آینه انجام نشد. دوباره امتحان کن.'+code({message:e.message}));
   };
-  worker.onerror=()=>shutdown('بارگذاری آینه انجام نشد. دوباره امتحان کن.');
-  initTimer=setTimeout(()=>{if(!ready)shutdown('آماده‌سازی طول کشید. دوباره امتحان کن.');},60000);
+  clearTimeout(initTimer);
+  initTimer=setTimeout(()=>{if(!ready)shutdown('آماده‌سازی طول کشید. اتصال اینترنت را بررسی کن و دوباره امتحان کن.');},90000);
+}
+async function useTracker(kind,reason){
+  if(tracker){tracker.close();tracker=null;}
+  ready=false;busy=false;trackerStarting=true;
+  perf.trackerNote=reason||'';
+  const token=++trackerGeneration;
+  try{
+    const Vision=await import('./vendor/vision_bundle.mjs');
+    await import('./face-core.js?v=14');
+    const core=self.rojaFaceCore(Vision,new URL('./',import.meta.url).href);
+    const found=await core.init();
+    if(token!==trackerGeneration){core.close();return;}
+    tracker={kind,post:m=>setTimeout(()=>{
+      let out;
+      try{out=core.handle(m);}catch(e){out={type:'error',stage:'detect',message:String(e?.message||e)};}
+      finally{m.frame?.close?.();}
+      onTracker(out);
+    },0),close:()=>core.close()};
+    trackerStarting=false;
+    onTracker({type:'ready',topology:found});
+  }catch(e){
+    trackerStarting=false;
+    if(token===trackerGeneration)shutdown('آینه روی این مرورگر آماده نشد. آخرین نسخهٔ Safari یا Chrome را امتحان کن.'+code(e));
+  }
 }
 function shutdown(message){
-  if(worker)worker.terminate();worker=null;ready=false;busy=false;
+  if(tracker)tracker.close();tracker=null;ready=false;busy=false;trackerStarting=false;trackerGeneration++;
   stop(message);
 }
 function enableTools(on){
@@ -807,7 +859,7 @@ function goLive(){
   landmarks=null;poseAngles=null;photoPasses=0;
   overlay.width=source.width;overlay.height=source.height;
   enableTools(ready);
-  ensureWorker();
+  ensureTracker();
   native?.keepScreenOn?.(true);
   cancelAnimationFrame(raf);raf=requestAnimationFrame(frame);
   updateSeam();invalidate({masks:true,measure:true});
@@ -831,7 +883,7 @@ function stop(message='دوربین خاموش شد.'){
   $('welcome').hidden=false;$('start').disabled=false;
   $('start').lastChild.textContent='روشن‌کردن دوربین';
   $('stop').disabled=true;$('toolbar').hidden=true;$('seam').hidden=true;seamOn=false;
-  $('guide').hidden=true;$('badge').hidden=true;$('hud').hidden=true;$('brush-cursor').hidden=true;
+  $('guide').hidden=true;$('badge').hidden=true;$('hud').hidden=true;$('brush-cursor').hidden=true;$('tap-start').hidden=true;
   if(brushState.on)setBrush(false);
   enableTools(false);
   if(finder.state==='sampling'){finder.state='idle';wantSkin=false;renderFinder();}
@@ -850,24 +902,55 @@ async function start(){
     if(!window.isSecureContext||!navigator.mediaDevices?.getUserMedia)throw new Error('UNSUPPORTED');
     const acquired=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:'user',width:{ideal:640},height:{ideal:480},frameRate:{ideal:24,max:30}}});
     if(token!==generation){acquired.getTracks().forEach(t=>t.stop());return;}
-    stream=acquired;video.srcObject=stream;await video.play();
+    stream=acquired;video.srcObject=stream;
+    const playing=await video.play().then(()=>true,()=>false);
+    await videoSize(video);
     if(token!==generation)return;
+    if(!video.videoWidth||!video.videoHeight)throw Object.assign(new Error('the camera sent no picture'),{name:'NoVideo'});
     source={kind:'camera',el:video,width:video.videoWidth,height:video.videoHeight,live:true,version:++sourceVersion};
     status(ready?'صورتت را روبه‌روی دوربین نگه دار.':'آماده‌سازی آینه. بار اول ممکن است کمی طول بکشد.');
     goLive();
+    if(!playing)$('tap-start').hidden=false;
     stream.getVideoTracks()[0].onended=()=>stop();
   }catch(e){
     if(token!==generation)return;
+    perf.lastError=`camera: ${e?.name||''} ${e?.message||''}`;
     const errors={
-      NotAllowedError:'اجازهٔ دوربین داده نشد. از تنظیمات سایت در مرورگر، دسترسی دوربین را فعال کن یا یک عکس انتخاب کن.',
+      NotAllowedError:'اجازهٔ دوربین داده نشد. '+cameraHelp()+' یا یک عکس انتخاب کن.',
+      SecurityError:'اجازهٔ دوربین داده نشد. '+cameraHelp(),
       NotFoundError:'دوربینی پیدا نشد. می‌توانی به‌جای آن یک عکس انتخاب کنی.',
-      NotReadableError:'دوربین در دسترس نیست. برنامه‌های دیگری که از آن استفاده می‌کنند را ببند.'
+      OverconstrainedError:'دوربین این دستگاه تنظیم خواسته‌شده را ندارد. یک عکس انتخاب کن.',
+      NotReadableError:'دوربین در دسترس نیست. برنامه‌های دیگری که از آن استفاده می‌کنند را ببند.',
+      NoVideo:'دوربین روشن شد اما تصویری نفرستاد. صفحه را دوباره باز کن.'
     };
-    stop(errors[e.name]||(e.message==='UNSUPPORTED'
-      ?'این مرورگر دوربین را پشتیبانی نمی‌کند. سایت را با HTTPS باز کن یا یک عکس انتخاب کن.'
-      :'دوربین باز نشد. دوباره امتحان کن.'));
+    stop((errors[e.name]||(e.message==='UNSUPPORTED'
+      ?(inApp?'این صفحه در مرورگر داخلی یک برنامه باز شده که به دوربین دسترسی ندارد. آن را در Safari یا Chrome باز کن، یا یک عکس انتخاب کن.'
+        :'این مرورگر دوربین را پشتیبانی نمی‌کند. سایت را با HTTPS در Safari یا Chrome باز کن، یا یک عکس انتخاب کن.')
+      :'دوربین باز نشد. دوباره امتحان کن.'))+code(e));
   }
 }
+// The stream's size can arrive a moment after the stream itself.
+function videoSize(v,ms=5000){
+  if(v.videoWidth&&v.videoHeight)return Promise.resolve();
+  return new Promise(resolve=>{
+    const done=()=>{clearTimeout(timer);v.removeEventListener('loadedmetadata',done);v.removeEventListener('resize',done);resolve();};
+    const timer=setTimeout(done,ms);
+    v.addEventListener('loadedmetadata',done);v.addEventListener('resize',done);
+  });
+}
+// Turning an iPhone swaps the camera's width and height mid-stream.
+video.addEventListener('resize',()=>{
+  if(source?.kind!=='camera'||!video.videoWidth||!video.videoHeight)return;
+  if(video.videoWidth===source.width&&video.videoHeight===source.height)return;
+  source.width=video.videoWidth;source.height=video.videoHeight;
+  overlay.width=source.width;overlay.height=source.height;
+  invalidate({masks:true,measure:true});
+  if(seamOn)placeSeam();
+});
+// Some browsers only start a camera picture from a tap on the page itself.
+$('tap-start').onclick=()=>{
+  video.play().then(()=>{$('tap-start').hidden=true;invalidate();},e=>toast('تصویر شروع نشد.'+code(e)));
+};
 
 // A photo is drawn mirrored, so the CSS mirror that suits a selfie camera shows it
 // the right way round and every other part of the pipeline stays the same.
@@ -904,20 +987,35 @@ function frame(now){
 }
 function hasShimmer(){return plan().after.some(s=>(FINISH[s.finish]?.shimmer||0)>0);}
 function detect(now){
-  if(!ready||busy||!worker||!source)return;
+  if(!ready||busy||!tracker||!source)return;
   if(source.kind==='camera'){
     if(frozen&&landmarks&&!wantSkin)return;
-    if(now-lastSent<60||video.readyState<2)return;
+    // On the page itself, a little less often, so the interface stays responsive.
+    if(now-lastSent<(tracker.kind==='page'?110:60)||video.readyState<2)return;
   }else{
     if(photoPasses>=PHOTO_PASSES&&!wantSkin)return;
     if(now-lastSent<30)return;
   }
   busy=true;lastSent=now;sentAt=performance.now();sentGen=generation;
-  const token=generation,frameSource=source.el;
-  createImageBitmap(frameSource,{resizeWidth:480,resizeHeight:Math.round(480*source.height/source.width)}).then(bitmap=>{
-    if(token!==generation||!worker){bitmap.close();busy=false;return;}
-    worker.postMessage({type:'frame',bitmap,timestamp:now,extras:debug.on||$('debug-panel').open,sample:wantSkin},[bitmap]);
-  }).catch(()=>{busy=false;if(token===generation)stop('پردازش تصویر روی این مرورگر انجام نشد. مرورگر دیگری را امتحان کن.');});
+  const token=generation;
+  grabFrame().then(({frame,transfer})=>{
+    if(token!==generation||!tracker){frame.close?.();busy=false;return;}
+    tracker.post({type:'frame',frame,timestamp:now,extras:debug.on||$('debug-panel').open,sample:wantSkin},transfer);
+  }).catch(e=>{busy=false;perf.lastError=`frame: ${e?.message||e}`;
+    if(token===generation)stop('پردازش تصویر روی این مرورگر انجام نشد. مرورگر دیگری را امتحان کن.'+code(e));});
+}
+// The frame the tracker measures, 480 px wide. Drawing the video into a 2D canvas works
+// the same everywhere; createImageBitmap straight from a camera video, with resizing,
+// does not (WebKit on iPhone was the trouble). No createImageBitmap at all: ImageData.
+const frameCanvas=document.createElement('canvas');
+function grabFrame(){
+  const w=480,h=Math.max(1,Math.round(480*source.height/source.width));
+  if(frameCanvas.width!==w||frameCanvas.height!==h){frameCanvas.width=w;frameCanvas.height=h;}
+  const x=frameCanvas.getContext('2d',{willReadFrequently:!window.createImageBitmap});
+  x.drawImage(source.el,0,0,w,h);
+  if(window.createImageBitmap)return createImageBitmap(frameCanvas).then(frame=>({frame,transfer:[frame]}));
+  const frame=x.getImageData(0,0,w,h);
+  return Promise.resolve({frame,transfer:[frame.data.buffer]});
 }
 
 /* ---------- tools on the mirror ----------------------------------------- */
@@ -1318,7 +1416,7 @@ document.addEventListener('keydown',e=>{
 window.addEventListener('resize',()=>{if(seamOn)placeSeam();});
 document.addEventListener('fullscreenchange',()=>{if(seamOn)placeSeam();});
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&source?.kind==='camera')stop('با خارج‌شدن از صفحه، دوربین خاموش شد.');});
-window.addEventListener('pagehide',()=>{stop();if(worker){worker.terminate();worker=null;ready=false;}});
+window.addEventListener('pagehide',()=>{stop();if(tracker){tracker.close();tracker=null;ready=false;}});
 $('start').onclick=start;
 $('photo-input').onchange=()=>{const file=$('photo-input').files[0];$('photo-input').value='';openPhoto(file);};
 $('stop').onclick=()=>stop(source?.kind==='photo'?'عکس بسته شد.':'دوربین خاموش شد.');
@@ -1351,6 +1449,10 @@ window.rojaBack=()=>{
 // would serve yesterday's files.
 if('serviceWorker' in navigator&&!native&&!['localhost','127.0.0.1','[::1]'].includes(location.hostname))
   navigator.serviceWorker.register('sw.js').catch(()=>{});
+// Anything that breaks later says so, instead of leaving a silent mirror: the message
+// is what a bug report needs, and the debug panel keeps the last one.
+window.addEventListener('error',e=>{perf.lastError=String(e.message||e.error||'error');toast('خطا: '+perf.lastError);});
+window.addEventListener('unhandledrejection',e=>{perf.lastError=String(e.reason?.message||e.reason||'error');toast('خطا: '+perf.lastError);});
 document.documentElement.dataset.ready='1';
 
 /* Optional agent hooks. */

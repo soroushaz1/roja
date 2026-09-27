@@ -84,14 +84,17 @@ scores) in the panel or on the mirror, and an export of all of it as JSON.
 ## How it works
 
 - **Face tracking** — MediaPipe Face Landmarker, 478 points with head pose and expression
-  scores, running in a Web Worker so the interface never blocks. The model and its
-  WebAssembly runtime are served from this repo.
+  scores, running in a Web Worker so the interface never blocks. Where a worker cannot
+  run it (iPhones before iOS 17 have no WebGL in workers) the same code, `face-core.js`,
+  runs on the page instead. The model and its WebAssembly runtime are served from this repo.
 - **Makeup** — each product is a soft mask drawn from the landmarks on a 2D canvas, then a
   WebGL pass that recolours the camera texture under it. The colour is scaled to the light
   on the face and modulated by each pixel's brightness relative to the region's mean, so
   lip creases, shading and skin texture show through it as they do with real product.
   Finish decides how glints behave: matte flattens them, gloss sharpens them, shimmer
-  scatters specks. Foundation adds edge-preserving smoothing that stays on skin. Broad
+  scatters specks. Foundation adds edge-preserving smoothing that stays on skin. Soft edges
+  come from a blur built only from `drawImage` scaling (`blur.js`), which every browser
+  draws the same way; canvas shadows and filters do not, on iPhones above all. Broad
   masks are painted at half resolution and every pass is scissored to its layer, so a full
   look stays cheap. Without WebGL, the same masks are painted in flat colour on a 2D
   overlay.
@@ -115,6 +118,16 @@ The camera frame, or the photo you pick, is processed on the device and never se
 stored. The only pixels read back are the ones you ask for: a snapshot you take (kept in the
 page until you save it or close the page) and, while the shade finder runs, a few small skin
 patches that the face worker averages into one colour.
+
+## Browsers
+
+Chrome, Edge, Firefox and Samsung Internet on Android and desktop; Safari, and Chrome or
+Firefox on iPhone and iPad (all WebKit there); Safari on the Mac. The camera needs HTTPS.
+Browsers built into other apps (Instagram, Telegram…) often have no camera: the page says
+so and suggests opening it in Safari or Chrome, and a photo still works there. When the
+camera cannot start, the message names the reason and where to allow it, with an error
+code; the debug panel shows the browser, whether tracking runs in a worker or on the page,
+and the last error.
 
 ## Running it locally
 
@@ -162,7 +175,10 @@ the change; that the before/after seam sits on the cut it draws; that losing the
 nothing stale on screen; every debug layer, the landmark search, the stats and the export;
 that the mirror never resizes when the panel's content changes; that the phone layout keeps
 the mirror and its controls on one screen; that a photo opens the right way round after a
-camera session; and that a device without WebGL still gets working makeup. Point it at a
+camera session; that a device without WebGL still gets working makeup; and that an
+iPhone-like browser — a worker that cannot run the tracker, a `video.play()` refused until
+a tap — still tracks the face on the page, offers a tap to start the picture, never hides the
+camera video, and shows makeup. Point it at a
 deployed copy with `ROJA_URL`. Playwright is found through `PLAYWRIGHT_MODULE`, a normal
 `require` or the global npm folder, and the browser through `ROJA_CHROMIUM`, an installed
 Chrome or Playwright's own Chromium.
