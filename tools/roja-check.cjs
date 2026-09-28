@@ -852,6 +852,40 @@ const LIPS=[61,0,291,17,40,270,91,321];
       report.appDownload.hiddenOn='iPhone, the app';
     }
 
+    /* ---- a page kept from an older release ---- */
+    // GitHub Pages ignores the ?v= query, so just after a release a page kept by the
+    // browser or the CDN can be handed the new script. It must be loaded afresh once, and
+    // neither loop nor fail when the page stays old.
+    {
+      const keptPage=async times=>{
+        const p=await browser.newPage({viewport:{width:1280,height:800}});
+        const errs=[];p.on('pageerror',e=>errs.push(e.message));
+        let loads=0;
+        await p.route(url=>/\/(index\.html)?$/.test(url.pathname),async route=>{
+          if(route.request().resourceType()!=='document')return route.continue();
+          const response=await route.fetch();
+          let body=await response.text();
+          if(++loads<=times)body=body.replace(/ data-release="\d+"/,'');   // pages before the guard had none
+          await route.fulfill({response,body});
+        });
+        await p.goto(origin+'/index.html',{waitUntil:'load',timeout:60000});
+        await p.waitForTimeout(1500);
+        const r={loads,errs,started:await p.evaluate(()=>typeof window.rojaState==='function'),status:await p.locator('#status').textContent()};
+        await p.close();
+        return r;
+      };
+      const once=await keptPage(1);
+      assert.equal(once.loads,2,`a page from an older release was not loaded afresh once (${once.loads} loads)`);
+      assert.equal(once.started,true,'the app did not start after loading the page afresh');
+      assert(!once.status.includes('نتوانست'),'an error was shown for a page from an older release: '+once.status);
+      assert(once.errs.every(m=>m.includes('older release')),'page errors around a kept page: '+once.errs.join('; '));
+      const stuck=await keptPage(Infinity);
+      assert.equal(stuck.loads,2,`a page that stays old was loaded ${stuck.loads} times`);
+      assert.equal(stuck.started,false,'the new script ran against a page from an older release');
+      assert(stuck.status.includes('در راه است'),'no note that a new version is on its way: '+stuck.status);
+      report.keptPage={once:'loaded afresh, started',stuck:'one retry, then a note'};
+    }
+
     /* ---- the fast path, and frames in step ---- */
     // The model on the GPU, camera frames handed over as VideoFrames, and each frame
     // shown with its own landmarks; then the same showing-in-step on the CPU route
