@@ -11,7 +11,7 @@
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <meta name="mobile-web-app-capable" content="yes">
 <link rel="preload" href="fonts/Estedad-var.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="roja.css?v=15">
+<link rel="stylesheet" href="roja.css?v=16">
 </head>
 <body>
 
@@ -30,6 +30,7 @@
   <symbol id="i-power" viewBox="0 0 24 24"><path d="M12 3v8"/><path d="M6.4 7a8 8 0 1 0 11.2 0"/></symbol>
   <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></symbol>
   <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9.5 7V4.5h5V7M6 7l1 13h10l1-13"/></symbol>
+  <symbol id="i-app" viewBox="0 0 24 24"><rect x="6.5" y="2.5" width="11" height="19" rx="2.5"/><path d="M12 7v6.5M9.4 11L12 13.6l2.6-2.6M10.5 18.2h3"/></symbol>
   <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7.5 10.5L12 15l4.5-4.5M4 20h16"/></symbol>
   <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M18.5 16.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"/></symbol>
   <symbol id="i-drop" viewBox="0 0 24 24"><path d="M12 3.5s6 6.4 6 10.5a6 6 0 0 1-12 0c0-4.1 6-10.5 6-10.5z"/></symbol>
@@ -47,6 +48,10 @@
     </button>
   </nav>
   <div class="top-actions">
+    <!-- Not in the app itself, and not on an iPhone, which has no app. -->
+    <button id="app-open" class="ghost pill" aria-label="دریافت اپ اندروید رُژا" hidden>
+      <svg class="ico"><use href="#i-app"/></svg><span class="label">اپ اندروید</span>
+    </button>
     <button id="gallery-open" class="ghost pill" aria-label="عکس‌های گرفته‌شده">
       <svg class="ico"><use href="#i-images"/></svg><span class="label">عکس‌ها</span> <span class="count" id="shots-count">۰</span>
     </button>
@@ -109,6 +114,7 @@
           <input id="photo-input" type="file" accept="image/*" hidden>
         </div>
         <p class="quiet">بار اول حدود ۱۵ مگابایت (مدل تشخیص صورت) بارگیری می‌شود.</p>
+        <p class="app-hint" id="welcome-app" hidden>آینه در <button type="button" class="link" id="welcome-app-open">اپ اندروید رُژا</button> روان‌تر است.</p>
       </div>
     </div>
 
@@ -326,6 +332,37 @@
   <div class="shots" id="gallery-shots"></div>
 </dialog>
 
+<dialog id="app-dialog" aria-labelledby="app-title">
+  <div class="dialog-head">
+    <h2 id="app-title">رُژا برای اندروید</h2>
+    <button id="app-close" class="ghost">بستن</button>
+  </div>
+  <p class="app-lead">همین آینه، به‌صورت برنامه: دوربین، تشخیص چهره و رسم آرایش مستقیم روی سخت‌افزار گوشی انجام می‌شود، پس تصویر روان‌تر است و آرایش بهتر روی صورت می‌نشیند.</p>
+  <ul class="app-points">
+    <li>بدون اینترنت کار می‌کند؛ همهٔ سایت داخل خود برنامه است.</li>
+    <li>برنامه اجازهٔ دسترسی به اینترنت ندارد، پس تصویر دوربین از گوشی بیرون نمی‌رود.</li>
+    <li>نسخه‌های تازه روی نسخهٔ قبلی نصب می‌شوند.</li>
+  </ul>
+  <div class="app-get">
+    <figure class="app-qr" id="app-qr">
+      <img src="icons/app-qr.svg" width="148" height="148" alt="کد QR لینک دریافت اپ">
+      <figcaption>با دوربین گوشی اندروید اسکن کن</figcaption>
+    </figure>
+    <div class="app-download">
+      <a class="primary button" id="app-download" href="https://github.com/soroushaz1/roja/releases/latest/download/roja.apk" download>
+        <svg class="ico"><use href="#i-download"/></svg>دریافت فایل نصب (APK)
+      </a>
+      <p class="quiet">اندروید ۸ و بالاتر · حدود ۳۵ مگابایت · همیشه تازه‌ترین نسخه</p>
+    </div>
+  </div>
+  <ol class="app-steps">
+    <li>فایل را دریافت کن.</li>
+    <li>بازش کن؛ اگر اندروید پرسید، اجازهٔ نصب از این منبع را بده.</li>
+    <li>رُژا را از فهرست برنامه‌ها باز کن و دوربین را روشن کن.</li>
+  </ol>
+  <p class="quiet">همهٔ نسخه‌ها و تغییراتشان در <a href="https://github.com/soroushaz1/roja/releases" target="_blank" rel="noopener">صفحهٔ نسخه‌ها</a>.</p>
+</dialog>
+
 <div id="toast" role="status" aria-live="polite"></div>
 
 <!-- If the app cannot start in this browser, say so instead of leaving a dead page. -->
@@ -337,6 +374,6 @@
 })();
 </script>
 <script nomodule>document.getElementById('status').textContent='این مرورگر قدیمی است و این برنامه را اجرا نمی‌کند. آخرین نسخهٔ Safari یا Chrome را نصب کن.';</script>
-<script type="module" src="app.js?v=15"></script>
+<script type="module" src="app.js?v=16"></script>
 </body>
 </html>

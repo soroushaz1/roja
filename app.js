@@ -1,12 +1,12 @@
-import {products,categories,finishes,looks,byProduct} from './catalog.js?v=15';
-import {layerSpecs,createMaskPainter,renderFallback,createSmoother,landmarksByType,frameLandmarks,hexToRgb} from './makeup.js?v=15';
-import {createStage,layerModes} from './stage.js?v=15';
-import {controls,regions,controlLandmarks,controlRange,deformers,textureLayers} from './deform.js?v=15';
-import {procedures,byId,amountsFor,resolve,kinds} from './procedures.js?v=15';
-import {renderDebug,nearest} from './debug.js?v=15';
-import {createBrush,brushModes} from './brush.js?v=15';
-import {metrics,measure,points as placed,symmetry,pose as poseOf} from './measure.js?v=15';
-import {CANON,CANON_ASPECT,TRIANGLES} from './facemesh.js?v=15';
+import {products,categories,finishes,looks,byProduct} from './catalog.js?v=16';
+import {layerSpecs,createMaskPainter,renderFallback,createSmoother,landmarksByType,frameLandmarks,hexToRgb} from './makeup.js?v=16';
+import {createStage,layerModes} from './stage.js?v=16';
+import {controls,regions,controlLandmarks,controlRange,deformers,textureLayers} from './deform.js?v=16';
+import {procedures,byId,amountsFor,resolve,kinds} from './procedures.js?v=16';
+import {renderDebug,nearest} from './debug.js?v=16';
+import {createBrush,brushModes} from './brush.js?v=16';
+import {metrics,measure,points as placed,symmetry,pose as poseOf} from './measure.js?v=16';
+import {CANON,CANON_ASPECT,TRIANGLES} from './facemesh.js?v=16';
 
 const $=id=>document.getElementById(id);
 const fa=new Intl.NumberFormat('fa-IR');
@@ -896,7 +896,7 @@ function onTracker(d){
 function ensureTracker(){
   if(tracker||trackerStarting)return;
   let w=null;
-  try{w=new Worker(new URL(`face-worker.js?v=15${gpuQuery}`,import.meta.url));}catch(e){perf.lastError=`worker: ${e.message}`;}
+  try{w=new Worker(new URL(`face-worker.js?v=16${gpuQuery}`,import.meta.url));}catch(e){perf.lastError=`worker: ${e.message}`;}
   if(!w){useTracker('page','no worker');return;}
   ready=false;busy=false;
   tracker={kind:'worker',post:(m,transfer)=>w.postMessage(m,transfer),close:()=>w.terminate()};
@@ -916,7 +916,7 @@ async function useTracker(kind,reason){
   const token=++trackerGeneration;
   try{
     const Vision=await import('./vendor/vision_bundle.mjs');
-    await import('./face-core.js?v=15');
+    await import('./face-core.js?v=16');
     const core=self.rojaFaceCore(Vision,new URL('./',import.meta.url).href);
     const found=await core.init();
     if(token!==trackerGeneration){core.close();return;}
@@ -1459,7 +1459,17 @@ $('basket').onclick=()=>{renderCart();$('cart').showModal();};
 $('close').onclick=()=>$('cart').close();
 $('gallery-open').onclick=()=>{renderGallery();$('gallery').showModal();};
 $('gallery-close').onclick=()=>$('gallery').close();
-for(const dialog of [$('cart'),$('gallery')])dialog.addEventListener('click',e=>{if(e.target===dialog)dialog.close();});
+// The Android app: offered where it can be installed, or passed on to a phone with the
+// QR code; not inside the app itself, and not on an iPhone, which has no app.
+if(!native&&!iOS){
+  const android=/Android/i.test(ua);
+  $('app-open').hidden=false;
+  $('welcome-app').hidden=!android;
+  $('app-qr').hidden=android;                 // on the phone itself there is nothing to scan
+}
+$('app-open').onclick=$('welcome-app-open').onclick=()=>$('app-dialog').showModal();
+$('app-close').onclick=()=>$('app-dialog').close();
+for(const dialog of [$('cart'),$('gallery'),$('app-dialog')])dialog.addEventListener('click',e=>{if(e.target===dialog)dialog.close();});
 
 $('strength').oninput=()=>{
   const value=Number($('strength').value);

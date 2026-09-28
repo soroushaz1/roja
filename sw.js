@@ -4,11 +4,11 @@
 //
 // Only this origin's own files are cached, and nothing from the camera ever passes
 // through here: frames never leave the page.
-const CACHE='roja-v15';
-const SHELL=['./','index.html','roja.css?v=15','app.js?v=15','catalog.js?v=15','makeup.js?v=15','stage.js?v=15',
-  'deform.js?v=15','procedures.js?v=15','debug.js?v=15','brush.js?v=15','measure.js?v=15','blur.js?v=15','facemesh.js?v=15','shaders.js?v=15',
-  'face-worker.js?v=15','face-core.js?v=15',
-  'fonts/Estedad-var.woff2','favicon.svg','manifest.webmanifest','icons/icon-192.png'];
+const CACHE='roja-v16';
+const SHELL=['./','index.html','roja.css?v=16','app.js?v=16','catalog.js?v=16','makeup.js?v=16','stage.js?v=16',
+  'deform.js?v=16','procedures.js?v=16','debug.js?v=16','brush.js?v=16','measure.js?v=16','blur.js?v=16','facemesh.js?v=16','shaders.js?v=16',
+  'face-worker.js?v=16','face-core.js?v=16',
+  'fonts/Estedad-var.woff2','favicon.svg','manifest.webmanifest','icons/icon-192.png','icons/app-qr.svg'];
 
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)).then(()=>self.skipWaiting()));

@@ -795,6 +795,63 @@ const LIPS=[61,0,291,17,40,270,91,321];
       await phone.close();
     }
 
+    /* ---- getting the Android app ---- */
+    // Offered in the header, with a QR code for a computer; on an Android phone under
+    // the start buttons instead, without the code; never on an iPhone or in the app.
+    {
+      const APK='https://github.com/soroushaz1/roja/releases/latest/download/roja.apk';
+      const phoneUA={
+        android:'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Mobile Safari/537.36',
+        iphone:'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1'
+      };
+      const visit=async(options,init)=>{
+        const ctx=await browser.newContext(options);const p=await ctx.newPage();
+        const errs=[];p.on('pageerror',e=>errs.push(e.message));
+        if(init)await p.addInitScript(init);
+        await p.goto(origin+'/index.html',{waitUntil:'load',timeout:60000});
+        await p.waitForTimeout(300);
+        const seen=await p.evaluate(()=>{const shown=s=>document.querySelector(s).getClientRects().length>0;
+          return {header:shown('#app-open'),hint:shown('#welcome-app'),qr:!document.querySelector('#app-qr').hidden};});
+        return {ctx,p,errs,seen};
+      };
+      report.appDownload={};
+
+      const desk=await visit({viewport:{width:1280,height:800}});
+      assert.deepEqual(desk.seen,{header:true,hint:false,qr:true},'the app offer on a computer');
+      await desk.p.locator('#app-open').click();
+      assert.equal(await desk.p.locator('#app-dialog').isVisible(),true,'the app dialog did not open');
+      assert.equal(await desk.p.locator('#app-download').getAttribute('href'),APK,'the download does not point at the latest release');
+      assert(await desk.p.evaluate(()=>{const im=document.querySelector('#app-qr img');return im.complete&&im.naturalWidth>0;}),'the QR code did not load');
+      assert(await onScreen(desk.p,'#app-download'),'the download button is off-screen');
+      await desk.p.locator('#app-close').click();
+      assert.equal(await desk.p.locator('#app-dialog').isVisible(),false,'the app dialog did not close');
+      assert.deepEqual(desk.errs,[],'page errors around the app dialog');
+      report.appDownload.desktop=desk.seen;
+      await desk.ctx.close();
+
+      const droid=await visit({viewport:{width:360,height:740},isMobile:true,hasTouch:true,userAgent:phoneUA.android});
+      assert.deepEqual(droid.seen,{header:false,hint:true,qr:false},'the app offer on an Android phone');
+      // The hint must fit the start box of a small phone, not run under the shades.
+      assert(await droid.p.evaluate(()=>document.querySelector('#welcome-app').getBoundingClientRect().bottom<=
+        document.querySelector('#viewport').getBoundingClientRect().bottom),'the app hint overflows the start box');
+      await droid.p.locator('#welcome-app-open').click();
+      assert(await onScreen(droid.p,'#app-download'),'the download button is off-screen on a phone');
+      assert.equal(await droid.p.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'horizontal scroll with the app dialog open');
+      assert.deepEqual(droid.errs,[],'page errors around the app offer on Android');
+      report.appDownload.android=droid.seen;
+      await droid.ctx.close();
+
+      const ios=await visit({viewport:{width:390,height:844},isMobile:true,hasTouch:true,userAgent:phoneUA.iphone});
+      assert.deepEqual(ios.seen,{header:false,hint:false,qr:true},'the Android app offered on an iPhone');
+      await ios.ctx.close();
+
+      const inApp=await visit({viewport:{width:390,height:844},isMobile:true,hasTouch:true,userAgent:phoneUA.android},
+        ()=>{window.RojaAndroid={saveFile(){return 'saved';},keepScreenOn(){},version(){return 'test';},nativeMirror(){return false;}};});
+      assert.equal(inApp.seen.header||inApp.seen.hint,false,'the app offers itself');
+      await inApp.ctx.close();
+      report.appDownload.hiddenOn='iPhone, the app';
+    }
+
     /* ---- the fast path, and frames in step ---- */
     // The model on the GPU, camera frames handed over as VideoFrames, and each frame
     // shown with its own landmarks; then the same showing-in-step on the CPU route
