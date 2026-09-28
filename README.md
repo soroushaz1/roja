@@ -182,6 +182,12 @@ Keyboard: **B** brush, **[ ]** brush size, **Ctrl+Z** undo a stroke, **C** compa
   (`manifest.webmanifest`). Once installed, `sw.js` keeps its files, including the face
   model after the first camera use, so it opens offline. The service worker is not
   registered on `localhost`, so development always serves fresh files.
+- **Releasing a change to the site** — raise the `?v=` number on every file that names
+  another (`index.html`, the modules, `sw.js`), the service worker's `CACHE`, and the
+  release in `<html data-release>` and `RELEASE` in `app.js` together. GitHub Pages ignores
+  the query and lets browsers keep a page for ten minutes, so just after a release a kept
+  page can be handed the new script; `app.js` sees the release differ and loads the page
+  afresh once (then says a new version is on its way rather than fail).
 
 ## Tests
 
@@ -207,7 +213,8 @@ a tap — still tracks the face on the page, offers a tap to start the picture, 
 camera video, and shows makeup. It checks where the Android app is offered — with the QR
 code on a computer, under the start buttons and fitting the start box on an Android phone,
 nowhere on an iPhone or inside the app — and that the download points at the latest
-release. Last, it runs the model on the GPU with frames handed over
+release. A page from an older release handed the new script must be loaded afresh once,
+and one that stays old must show a note instead of looping or failing. Last, it runs the model on the GPU with frames handed over
 as `VideoFrame`s, and on the CPU route iPhones take, each with frames shown in step with
 their landmarks: the picture must equal the camera's and makeup must appear. Point it at a
 deployed copy with `ROJA_URL`. Playwright is found through `PLAYWRIGHT_MODULE`, a normal

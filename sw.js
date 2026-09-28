@@ -4,14 +4,18 @@
 //
 // Only this origin's own files are cached, and nothing from the camera ever passes
 // through here: frames never leave the page.
-const CACHE='roja-v16';
-const SHELL=['./','index.html','roja.css?v=16','app.js?v=16','catalog.js?v=16','makeup.js?v=16','stage.js?v=16',
-  'deform.js?v=16','procedures.js?v=16','debug.js?v=16','brush.js?v=16','measure.js?v=16','blur.js?v=16','facemesh.js?v=16','shaders.js?v=16',
-  'face-worker.js?v=16','face-core.js?v=16',
+const CACHE='roja-v17';
+const SHELL=['./','index.html','roja.css?v=17','app.js?v=17','catalog.js?v=17','makeup.js?v=17','stage.js?v=17',
+  'deform.js?v=17','procedures.js?v=17','debug.js?v=17','brush.js?v=17','measure.js?v=17','blur.js?v=17','facemesh.js?v=17','shaders.js?v=17',
+  'face-worker.js?v=17','face-core.js?v=17',
   'fonts/Estedad-var.woff2','favicon.svg','manifest.webmanifest','icons/icon-192.png','icons/app-qr.svg'];
 
+// From the server, not the browser's cache: that can still hold the previous release's
+// page, and GitHub Pages ignores the ?v= query, so this release's names could be given
+// the previous release's files.
 self.addEventListener('install',event=>{
-  event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)).then(()=>self.skipWaiting()));
+  event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL.map(url=>new Request(url,{cache:'reload'}))))
+    .then(()=>self.skipWaiting()));
 });
 self.addEventListener('activate',event=>{
   event.waitUntil((async()=>{
@@ -24,9 +28,11 @@ self.addEventListener('fetch',event=>{
   if(request.method!=='GET'||new URL(request.url).origin!==self.location.origin)return;
   event.respondWith((async()=>{
     const cache=await caches.open(CACHE);
-    // The page itself: fresh when online, so a new version is picked up at once.
+    // The page itself: fresh when online, so a new version is picked up at once. Checked
+    // with the server every time, as the browser would otherwise reuse its copy for ten
+    // minutes and pair it with a newer script.
     if(request.mode==='navigate'){
-      try{const response=await fetch(request);if(response.ok)cache.put(request,response.clone());return response;}
+      try{const response=await fetch(request,{cache:'no-cache'});if(response.ok)cache.put(request,response.clone());return response;}
       catch{return (await cache.match(request))||(await cache.match('./'))||Response.error();}
     }
     // Everything else is versioned or never changes: the cache first.

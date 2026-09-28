@@ -1,14 +1,31 @@
-import {products,categories,finishes,looks,byProduct} from './catalog.js?v=16';
-import {layerSpecs,createMaskPainter,renderFallback,createSmoother,landmarksByType,frameLandmarks,hexToRgb} from './makeup.js?v=16';
-import {createStage,layerModes} from './stage.js?v=16';
-import {controls,regions,controlLandmarks,controlRange,deformers,textureLayers} from './deform.js?v=16';
-import {procedures,byId,amountsFor,resolve,kinds} from './procedures.js?v=16';
-import {renderDebug,nearest} from './debug.js?v=16';
-import {createBrush,brushModes} from './brush.js?v=16';
-import {metrics,measure,points as placed,symmetry,pose as poseOf} from './measure.js?v=16';
-import {CANON,CANON_ASPECT,TRIANGLES} from './facemesh.js?v=16';
+import {products,categories,finishes,looks,byProduct} from './catalog.js?v=17';
+import {layerSpecs,createMaskPainter,renderFallback,createSmoother,landmarksByType,frameLandmarks,hexToRgb} from './makeup.js?v=17';
+import {createStage,layerModes} from './stage.js?v=17';
+import {controls,regions,controlLandmarks,controlRange,deformers,textureLayers} from './deform.js?v=17';
+import {procedures,byId,amountsFor,resolve,kinds} from './procedures.js?v=17';
+import {renderDebug,nearest} from './debug.js?v=17';
+import {createBrush,brushModes} from './brush.js?v=17';
+import {metrics,measure,points as placed,symmetry,pose as poseOf} from './measure.js?v=17';
+import {CANON,CANON_ASPECT,TRIANGLES} from './facemesh.js?v=17';
 
 const $=id=>document.getElementById(id);
+// GitHub Pages ignores the ?v= query, and browsers and its CDN keep a page for up to ten
+// minutes: just after a release, a page kept from the one before can be handed this
+// newer script, which would then look for elements that page does not have. Such a
+// page is loaded afresh, once; if it is still the old one, it says a new version is
+// on its way instead of failing.
+const RELEASE='17';
+if(document.documentElement.dataset.release!==RELEASE){
+  let tried=null;
+  try{tried=sessionStorage.getItem('roja-reloaded');sessionStorage.setItem('roja-reloaded',RELEASE);}catch{}
+  document.documentElement.dataset.ready='1';           // keeps the page's own error note quiet
+  const status=$('status');
+  if(tried!==RELEASE){
+    if(status)status.textContent='نسخهٔ تازهٔ رُژا بار می‌شود…';
+    location.reload();
+  }else if(status)status.textContent='نسخهٔ تازهٔ رُژا در راه است؛ چند دقیقهٔ دیگر صفحه را دوباره باز کن.';
+  throw new Error(`a page from an older release than ${RELEASE}: not started`);
+}
 const fa=new Intl.NumberFormat('fa-IR');
 const fa1=new Intl.NumberFormat('fa-IR',{minimumFractionDigits:1,maximumFractionDigits:1});
 const fa2=new Intl.NumberFormat('fa-IR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -896,7 +913,7 @@ function onTracker(d){
 function ensureTracker(){
   if(tracker||trackerStarting)return;
   let w=null;
-  try{w=new Worker(new URL(`face-worker.js?v=16${gpuQuery}`,import.meta.url));}catch(e){perf.lastError=`worker: ${e.message}`;}
+  try{w=new Worker(new URL(`face-worker.js?v=17${gpuQuery}`,import.meta.url));}catch(e){perf.lastError=`worker: ${e.message}`;}
   if(!w){useTracker('page','no worker');return;}
   ready=false;busy=false;
   tracker={kind:'worker',post:(m,transfer)=>w.postMessage(m,transfer),close:()=>w.terminate()};
@@ -916,7 +933,7 @@ async function useTracker(kind,reason){
   const token=++trackerGeneration;
   try{
     const Vision=await import('./vendor/vision_bundle.mjs');
-    await import('./face-core.js?v=16');
+    await import('./face-core.js?v=17');
     const core=self.rojaFaceCore(Vision,new URL('./',import.meta.url).href);
     const found=await core.init();
     if(token!==trackerGeneration){core.close();return;}
