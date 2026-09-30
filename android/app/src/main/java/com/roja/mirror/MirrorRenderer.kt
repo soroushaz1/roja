@@ -36,7 +36,11 @@ class MirrorRenderer(private val code: SiteCode) : GLSurfaceView.Renderer {
     /** One makeup layer, as the page's stageLayer() builds it; [radiusK] is its smoothing radius in face widths. */
     class Layer(
         val key: String, val color: FloatArray, val amount: Float, val mode: Float, val detail: Float,
-        val gloss: Float, val matte: Float, val shimmer: Float, val smooth: Float, val bright: Float, val radiusK: Float
+        val gloss: Float, val matte: Float, val shimmer: Float, val smooth: Float, val bright: Float, val radiusK: Float,
+        /** How much of the skin's own colour the product lets through; see SHEER in app.js. */
+        val sheer: Float = 0f,
+        /** A concealer lifts the shadow it sits in; a foundation keeps it. */
+        val lift: Float = 0f
     )
 
     /** What to draw: the "after" layers and procedure amounts, and the "before" side from [seam] on. */
@@ -505,6 +509,8 @@ class MirrorRenderer(private val code: SiteCode) : GLSurfaceView.Renderer {
             glUniform1f(layerP.u("u_gloss"), layer.gloss)
             glUniform1f(layerP.u("u_matte"), layer.matte)
             glUniform1f(layerP.u("u_shimmer"), layer.shimmer)
+            glUniform1f(layerP.u("u_sheer"), layer.sheer)
+            glUniform1f(layerP.u("u_lift"), layer.lift)
             glUniform1f(layerP.u("u_smooth"), layer.smooth)
             glUniform1f(layerP.u("u_bright"), layer.bright)
             glUniform2f(layerP.u("u_texel"), 1f / size[0], 1f / size[1])

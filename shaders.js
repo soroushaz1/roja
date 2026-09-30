@@ -74,8 +74,8 @@ export const LAYER_FRAG=`
 varying vec2 v_uv;
 uniform sampler2D u_src;uniform sampler2D u_low;uniform sampler2D u_mask;uniform sampler2D u_stats;
 uniform vec3 u_color;uniform float u_amount;uniform float u_mode;
-uniform float u_detail;uniform float u_gloss;uniform float u_matte;uniform float u_shimmer;
-uniform float u_smooth;uniform float u_bright;uniform vec2 u_texel;uniform float u_radius;uniform float u_time;
+uniform float u_detail;uniform float u_gloss;uniform float u_matte;uniform float u_shimmer;uniform float u_sheer;
+uniform float u_smooth;uniform float u_bright;uniform vec2 u_texel;uniform float u_radius;uniform float u_time;uniform float u_lift;
 float luma(vec3 c){return dot(c,vec3(.299,.587,.114));}
 float hash(vec2 p){return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453);}
 vec3 smoothed(vec3 c0){
@@ -105,12 +105,20 @@ void main(){
   vec3 outc=base;
   if(u_mode<.5){
     float s=shade>1.?1.+(shade-1.)*(1.-.8*u_matte):shade;
-    outc=mix(base,col*mix(1.,s,u_detail),m);
+    vec3 paint=col*mix(1.,s,u_detail);
+    // A sheer product does not replace the skin, it washes over it: keep the pixel's
+    // own luminance and take only the product's hue. Opaque products (liner, lashes)
+    // keep u_sheer near zero and behave as before.
+    vec3 wash=base*(u_color/max(luma(u_color),.05));
+    outc=mix(base,mix(paint,wash,u_sheer),m);
   }else if(u_mode<1.5){
     float mx=max(max(u_color.r,u_color.g),max(u_color.b,.001));
     outc=mix(base,base*(u_color/mx),m);
   }else if(u_mode<2.5){
-    outc=mix(base,base*(u_color/max(luma(u_color),.05))*.78,m);
+    // Contour is the only layer here, and at .78 it darkened by about seven per cent
+    // at its default setting — below what anyone notices, which is why it read as
+    // "not working".
+    outc=mix(base,base*(u_color/max(luma(u_color),.05))*.62,m);
   }else if(u_mode<3.5){
     vec3 g=col*(.45+.55*smoothstep(.9,1.25,shade));
     outc=mix(base,1.-(1.-base)*(1.-g*.85),m);
@@ -122,7 +130,10 @@ void main(){
     vec3 even=mix(base,smoothed(base),clamp(u_smooth*cover*skin,0.,1.));
     if(u_mode<4.5){
       float s=clamp(luma(even)/Yr,0.,2.);
-      s=s>1.?1.+(s-1.)*(1.-.7*u_matte):s;
+      // Below the region's mean the layer inherits the shadow it sits in. A foundation
+      // should (u_lift 0), but a concealer exists to cancel the dark under an eye, so
+      // it lifts that floor back towards the product's own value.
+      s=s>1.?1.+(s-1.)*(1.-.7*u_matte):mix(s,1.,u_lift);
       outc=mix(even,col*mix(1.,s,u_detail),m*skin);
     }else{
       outc=even*(1.+.24*u_bright*cover*skin);

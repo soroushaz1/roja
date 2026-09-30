@@ -261,7 +261,8 @@ class MainActivity : ComponentActivity() {
                 l.getString("key"), floatArrayOf(c.getDouble(0).toFloat(), c.getDouble(1).toFloat(), c.getDouble(2).toFloat()),
                 l.optDouble("amount", 0.0).toFloat(), l.optDouble("mode", 0.0).toFloat(), l.optDouble("detail", 0.0).toFloat(),
                 l.optDouble("gloss", 0.0).toFloat(), l.optDouble("matte", 0.0).toFloat(), l.optDouble("shimmer", 0.0).toFloat(),
-                l.optDouble("smooth", 0.0).toFloat(), l.optDouble("bright", 0.0).toFloat(), l.optDouble("radiusK", .03).toFloat()
+                l.optDouble("smooth", 0.0).toFloat(), l.optDouble("bright", 0.0).toFloat(), l.optDouble("radiusK", .03).toFloat(),
+                l.optDouble("sheer", 0.0).toFloat(), l.optDouble("lift", 0.0).toFloat()
             )
         }
     }
