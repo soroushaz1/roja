@@ -131,6 +131,10 @@ const FINISH={
   dewy:{gloss:.28,matte:0,shimmer:0,smooth:.3}
 };
 const DETAIL={lipstick:.9,gloss:.95,lipliner:.7,eyeshadow:.85,eyeliner:.25,mascara:.15,brow:.9,foundation:.85,concealer:.8};
+// How much of the skin's own colour a product lets through, rather than replacing it.
+// Liner and lashes really are opaque. A gloss is mostly skin with a hint of hue. A brow
+// has to keep the hair showing or it reads as a block drawn on the face.
+const SHEER={lipstick:.20,gloss:.78,lipliner:.15,eyeshadow:.40,eyeliner:.06,mascara:.10,brow:.55};
 
 /* ---------- small helpers ----------------------------------------------- */
 function paintRange(input){
@@ -573,10 +577,15 @@ function stageLayer(spec,face){
   const intensity=Math.max(0,Math.min(1,spec.intensity/100));
   const detail=(DETAIL[spec.type]??.8)*($('natural-blend').checked?1:.3);
   const glossy=spec.type==='gloss'?1:Math.min(1,intensity*1.4);
-  // A pigment builds coverage fast: half the slider already reads as a real lipstick,
-  // the top of it as full coverage. Sheer products (gloss) and skin products stay linear.
-  const amount=spec.mode==='pigment'&&spec.type!=='gloss'?1-Math.pow(1-intensity,2):intensity*(spec.type==='gloss'?.9:1);
+  // The slider is a promise: at 40 the product covers 40. The old curve bent a pigment
+  // up to 1-(1-i)², so a 55 turned into 80% coverage — the single biggest reason the
+  // makeup read as paint rather than product.
+  const amount=intensity*(spec.type==='gloss'?.9:1);
+  // Turning off "blend with the skin's texture" should mean exactly that, so the sheer
+  // pass — which exists to let the skin through — closes down with it.
   return {key:spec.key,color:hexToRgb(spec.color),amount,
+    sheer:(SHEER[spec.type]??0)*($('natural-blend').checked?1:.2),
+    lift:spec.type==='concealer'?.75:0,
     mode:layerModes[spec.mode],detail,gloss:(f.gloss||0)*glossy,matte:f.matte||0,
     shimmer:(f.shimmer||0)*Math.min(1,intensity*1.6),
     smooth:spec.mode==='foundation'?(f.smooth??.4)*Math.min(1,.45+intensity):0,radius:Math.max(2,face*.03),radiusK:.03};

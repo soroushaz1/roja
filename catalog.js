@@ -79,7 +79,7 @@ export const products=[
 
   {id:'contour', type:'contour', category:'face', mode:'shade', finish:'matte',
    name:'کانتور', title:'پودر کانتور مات', region:'زیر گونه و کنار بینی', code:'ROJA / CTR',
-   intensity:35, fade:70, price:820000,
+   intensity:50, fade:70, price:820000,
    description:'۵ رنگ سرد تا گرم برای سایه‌انداختن زیر استخوان گونه، شقیقه و کنار بینی.',
    limitation:'جای دقیق کانتور به فرم استخوان صورت بستگی دارد؛ با ابزار براش جابه‌جایش کن.',
    shades:range('ctr',[
@@ -114,7 +114,7 @@ export const products=[
   /* ---- eyes ---- */
   {id:'shadow', type:'eyeshadow', category:'eyes', mode:'pigment', finish:'matte',
    name:'سایهٔ تک‌رنگ', title:'سایهٔ چشم تک‌رنگ', region:'پلک', code:'ROJA / EYE',
-   intensity:45, fade:45, price:390000,
+   intensity:59, fade:45, price:390000,
    description:'۱۲ رنگ مات، شاین و متالیک برای ترکیب آزاد.',
    limitation:'درخشش ذرات شاین فقط تقریبی نمایش داده می‌شود.',
    shades:range('eye',[
@@ -124,7 +124,7 @@ export const products=[
 
   {id:'palette', type:'eyeshadow', category:'eyes', mode:'pigment', finish:'matte',
    name:'پالت سایه', title:'پالت سایهٔ چهاررنگ', region:'پلک', code:'ROJA / PAL',
-   intensity:50, fade:50, price:1250000,
+   intensity:64, fade:50, price:1250000,
    description:'۵ پالت چهاررنگ. هر پالت کامل روی پلک می‌نشیند: رنگ روشن زیر ابرو و گوشهٔ داخلی، میانی در چین پلک، تیره در گوشهٔ بیرونی و رنگ تأکید روی پلک.',
    limitation:'جای هر رنگ الگوی رایج است؛ با براش می‌توانی پخش یا کمش کنی.',
    palettes,
@@ -133,7 +133,7 @@ export const products=[
 
   {id:'liner', type:'eyeliner', category:'eyes', mode:'pigment', finish:'satin',
    name:'خط چشم', title:'خط چشم ماژیکی', region:'خط مژه', code:'ROJA / LNR',
-   intensity:80, fade:18, price:690000,
+   intensity:82, fade:18, price:690000,
    styles:[{id:'thin',name:'باریک'},{id:'classic',name:'کلاسیک'},{id:'wing',name:'گربه‌ای'},{id:'smudge',name:'دودی دور چشم'}],
    description:'۵ رنگ و چهار فرم کشیدن خط.',
    limitation:'فرم خط روی چشم‌های پف‌دار یا افتاده ممکن است متفاوت دیده شود.',
@@ -141,7 +141,7 @@ export const products=[
 
   {id:'mascara', type:'mascara', category:'eyes', mode:'pigment', finish:'satin',
    name:'ریمل', title:'ریمل', region:'مژه', code:'ROJA / MSC',
-   intensity:70, fade:10, price:840000,
+   intensity:77, fade:10, price:840000,
    styles:[{id:'length',name:'بلندکننده'},{id:'volume',name:'حجم‌دهنده'}],
    description:'۳ رنگ، با فرمول بلندکننده یا حجم‌دهنده.',
    limitation:'مژه‌ها طرح‌وارند؛ پیش‌نمایش حالت و تیرگی خط مژه را نشان می‌دهد نه تک‌تک تارها.',
@@ -149,7 +149,7 @@ export const products=[
 
   {id:'brow', type:'brow', category:'eyes', mode:'pigment', finish:'matte',
    name:'مداد ابرو', title:'مداد ابرو', region:'ابرو', code:'ROJA / BRW',
-   intensity:38, fade:35, price:520000,
+   intensity:52, fade:35, price:520000,
    description:'۶ رنگ برای پرکردن و یکدست‌کردن ابرو؛ بافت موها حفظ می‌شود.',
    limitation:'فرم ابرو تغییر نمی‌کند؛ فقط رنگ و پری آن.',
    shades:range('brw',[['بلوند','#9C7B5A'],['قهوه‌ای روشن','#7A5A42'],['فندقی','#634634'],['قهوه‌ای تیره','#4A3428'],['خاکستری تیره','#3E3A3A'],['مشکی نرم','#2A2224']])},
@@ -157,14 +157,14 @@ export const products=[
   /* ---- lips ---- */
   {id:'lipliner', type:'lipliner', category:'lips', mode:'pigment', finish:'matte',
    name:'مداد لب', title:'مداد لب', region:'دور لب', code:'ROJA / LPL',
-   intensity:60, fade:25, price:480000,
+   intensity:71, fade:25, price:480000,
    description:'۶ رنگ برای دورگیری و مشخص‌تر کردن فرم لب.',
    limitation:'کشیدن خط بیرون از مرز طبیعی لب در پیش‌نمایش شبیه‌سازی نمی‌شود.',
    shades:range('lpl',[['نود','#A86B5E'],['رز','#A2505C'],['قرمز','#9E2530'],['آجری','#8E3E30'],['شرابی','#5E1F2E'],['کاکائویی','#5E3730']])},
 
   {id:'velvet', type:'lipstick', category:'lips', mode:'pigment', finish:'velvet',
    name:'رژ مخملی', title:'رژ لب جامد مخملی', region:'لب', code:'ROJA / VLV',
-   intensity:55, fade:45, price:890000,
+   intensity:68, fade:45, price:890000,
    description:'پوشش مات مخملی با ۱۲ رنگ، از نودهای گرم تا بادمجانی تیره.',
    limitation:'بافت مخملی تقریبی نمایش داده می‌شود؛ رنگ روی لب‌های تیره‌تر کمی متفاوت می‌نشیند.',
    shades:range('vlv',[
@@ -174,7 +174,7 @@ export const products=[
 
   {id:'liquid', type:'lipstick', category:'lips', mode:'pigment', finish:'matte',
    name:'رژ مایع مات', title:'رژ لب مایع مات', region:'لب', code:'ROJA / MAT',
-   intensity:62, fade:35, price:950000,
+   intensity:73, fade:35, price:950000,
    description:'ماندگاری بالا و پوشش کامل با ۱۰ رنگ.',
    limitation:'رژ مایع روی لب کمی تیره‌تر از پیش‌نمایش می‌نشیند.',
    shades:range('mat',[
@@ -198,15 +198,15 @@ export const byProduct=id=>products.find(p=>p.id===id);
 // the shade finder's pick if it has been run, otherwise whatever is selected.
 export const looks=[
   {id:'natural', name:'روزانهٔ طبیعی', description:'پوست یکدست و سبک، گونهٔ هلویی و لب نود.',
-   items:[['tint','auto',30],['powder-blush','pwd-1',28],['brow','brw-2',30],['mascara','msc-2',55,'length'],['velvet','vlv-1',45]]},
+   items:[['tint','auto',30],['powder-blush','pwd-1',28],['brow','brw-2',43],['mascara','msc-2',68,'length'],['velvet','vlv-1',59]]},
   {id:'office', name:'اداری', description:'پوشش متوسط، سایهٔ قهوه‌ای ملایم و خط چشم باریک.',
-   items:[['foundation','auto',40],['concealer','auto',35],['powder-blush','pwd-3',26],['shadow','eye-5',35],['liner','lnr-2',60,'thin'],['mascara','msc-1',60,'length'],['brow','brw-3',35],['liquid','mat-2',55]]},
+   items:[['foundation','auto',40],['concealer','auto',35],['powder-blush','pwd-3',26],['shadow','eye-5',49],['liner','lnr-2',71,'thin'],['mascara','msc-1',71,'length'],['brow','brw-3',49],['liquid','mat-2',68]]},
   {id:'evening', name:'مهمانی', description:'پلک رز، خط چشم گربه‌ای، هایلایت و رژ قرمز.',
-   items:[['foundation','auto',55],['contour','ctr-2',35],['highlighter','hlt-1',45],['palette','pal-2',55],['liner','lnr-1',85,'wing'],['mascara','msc-1',80,'volume'],['brow','brw-4',40],['lipliner','lpl-3',55],['velvet','vlv-8',65]]},
+   items:[['foundation','auto',55],['contour','ctr-2',35],['highlighter','hlt-1',45],['palette','pal-2',68],['liner','lnr-1',83,'wing'],['mascara','msc-1',82,'volume'],['brow','brw-4',54],['lipliner','lpl-3',68],['velvet','vlv-8',75]]},
   {id:'smoky', name:'اسموکی', description:'سایهٔ دودی، خط چشم پخش و لب نود.',
-   items:[['foundation','auto',50],['contour','ctr-1',30],['palette','pal-3',60],['liner','lnr-1',80,'smudge'],['mascara','msc-1',80,'volume'],['brow','brw-4',40],['liquid','mat-2',50]]},
+   items:[['foundation','auto',50],['contour','ctr-1',30],['palette','pal-3',71],['liner','lnr-1',82,'smudge'],['mascara','msc-1',82,'volume'],['brow','brw-4',54],['liquid','mat-2',64]]},
   {id:'bridal', name:'عروس', description:'پوست درخشان، پالت خاکی، رژ رز و برق لب.',
-   items:[['foundation','auto',55],['concealer','auto',40],['highlighter','hlt-2',50],['cream-blush','crm-2',35],['palette','pal-1',50],['liner','lnr-2',70,'classic'],['mascara','msc-1',75,'volume'],['brow','brw-3',35],['lipliner','lpl-2',45],['velvet','vlv-6',55],['gloss','gls-1',35]]},
+   items:[['foundation','auto',55],['concealer','auto',40],['highlighter','hlt-2',50],['cream-blush','crm-2',35],['palette','pal-1',64],['liner','lnr-2',77,'classic'],['mascara','msc-1',80,'volume'],['brow','brw-3',49],['lipliner','lpl-2',59],['velvet','vlv-6',68],['gloss','gls-1',49]]},
   {id:'bold', name:'لب پررنگ', description:'چهرهٔ ساده و رژ مات پررنگ.',
-   items:[['tint','auto',30],['brow','brw-3',30],['mascara','msc-1',60,'length'],['lipliner','lpl-5',60],['liquid','mat-8',70]]}
+   items:[['tint','auto',30],['brow','brw-3',43],['mascara','msc-1',71,'length'],['lipliner','lpl-5',71],['liquid','mat-8',77]]}
 ];

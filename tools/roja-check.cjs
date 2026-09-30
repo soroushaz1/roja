@@ -156,8 +156,21 @@ const LIPS=[61,0,291,17,40,270,91,321];
     /* ---- makeup on the WebGL stage ---- */
     assert.equal(await page.locator('#webgl-missing').isVisible(),false,'WebGL reported missing');
     const lipsOn=await page.evaluate(region,{ids:LIPS});
-    assert(lipsOn.diff>4,`the default lipstick did not colour the lips (${lipsOn.diff.toFixed(2)})`);
+    // The default shade is a nude. 4 encoded the old inflated coverage, where a slider
+    // at 62 painted at 86; stageLayer() now paints what the slider says, and a sheer
+    // pass lets the lip's own colour through, so a nude legitimately moves less.
+    assert(lipsOn.diff>3,`the default lipstick did not colour the lips (${lipsOn.diff.toFixed(2)})`);
     assert.equal(await page.evaluate(outside,{margin:12}),0,'makeup changed pixels away from the face');
+
+    // The guard that matters more: a deep shade must still read as a real lipstick, so
+    // softening the nude can never quietly become "no colour at all".
+    await page.locator('#clear-look').click();
+    await page.locator('[data-product="velvet"]').click();
+    await page.locator('#shades .shade').nth(9).click();
+    await settle(page);
+    const lipsDeep=await page.evaluate(region,{ids:LIPS});
+    assert(lipsDeep.diff>9,`a deep lipstick barely coloured the lips (${lipsDeep.diff.toFixed(2)})`);
+    report.lips={nude:+lipsOn.diff.toFixed(2),deep:+lipsDeep.diff.toFixed(2)};
 
     // Every product renders, and none leaks into the eye opening or off the face.
     const productIds=await page.evaluate(()=>[...document.querySelectorAll('[data-product]')].map(b=>b.dataset.product));
@@ -211,6 +224,46 @@ const LIPS=[61,0,291,17,40,270,91,321];
     const glossed=await page.evaluate(region,{ids:LIPS});
     assert(Math.abs(glossed.diff-red.diff)>0.3,'a gloss over the lipstick changed nothing');
     await page.locator('#product-toggle').click();          // gloss off again
+
+    /* ---- a closed eye loses its eye makeup, and only that eye ---- */
+    // People shut one eye to draw liner. A shut lid folds the lash line onto the lower
+    // one, and anything drawn between them smears across the eye.
+    const blink=await page.evaluate(async()=>{
+      const m=await import('./makeup.js?v=17');
+      const W=640,H=480,lm=window.testLandmarks;
+      const eye=m.eyeContours[0],n=eye.upper.length;
+      // Which half of the frame this eye sits on, measured against the nose.
+      const onLeft=lm[eye.upper[0]].x<lm[1].x;
+      const shut=lm.map(q=>({...q}));
+      for(let i=0;i<n;i++){
+        const low=lm[eye.lower[n-1-i]];
+        shut[eye.upper[i]]={...shut[eye.upper[i]],x:low.x,y:low.y};
+      }
+      const spec={type:'eyeliner',style:'classic',fade:45,intensity:80,key:'t',color:'#000000'};
+      const halves=marks=>{
+        const mask=m.createMaskPainter().paint(spec,marks,W,H,null);
+        const c=document.createElement('canvas');c.width=mask.width;c.height=mask.height;
+        const x=c.getContext('2d');x.drawImage(mask,0,0);
+        const d=x.getImageData(0,0,c.width,c.height).data,mid=lm[1].x*c.width;
+        let a=0,b=0;
+        for(let y=0;y<c.height;y++)for(let px=0;px<c.width;px++){
+          if(!d[(y*c.width+px)*4+3])continue;
+          if(px<mid)a++;else b++;
+        }
+        return onLeft?{eye:a,other:b}:{eye:b,other:a};
+      };
+      const at=marks=>i=>({x:marks[i].x*W,y:marks[i].y*H});
+      return {open:halves(lm),shut:halves(shut),
+        opennessOpen:m.eyeOpenness(eye,at(lm)),opennessShut:m.eyeOpenness(eye,at(shut))};
+    });
+    assert(blink.opennessOpen>.8,`an open eye measured ${blink.opennessOpen.toFixed(2)} open`);
+    assert(blink.opennessShut<.05,`a shut eye measured ${blink.opennessShut.toFixed(2)} open`);
+    assert(blink.shut.eye<blink.open.eye*.15,
+      `the shut eye kept its liner (${blink.shut.eye} of ${blink.open.eye} pixels)`);
+    assert(blink.shut.other>blink.open.other*.85,
+      `closing one eye took liner off the other (${blink.shut.other} of ${blink.open.other})`);
+    report.blink={open:blink.open,shut:blink.shut,
+      openness:[+blink.opennessOpen.toFixed(2),+blink.opennessShut.toFixed(2)]};
     report.finishes={red:red.color.map(Math.round),flatDiff:+flat.diff.toFixed(2),glossDiff:+glossed.diff.toFixed(2)};
 
     /* ---- the brush ---- */

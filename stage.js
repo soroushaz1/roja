@@ -211,6 +211,7 @@ export function createStage(canvas) {
       gl.uniform1f(u.u_amount,layer.amount);gl.uniform1f(u.u_mode,layer.mode);
       gl.uniform1f(u.u_detail,layer.detail);gl.uniform1f(u.u_gloss,layer.gloss);
       gl.uniform1f(u.u_matte,layer.matte);gl.uniform1f(u.u_shimmer,layer.shimmer);
+      gl.uniform1f(u.u_sheer,layer.sheer||0);gl.uniform1f(u.u_lift,layer.lift||0);
       gl.uniform1f(u.u_smooth,layer.smooth||0);gl.uniform1f(u.u_bright,layer.bright||0);
       gl.uniform2f(u.u_texel,1/size.w,1/size.h);gl.uniform1f(u.u_radius,layer.radius||4);
       gl.uniform1f(u.u_time,time);

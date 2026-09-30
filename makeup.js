@@ -29,6 +29,7 @@ const foreheadAnchors=[54,103,67,109,10,338,297,332,284,9];
 // Which landmarks each layer reads, so the debug overlay can pick out the ones in
 // play. roja-check.cjs re-reads every p(N) in this file and fails if one is missing.
 export const frameLandmarks=[234,454];
+export const eyeContours=eyes;          // so a test can collapse one lid and check the result
 const eyeUpper=eyes.flatMap(e=>e.upper), eyeLower=eyes.flatMap(e=>e.lower);
 const browAll=eyes.flatMap(e=>[...e.brow,...e.browTop]);
 export const landmarksByType={
@@ -73,10 +74,24 @@ const white=a=>`rgba(255,255,255,${Math.max(0,Math.min(1,a))})`;
 
 // The face-local frame every size is measured in, so a mask keeps its proportions
 // whatever the distance to the camera and the tilt of the head.
+// How open one eye is, 0 shut to 1 wide. The lower lid is listed in the opposite
+// direction to the upper, so `upper[i]` pairs with `lower[n-1-i]`; two chords across
+// the opening, over the corner-to-corner width, is the usual eye-aspect ratio. The
+// thresholds are wide enough to cover different eye shapes without flickering.
+export function eyeOpenness(eye,p){
+  const u=eye.upper.map(p),l=eye.lower.map(p),n=eye.upper.length;
+  const span=distance(u[0],u[n-1])||1;
+  const ratio=(distance(u[3],l[n-4])+distance(u[5],l[n-6]))/(2*span);
+  return Math.max(0,Math.min(1,(ratio-.07)/.13));
+}
 function faceFrame(p){
   const left=p(234),right=p(454);
   const ex=unit(sub(right,left)),ey={x:-ex.y,y:ex.x};
-  return {face:distance(left,right)||1,ex,ey,up:{x:-ey.x,y:-ey.y}};
+  // Per eye, in the same order as `eyes`. Eye makeup fades with the lid it sits on,
+  // because a closed lid folds the landmarks into a line and anything drawn along
+  // them turns into a smear.
+  return {face:distance(left,right)||1,ex,ey,up:{x:-ey.x,y:-ey.y},
+    open:eyes.map(e=>eyeOpenness(e,p))};
 }
 
 // The line a fraction k of the way from the lash line to the lower edge of the brow,
@@ -142,7 +157,7 @@ const shapes={
       const width=distance(lower[0],lower[lower.length-1]);
       const top=lower.map(q=>add(q,f.ey,width*.07));
       const bottom=lower.map((q,i)=>{const t=i/(lower.length-1);
-        return add(q,f.ey,width*(.12+.5*Math.pow(Math.sin(Math.PI*(.15+.7*t)),.8)));});
+        return add(q,f.ey,width*(.14+.62*Math.pow(Math.sin(Math.PI*(.15+.7*t)),.8)));});
       const shape=[...top,...bottom.reverse()];polygon(ctx,shape);pts.push(...shape);
     }
     ctx.fill();return pts;
@@ -194,20 +209,26 @@ const shapes={
   eyeshadow(ctx,p,f,spec){
     const zone=spec.zone||'single';
     const pts=[];
-    for(const eye of eyes){
+    for(let side=0;side<eyes.length;side++){
+      const eye=eyes[side],open=f.open[side];
+      if(open<=.02)continue;
+      ctx.save();ctx.globalAlpha*=open;
       const lash=eye.upper.map(p),brow=eye.brow.map(p);
       const outer=lash[0],inner=lash[lash.length-1],width=distance(outer,inner);
-      const reach={single:.68,lid:.52,crease:.8,outer:.7,highlight:.96}[zone];
+      // Fractions of the way from the lash line to the brow. These used to sit far too
+      // high — a wash reaching .68 puts colour most of the way to the brow, which is why
+      // the placement read as wrong. The lid stops below the socket, the crease sits on it.
+      const reach={single:.55,lid:.45,crease:.70,outer:.62,highlight:.90}[zone];
       const cap=lidLine(lash,brow,reach);
       ctx.save();ctx.beginPath();polygon(ctx,[...lash,...cap.slice().reverse()]);ctx.clip();
       const mid=lash[4],top=cap[4];
       if(zone==='single'||zone==='lid'){
         const g=ctx.createLinearGradient(mid.x,mid.y,top.x,top.y);
-        g.addColorStop(0,white(zone==='lid'?1:.85));g.addColorStop(.55,white(zone==='lid'?.8:.55));g.addColorStop(1,white(0));
+        g.addColorStop(0,white(zone==='lid'?.85:.7));g.addColorStop(.55,white(zone==='lid'?.55:.38));g.addColorStop(1,white(0));
         ctx.fillStyle=g;ctx.fillRect(0,0,ctx.canvas.width,ctx.canvas.height);
       }else if(zone==='crease'){
         const g=ctx.createLinearGradient(mid.x,mid.y,top.x,top.y);
-        g.addColorStop(0,white(0));g.addColorStop(.45,white(.9));g.addColorStop(.75,white(.65));g.addColorStop(1,white(0));
+        g.addColorStop(0,white(0));g.addColorStop(.45,white(.62));g.addColorStop(.75,white(.4));g.addColorStop(1,white(0));
         ctx.fillStyle=g;ctx.fillRect(0,0,ctx.canvas.width,ctx.canvas.height);
         // Deepest towards the outer corner.
         ctx.globalCompositeOperation='destination-in';
@@ -223,7 +244,7 @@ const shapes={
         // Under the brow, and a touch at the inner corner.
         const band=lidLine(lash,brow,.74);
         ctx.beginPath();polygon(ctx,[...band,...cap.slice().reverse()]);
-        ctx.fillStyle=white(.75);ctx.fill();
+        ctx.fillStyle=white(.42);ctx.fill();
         const g=ctx.createRadialGradient(inner.x,inner.y,0,inner.x,inner.y,width*.24);
         g.addColorStop(0,white(1));g.addColorStop(1,white(0));
         ctx.fillStyle=g;ctx.fillRect(0,0,ctx.canvas.width,ctx.canvas.height);
@@ -235,6 +256,7 @@ const shapes={
         ctx.fillStyle=g;ctx.beginPath();ctx.arc(inner.x,inner.y,width*.2,0,Math.PI*2);ctx.fill();
       }
       pts.push(...lash,...cap);
+      ctx.restore();
     }
     return pts;
   },
@@ -242,7 +264,13 @@ const shapes={
     const style=spec.style||'classic';
     const pts=[];
     ctx.fillStyle='#fff';
-    for(const eye of eyes){
+    for(let side=0;side<eyes.length;side++){
+      const eye=eyes[side],open=f.open[side];
+      // A shut lid collapses the lash line onto the lower one; anything drawn between
+      // them smears across the eye. People close one eye to draw liner, so this is the
+      // common case, not an edge case.
+      if(open<=.02)continue;
+      ctx.save();ctx.globalAlpha*=open;
       const lash=eye.upper.map(p),normal=lidNormals(lash,f.up);
       const outer=lash[0],inner=lash[lash.length-1],width=distance(outer,inner);
       const thick={thin:[.022,.022],classic:[.035,.055],wing:[.035,.06],smudge:[.06,.05]}[style];
@@ -261,6 +289,7 @@ const shapes={
         pts.push(...under);
       }
       pts.push(...lash,...edge);
+      ctx.restore();
     }
     return pts;
   },
@@ -270,35 +299,43 @@ const shapes={
     ctx.strokeStyle='#fff';ctx.lineCap='round';
     // A fixed scatter, so the lashes do not shimmer from frame to frame.
     const jitter=k=>{const v=Math.sin(k*12.9898)*43758.5453;return v-Math.floor(v)-.5;};
-    for(const eye of eyes){
+    for(let side=0;side<eyes.length;side++){
+      const eye=eyes[side],open=f.open[side];
+      if(open<=.02)continue;
+      ctx.save();ctx.globalAlpha*=open;
       const lash=eye.upper.map(p),normal=lidNormals(lash,f.up);
       const outer=lash[0],inner=lash[lash.length-1],width=distance(outer,inner);
       const outward=unit(sub(outer,inner));
       // Mostly, mascara darkens and thickens the lash line; individual lashes are
       // short, curled and irregular, longest at the outer corner.
       ctx.lineWidth=width*(volume?.038:.024);ctx.beginPath();curve(ctx,lash);ctx.stroke();
-      ctx.save();ctx.globalAlpha=.85;
+      // Every lash goes into one path. They share a width and an alpha, and it was the
+      // forty-odd separate stroke() calls per frame that made mascara lag.
+      ctx.save();ctx.globalAlpha*=.85;
       ctx.lineWidth=Math.max(.6,width*(volume?.014:.009));
       const count=volume?24:17;
+      ctx.beginPath();
       for(let k=0;k<count;k++){
         const s=.06+.9*k/(count-1)+jitter(k)*.02,at=Math.max(0,Math.min(1,s))*(lash.length-1),j=Math.min(lash.length-2,Math.floor(at));
         const root=mix(lash[j],lash[j+1],at-j),n=unit(mix(normal[j],normal[j+1],at-j));
         const dir=unit(add(add(n,outward,.7*(1-s)),outward,jitter(k+7)*.25));
         const length=width*(.085+.075*Math.pow(1-s,.7))*(volume?1:1.3)*(1+jitter(k+3)*.3);
         const tip=add(add(root,dir,length),f.up,length*.25),bend=add(root,dir,length*.6);
-        ctx.beginPath();ctx.moveTo(root.x,root.y);ctx.quadraticCurveTo(bend.x,bend.y,tip.x,tip.y);ctx.stroke();
+        ctx.moveTo(root.x,root.y);ctx.quadraticCurveTo(bend.x,bend.y,tip.x,tip.y);
         pts.push(tip);
       }
-      ctx.restore();
-      // A few short lower lashes.
+      ctx.stroke();ctx.restore();
+      // A few short lower lashes, again as one path.
       const lower=eye.lower.map(p);
-      ctx.save();ctx.globalAlpha=.4;ctx.lineWidth=Math.max(.5,width*.007);
+      ctx.save();ctx.globalAlpha*=.4;ctx.lineWidth=Math.max(.5,width*.007);
+      ctx.beginPath();
       for(let k=3;k<lower.length-1;k+=1){
         const q=lower[k],tip=add(add(q,f.ey,width*.045),outward,width*.02);
-        ctx.beginPath();ctx.moveTo(q.x,q.y);ctx.lineTo(tip.x,tip.y);ctx.stroke();pts.push(tip);
+        ctx.moveTo(q.x,q.y);ctx.lineTo(tip.x,tip.y);pts.push(tip);
       }
-      ctx.restore();
+      ctx.stroke();ctx.restore();
       pts.push(...lash);
+      ctx.restore();
     }
     return pts;
   },
@@ -433,9 +470,11 @@ export function layerSpecs(states){
     const base={product:item.id,type,mode:item.mode,intensity:state.intensity,fade:state.fade,
       style:state.style||item.styles?.[0]?.id,finish:shade.finish||item.finish,shade:shade.id};
     if(shade.colors){
-      // light under the brow and at the inner corner, the middle shade in the crease,
-      // the deepest at the outer corner, the accent on the lid.
-      const zones=[['highlight',0,.75],['crease',1,.9],['outer',2,.95],['lid',3,.9]];
+      // A real eye is not four strong washes stacked on one lid. The light pan washes
+      // the lid, a mid pan sits in the crease, the dark one stays in the outer corner
+      // and only a touch of light goes under the brow. Weights are well below the old
+      // .75-.95, which was what turned any palette into one flat smear of colour.
+      const zones=[['lid',0,.55],['crease',1,.58],['outer',2,.42],['highlight',0,.22]];
       for(const [zone,pan,weight] of zones)
         out.push({...base,key:`${item.id}:${zone}`,zone,color:shade.colors[pan],intensity:state.intensity*weight,
           finish:zone==='lid'?'shimmer':base.finish});
