@@ -134,7 +134,7 @@ const DETAIL={lipstick:.9,gloss:.95,lipliner:.7,eyeshadow:.85,eyeliner:.25,masca
 // How much of the skin's own colour a product lets through, rather than replacing it.
 // Liner and lashes really are opaque. A gloss is mostly skin with a hint of hue. A brow
 // has to keep the hair showing or it reads as a block drawn on the face.
-const SHEER={lipstick:.20,gloss:.78,lipliner:.15,eyeshadow:.40,eyeliner:.06,mascara:.10,brow:.55};
+const SHEER={lipstick:.20,gloss:.62,lipliner:.15,eyeshadow:.40,eyeliner:.06,mascara:.10,brow:.55};
 
 /* ---------- small helpers ----------------------------------------------- */
 function paintRange(input){
