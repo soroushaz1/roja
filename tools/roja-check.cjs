@@ -229,7 +229,7 @@ const LIPS=[61,0,291,17,40,270,91,321];
     // People shut one eye to draw liner. A shut lid folds the lash line onto the lower
     // one, and anything drawn between them smears across the eye.
     const blink=await page.evaluate(async()=>{
-      const m=await import('./makeup.js?v=17');
+      const m=await import('./makeup.js?v=18');
       const W=640,H=480,lm=window.testLandmarks;
       const eye=m.eyeContours[0],n=eye.upper.length;
       // Which half of the frame this eye sits on, measured against the nose.
@@ -594,6 +594,33 @@ const LIPS=[61,0,291,17,40,270,91,321];
     assert.equal(await page.locator('.cart-row .qty span').textContent(),'۲','the quantity did not go up');
     assert.equal(await page.locator('#cart-total').isVisible(),true,'the cart shows no total');
     await page.locator('#close').click();
+
+    /* ---- the skin check: the bare face, the questions, a routine ---- */
+    await page.locator('#mode-skin').click();await page.waitForTimeout(150);await settle(page);
+    const skinBare=await page.evaluate(probe,{GX,GY});
+    assert(skinBare.diff<1.5,`the skin check shows makeup on the face (${skinBare.diff.toFixed(2)})`);
+    assert.equal(await page.locator('#tray').isVisible(),false,'the product tray shows in the skin check');
+    assert.equal(await page.locator('#compare').isVisible(),false,'compare shows in the skin check');
+    await page.waitForFunction(()=>document.querySelectorAll('#skin-quality li.ok,#skin-quality li.bad').length===6,null,{timeout:10000});
+    await page.locator('#skin-scan').click();
+    await page.waitForSelector('#skin-questions:not([hidden])',{timeout:15000});
+    assert.match(await page.locator('#skin-scan-note').textContent(),/۶ نما/,'the picture was not measured six times');
+    assert.equal(await page.locator('#skin-done').isDisabled(),true,'the result opened with questions unanswered');
+    for(const name of await page.$$eval('#skin-form fieldset',f=>f.map(x=>x.querySelector('input').name)))
+      if(await page.locator(`input[name="${name}"]`).first().getAttribute('type')==='radio')
+        await page.locator(`input[name="${name}"]`).nth(1).check();
+    await page.locator('#skin-done').click();
+    await page.waitForSelector('#skin-result:not([hidden])');
+    const code=await page.locator('.profile-card .big').nth(1).textContent();
+    assert.match(code,/^[OD][SR][PN][WT]$/,`not a Baumann type: ${code}`);
+    assert(await page.locator('.routine').nth(0).locator('.routine-step').count()>=3,'the morning routine is too short');
+    const inCart=Number((await page.locator('#count').textContent()).replace(/[۰-۹]/g,d=>'۰۱۲۳۴۵۶۷۸۹'.indexOf(d)));
+    await page.locator('text=همهٔ محصولات روتین به سبد').click();
+    const nowInCart=Number((await page.locator('#count').textContent()).replace(/[۰-۹]/g,d=>'۰۱۲۳۴۵۶۷۸۹'.indexOf(d)));
+    assert(nowInCart>inCart+2,'the routine did not go into the cart');
+    report.skin={baumann:code,fitz:await page.locator('.profile-card .big').nth(0).textContent(),cart:nowInCart-inCart};
+    await page.locator('#mode-makeup').click();await page.waitForTimeout(150);await settle(page);
+    assert((await page.evaluate(region,{ids:LIPS})).diff>4,'makeup stopped rendering after the skin check');
 
     /* ---- debug overlay ---- */
     assert.equal(await page.locator('#debug').isVisible(),false,'debug overlay on by default');

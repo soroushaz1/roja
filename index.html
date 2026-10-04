@@ -1,17 +1,17 @@
 <!doctype html>
-<html lang="fa" dir="rtl" data-release="17">
+<html lang="fa" dir="rtl" data-release="18">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#140C11">
-<meta name="description" content="رُژا؛ آینهٔ زنده برای امتحان آرایش روی صورت خودت پیش از خرید، با براش پخش و محوکردن، استایل‌های آماده، پیدا کردن رنگ کرم‌پودر و دیدن نتیجهٔ تقریبی عمل‌های زیبایی.">
+<meta name="description" content="رُژا؛ آینهٔ زنده برای امتحان آرایش روی صورت خودت پیش از خرید، با براش پخش و محوکردن، استایل‌های آماده، پیدا کردن رنگ کرم‌پودر، تحلیل پوست با فیتزپاتریک و باومن و روتین مراقبت، و دیدن نتیجهٔ تقریبی عمل‌های زیبایی.">
 <title>رُژا | آینهٔ زنده</title>
 <link rel="icon" href="favicon.svg">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <meta name="mobile-web-app-capable" content="yes">
 <link rel="preload" href="fonts/Estedad-var.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="roja.css?v=17">
+<link rel="stylesheet" href="roja.css?v=18">
 </head>
 <body>
 
@@ -45,6 +45,9 @@
     </button>
     <button id="mode-procedure" role="tab" aria-selected="false" aria-controls="panel-procedure">
       <svg class="ico"><use href="#i-wand"/></svg>عمل‌های زیبایی
+    </button>
+    <button id="mode-skin" role="tab" aria-selected="false" aria-controls="panel-skin">
+      <svg class="ico"><use href="#i-drop"/></svg>تحلیل پوست
     </button>
   </nav>
   <div class="top-actions">
@@ -268,6 +271,54 @@
       </p>
     </section>
 
+    <section id="panel-skin" role="tabpanel" aria-labelledby="mode-skin" hidden>
+      <p class="eyebrow">تحلیل پوست</p>
+      <h2>پوستت را بشناس</h2>
+      <p class="lede">با تصویر صورت بدون آرایش و چند پرسش کوتاه، فوتوتایپ فیتزپاتریک، تیپ پوستی باومن، وضعیت پوست و یک روتین صبح و شب پیشنهاد می‌شود.</p>
+      <ol class="steps" id="skin-steps">
+        <li>تصویر</li><li>پرسش‌ها</li><li>نتیجه</li>
+      </ol>
+
+      <div id="skin-capture">
+        <ul class="protocol">
+          <li>بدون آرایش، بدون فیلتر و حالت زیباسازی دوربین</li>
+          <li>روبه‌روی پنجره، در نور روز و بدون آفتاب مستقیم</li>
+          <li>گوشی هم‌ارتفاع چشم، صورت صاف و بی‌حالت؛ عینک را بردار</li>
+        </ul>
+        <p class="field-label">کیفیت تصویر</p>
+        <ul class="quality" id="skin-quality" aria-live="polite"></ul>
+        <div class="row-actions">
+          <button id="skin-scan" class="primary" disabled>تحلیل تصویر</button>
+          <button id="skin-skip" class="ghost">بدون تصویر ادامه بده</button>
+        </div>
+        <p class="quiet">تصویر روی همین دستگاه اندازه‌گیری می‌شود و از آن بیرون نمی‌رود.</p>
+      </div>
+
+      <div id="skin-questions" hidden>
+        <p class="help" id="skin-scan-note"></p>
+        <div id="skin-form"></div>
+        <p class="quiet" id="skin-left"></p>
+        <div class="row-actions">
+          <button id="skin-done" class="primary" disabled>دیدن نتیجه</button>
+          <button id="skin-back" class="ghost">تصویر دوباره</button>
+        </div>
+      </div>
+
+      <div id="skin-result" hidden>
+        <div id="skin-result-body"></div>
+        <section class="card">
+          <div class="card-head"><svg class="ico"><use href="#i-sparkle"/></svg><h3>پیگیری در هفته‌های بعد</h3></div>
+          <div id="skin-follow"></div>
+        </section>
+        <button id="skin-restart" class="ghost wide">تحلیل دوباره</button>
+      </div>
+
+      <p class="note">
+        این یک ارزیابی آرایشی و مراقبتی است، نه تشخیص پزشکی. بیماری پوستی تشخیص داده نمی‌شود. اگر جوش شدید یا دردناک
+        داری، قرمزی پایدار، یا خال و لکه‌ای که شکل، رنگ یا اندازه‌اش عوض می‌شود، به پزشک متخصص پوست مراجعه کن.
+      </p>
+    </section>
+
     <details id="debug-panel">
       <summary><svg class="ico"><use href="#i-bug"/></svg>حالت دیباگ</summary>
       <p class="help">نقطه‌هایی که مدل روی صورت پیدا می‌کند، با شمارهٔ هرکدام. نقاطی که همین الان محصول یا عمل انتخاب‌شده را می‌سازند، رنگ جدا می‌گیرند.</p>
@@ -374,6 +425,6 @@
 })();
 </script>
 <script nomodule>document.getElementById('status').textContent='این مرورگر قدیمی است و این برنامه را اجرا نمی‌کند. آخرین نسخهٔ Safari یا Chrome را نصب کن.';</script>
-<script type="module" src="app.js?v=17"></script>
+<script type="module" src="app.js?v=18"></script>
 </body>
 </html>

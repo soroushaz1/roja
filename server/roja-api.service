@@ -1,0 +1,28 @@
+# The skin check API (server/skin-api.mjs), behind nginx on 127.0.0.1:51840.
+# Installed by tools/deploy.sh as /etc/systemd/system/roja-api.service.
+[Unit]
+Description=Roja skin check API (loopback, behind nginx)
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/node /opt/roja-api/server/skin-api.mjs
+Environment=ROJA_PORT=51840
+Environment=ROJA_DB=/var/lib/roja-api/skin.db
+Environment=NODE_ENV=production
+Restart=on-failure
+RestartSec=3
+# Its own throwaway user; it can write only its database directory.
+DynamicUser=yes
+StateDirectory=roja-api
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_UNIX
+MemoryMax=96M
+
+[Install]
+WantedBy=multi-user.target

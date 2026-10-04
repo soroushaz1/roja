@@ -7,7 +7,7 @@ side by side, or pick a cosmetic procedure and see an approximation of the shape
 Everything happens on the device: the camera frame becomes a GPU texture and is never
 uploaded or stored, and no asset is fetched from anywhere but this repository.
 
-**[Open the mirror →](https://YOUR-USERNAME.github.io/roja/)**
+**[Open the mirror →](https://pythonpath.ir/)**
 
 > آینه‌ای زنده که کاملاً داخل مرورگر اجرا می‌شود. آرایش را پیش از خرید روی صورت خودت
 > امتحان کن، با براش پخش یا محوش کن، دو رنگ را کنار هم ببین، یا نتیجهٔ تقریبی یک عمل
@@ -29,6 +29,9 @@ would actually achieve, and it is not a prediction of a result. The "lasts" and 
 notes are general, commonly quoted ranges, not advice. Colours are samples on a screen, not
 measured product matches — ambient light, the camera and natural skin tone all move what
 you see. For any medical decision, talk to a qualified doctor.
+
+The skin check is cosmetic guidance, not a diagnosis: it does not look for skin disease,
+and its scores describe one camera picture, not a clinical grading.
 
 ## What is in it
 
@@ -72,6 +75,21 @@ measurements table shows what the preview changed — nose width, lip thickness 
 eye opening and canthal tilt, jaw and chin width, facial thirds — before and after. Drag the
 brass seam across your face to compare. Twenty-six region controls are available for fine
 tuning.
+
+**تحلیل پوست — skin check.** A picture of the bare face and eleven short questions give a
+skin profile: the Fitzpatrick phototype (I–VI, carried by the sunburn-and-tan question, with
+skin colour from the camera as a nudge), the Baumann skin type (oily/dry, sensitive/resistant,
+pigmented/non-pigmented, wrinkled/tight — 16 types) with a confidence for each letter, and
+0–100 scores for oiliness, dryness, sensitivity, redness, spots, uneven tone, lines, texture
+and the eye area. Before measuring, the mirror checks the picture — distance, a straight head,
+enough and even light, a natural colour of light, focus — and a measure the picture cannot
+carry is left out rather than guessed. The profile becomes a morning and evening routine from
+Roja's sample skincare range, each step with the reason it is there: at most two night
+actives (one for sensitive skin), salicylic acid and a retinoid never on the same night, no
+retinoid in pregnancy or when retinoids irritate. It can be done without a picture, from the
+answers alone. If you choose to, the result (numbers and answers, never the picture) is kept
+on the server so a check weeks later can be compared with it; "do you agree with this
+result?" is recorded with it, and everything kept can be deleted from the same screen.
 
 **حالت دیباگ — debug overlay.** Every landmark the model returns, numbered, with the ones
 driving the current selection picked out in a second colour. Optional layers: the tracking
@@ -127,6 +145,13 @@ scores) in the panel or on the mirror, and an export of all of it as JSON.
   through the same field.
 - **Before/after** — a second composite drawn through a `gl.scissor` on one side of the
   seam.
+- **Skin check** — `skin-scan.js` cuts the face out of the frame at a fixed 320 px ear to ear
+  and picks forehead, cheeks, nose, chin, under-eye and eye-corner regions from the
+  canonical mesh, drawn through the live landmarks. Each is measured in CIE Lab, in bands of
+  detail so the shading of the face's shape is never read as a line or a spot: tone and its
+  Individual Typology Angle, shine on the T-zone, redness and red spots, dark spots and
+  uneven tone, fine texture, lines. Six frames are combined by median. `skin.js` turns that
+  and the answers into the profile and the routine; `skin-panel.js` is the panel.
 
 No build step, no framework, no bundler. Plain ES modules served as files.
 
@@ -134,8 +159,15 @@ No build step, no framework, no bundler. Plain ES modules served as files.
 
 The camera frame, or the photo you pick, is processed on the device and never sent or
 stored. The only pixels read back are the ones you ask for: a snapshot you take (kept in the
-page until you save it or close the page) and, while the shade finder runs, a few small skin
-patches that the face worker averages into one colour.
+page until you save it or close the page), while the shade finder runs a few small skin
+patches that the face worker averages into one colour, and while the skin check measures,
+the face cut out of the frame, reduced on the page to a few numbers and let go.
+
+The one thing that can leave the device is a skin check result, and only when you tick the
+box and press save: its scores and your answers, no picture, no name or account. A random key
+made on your device (kept in its local storage, sent in a request header) names your results
+on the server; only a hash of it is stored, and the same screen deletes everything kept
+under it.
 
 ## Browsers
 
@@ -184,10 +216,32 @@ Keyboard: **B** brush, **[ ]** brush size, **Ctrl+Z** undo a stroke, **C** compa
   registered on `localhost`, so development always serves fresh files.
 - **Releasing a change to the site** — raise the `?v=` number on every file that names
   another (`index.html`, the modules, `sw.js`), the service worker's `CACHE`, and the
-  release in `<html data-release>` and `RELEASE` in `app.js` together. GitHub Pages ignores
-  the query and lets browsers keep a page for ten minutes, so just after a release a kept
-  page can be handed the new script; `app.js` sees the release differ and loads the page
+  release in `<html data-release>` and `RELEASE` in `app.js` together. A browser or the
+  service worker can still hold the previous page, so just after a release a kept page can
+  be handed the new script; `app.js` sees the release differ and loads the page
   afresh once (then says a new version is on its way rather than fail).
+
+## Server
+
+The site runs at [pythonpath.ir](https://pythonpath.ir/) (204.48.27.227, Ubuntu, nginx), with
+`www.` redirected to it. nginx serves the files and passes `/api/skin` to
+`server/skin-api.mjs`, a small Node service (no dependencies; `node:sqlite`) that keeps skin
+check results; it rebuilds every record from the fields it allows and stores nothing else.
+
+```bash
+tools/deploy.sh             # the working copy to the server: site, API, unit, nginx site
+```
+
+`tools/deploy.sh` runs `tools/skin-check.mjs` first, then puts the site in
+`/var/www/pythonpath` and the API in `/opt/roja-api` (each swapped in whole), installs
+`server/roja-api.service` (its own throwaway user, writing only `/var/lib/roja-api`) and
+`server/nginx-pythonpath.conf`, and reloads both. The certificate is Let's Encrypt's, set up
+once with `certbot certonly --webroot -w /var/www/pythonpath -d pythonpath.ir -d www.pythonpath.ir`
+and renewed the same way.
+
+This server is temporary; the site is meant to move to a server in Iran. If it is ever put
+behind Cloudflare's proxy, the nginx site already reads the visitor's address from
+`CF-Connecting-IP` for Cloudflare's ranges only, so the API's rate limit stays per visitor.
 
 ## Tests
 
@@ -220,6 +274,16 @@ their landmarks: the picture must equal the camera's and makeup must appear. Poi
 deployed copy with `ROJA_URL`. Playwright is found through `PLAYWRIGHT_MODULE`, a normal
 `require` or the global npm folder, and the browser through `ROJA_CHROMIUM`, an installed
 Chrome or Playwright's own Chromium.
+
+`node tools/skin-check.mjs` checks the skin check without a browser: that the Baumann
+letters follow the answers and the picture moves an axis without overruling a clear answer,
+that confidence rises when the two agree, that Fitzpatrick follows the sun answer, that a
+picture too small or blurred adds no detail scores and one in coloured light no colour ones,
+that the routine keeps its safety rules (no retinoid in pregnancy or when retinoids irritate,
+one active for sensitive skin, salicylic acid and a retinoid on different nights); and, against
+a throwaway database, that the server keeps a result under its key only, refuses anything
+outside the record's shape, records feedback on the owner's result only and deletes all of a
+key's results and no other's.
 
 `node tools/roja-perf.cjs` prints the app's own numbers (pictures and tracked frames a
 second, tracking latency, the model's time per frame, mask and draw cost) for a few looks.

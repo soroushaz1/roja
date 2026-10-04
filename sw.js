@@ -4,10 +4,10 @@
 //
 // Only this origin's own files are cached, and nothing from the camera ever passes
 // through here: frames never leave the page.
-const CACHE='roja-v17';
-const SHELL=['./','index.html','roja.css?v=17','app.js?v=17','catalog.js?v=17','makeup.js?v=17','stage.js?v=17',
-  'deform.js?v=17','procedures.js?v=17','debug.js?v=17','brush.js?v=17','measure.js?v=17','blur.js?v=17','facemesh.js?v=17','shaders.js?v=17',
-  'face-worker.js?v=17','face-core.js?v=17',
+const CACHE='roja-v18';
+const SHELL=['./','index.html','roja.css?v=18','app.js?v=18','catalog.js?v=18','makeup.js?v=18','stage.js?v=18',
+  'deform.js?v=18','procedures.js?v=18','debug.js?v=18','brush.js?v=18','measure.js?v=18','blur.js?v=18','facemesh.js?v=18','shaders.js?v=18',
+  'face-worker.js?v=18','face-core.js?v=18','skin.js?v=18','skin-scan.js?v=18','skin-panel.js?v=18',
   'fonts/Estedad-var.woff2','favicon.svg','manifest.webmanifest','icons/icon-192.png','icons/app-qr.svg'];
 
 // From the server, not the browser's cache: that can still hold the previous release's

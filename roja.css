@@ -413,6 +413,56 @@ details > summary + *{margin-top:10px}
 .measure .up{color:var(--ok)}
 .measure .down{color:var(--danger)}
 .measure .changed{background:var(--brass-soft)}
+
+/* the skin check */
+.steps{display:flex;gap:6px;list-style:none;padding:0;margin:12px 0;counter-reset:step}
+.steps li{flex:1;counter-increment:step;font-size:12px;color:var(--faint);padding:6px 8px;border-radius:9px;border:1px solid var(--line-soft);text-align:center}
+.steps li::before{content:counter(step,persian) '. '}
+.steps li[aria-current=true]{color:var(--text);border-color:var(--rose);background:var(--rose-soft)}
+.protocol{margin:6px 0 4px;padding-inline-start:18px;font-size:12.5px;color:var(--muted);line-height:1.9}
+.quality{list-style:none;padding:0;margin:0;display:grid;gap:4px;font-size:12.5px}
+.quality li{display:flex;gap:8px;align-items:baseline;color:var(--muted)}
+.quality li::before{content:'·';width:12px;flex:none;text-align:center;color:var(--faint)}
+.quality li.ok::before{content:'✓';color:var(--ok)}
+.quality li.bad{color:var(--danger)}
+.quality li.bad::before{content:'!';color:var(--danger)}
+.question{border:1px solid var(--line-soft);border-radius:var(--radius);padding:10px 12px 12px;margin:10px 0;background:#FFFFFF05}
+.question legend{font-size:13.5px;line-height:1.8;padding:0 4px;display:flex;gap:8px}
+.question legend b{color:var(--rose);flex:none}
+.options{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;margin-top:6px}
+.option{display:flex;gap:8px;align-items:flex-start;padding:7px 9px;border:1px solid var(--line-soft);border-radius:9px;font-size:12.5px;color:var(--muted);cursor:pointer;line-height:1.6}
+.option input{accent-color:var(--rose);margin:3px 0 0;flex:none}
+.option:has(input:checked){border-color:var(--rose);color:var(--text);background:var(--rose-soft)}
+.option:has(input:focus-visible){outline:2px solid var(--rose);outline-offset:2px}
+.profile{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:10px 0}
+.profile-card{background:var(--surface-2);border:1px solid var(--line-soft);border-radius:var(--radius);padding:10px 12px}
+.profile-card .big{display:block;font-size:24px;color:var(--brass);letter-spacing:.06em;margin:2px 0}
+.profile-card small{color:var(--faint);font-size:11.5px;line-height:1.7}
+.axes{list-style:none;padding:0;margin:6px 0 0;display:grid;gap:3px;font-size:12px}
+.axes li{display:grid;grid-template-columns:18px 1fr auto;gap:6px;align-items:baseline}
+.axes b{color:var(--brass)}
+#panel-skin h3{margin:18px 0 8px;font-size:14px}
+.concerns{list-style:none;padding:0;margin:0;display:grid;gap:7px;font-size:12.5px}
+.concerns li{display:grid;grid-template-columns:minmax(0,7.5em) 1fr 2.5em;gap:10px;align-items:center}
+.concerns output{color:var(--brass);font-variant-numeric:tabular-nums;text-align:end}
+.concerns.compare li{grid-template-columns:minmax(0,7.5em) 1fr auto}
+.concerns .down{color:var(--ok)}
+.concerns .up{color:var(--danger)}
+.meter{height:6px;border-radius:99px;background:var(--line-soft);overflow:hidden}
+.meter i{display:block;height:100%;background:var(--brass);border-radius:inherit}
+.priorities{margin:0;padding-inline-start:20px;font-size:13px;line-height:1.9}
+.routine{list-style:none;padding:0;margin:0}
+.routine-step{display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-top:1px solid var(--line-soft)}
+.routine-step .mini{margin-top:3px}
+.routine-step > div{flex:1;min-width:0}
+.routine-step strong{font-size:13.5px}
+.routine-step small{color:var(--faint);font-size:11.5px}
+.routine-step p{margin:2px 0 0}
+.routine-step button{flex:none;padding:5px 12px;font-size:12px}
+.past{list-style:none;padding:0;margin:8px 0;font-size:12.5px}
+.past li{display:flex;gap:10px;align-items:baseline;padding:5px 0;border-top:1px solid var(--line-soft)}
+.past li span{flex:1;color:var(--muted)}
+.past small{color:var(--faint)}
 .fine-group{font-size:12px;color:var(--brass);margin:14px 0 0}
 
 /* ---- debug ------------------------------------------------------------- */
@@ -538,6 +588,12 @@ footer{
 }
 @media (max-width:420px){
   .modes button{padding:6px 8px;font-size:12.5px}
+}
+/* Three modes and the actions do not fit one phone row: the modes get a row of their own. */
+@media (max-width:560px){
+  .topbar{flex-wrap:wrap;row-gap:8px}
+  .modes{order:3;flex:1 0 100%}
+  .modes button{flex:1}
 }
 /* No room left in a phone's header; there the start screen offers the app instead. */
 @media (max-width:440px){

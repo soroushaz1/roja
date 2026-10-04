@@ -6,7 +6,7 @@
 // three landmarks around it by barycentric weights, so a stroke keeps its place on the
 // skin when the head turns, the mouth opens or the camera moves closer.
 
-import {blurInto} from './blur.js?v=17';
+import {blurInto} from './blur.js?v=18';
 
 export const brushModes=[
   {id:'blend',  name:'پخش‌کن',   help:'رنگ را زیر براش نرم و پخش می‌کند، مثل براش ترکیب.',strength:60},
