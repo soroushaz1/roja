@@ -5,7 +5,7 @@
 // landmark through the same displacement field the stage draws with, so the numbers
 // describe exactly the change you see. They describe the picture, not the anatomy:
 // a frontal photo cannot measure depth, and a turned head skews every one of them.
-import {displace} from './deform.js?v=17';
+import {displace} from './deform.js?v=18';
 
 export const metrics=[
   {id:'nose-width', name:'پهنای پرهٔ بینی', span:[64,294]},
