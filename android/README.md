@@ -3,8 +3,10 @@
 > **دانلود:** https://github.com/soroushaz1/roja/releases/latest/download/roja.apk
 >
 > این لینک همیشه تازه‌ترین نسخه را می‌دهد. فایل را روی گوشی باز کن و اگر اندروید پرسید، اجازهٔ
-> نصب از این منبع را بده. برنامه به اینترنت دسترسی ندارد: تمام سایت داخل خود برنامه است و
-> تصویر دوربین از گوشی بیرون نمی‌رود.
+> نصب از این منبع را بده. تمام سایت داخل خود برنامه است و تصویر دوربین از گوشی بیرون
+> نمی‌رود. برنامه فقط یک کار اختیاری با اینترنت دارد: نگه‌داشتن نتیجهٔ تحلیل پوست روی سرور
+> برای مقایسهٔ بعدی، که تا خودت فعالش نکنی هیچ درخواستی فرستاده نمی‌شود و عکس هم هرگز
+> فرستاده نمی‌شود.
 
 The same mirror as the website, as an installable Android app (Android 8.0 and later),
 with the live camera done natively. The site at the root of this repository is copied
@@ -18,8 +20,12 @@ drawing, runs natively under the page, for a picture that keeps up with the face
 - **Served from the APK.** `WebViewAssetLoader` serves `assets/www` under
   `https://appassets.androidplatform.net`, a secure origin, so the camera, the
   face-tracking worker, its WebAssembly runtime and WebGL behave as they do in a browser.
-- **No network permission.** The manifest does not ask for `INTERNET`. Nothing the app
-  shows comes from the internet, and nothing the camera sees can leave the phone.
+- **Nothing the app shows comes from the internet,** and nothing the camera sees can
+  leave the phone. `INTERNET` is asked for one optional thing: keeping a skin check on
+  the server so a later one can be compared with it. The panel asks before its first
+  request and sends nothing until its owner turns it on, then asks again before the
+  result itself is kept; what goes is the profile and the answers, never the picture.
+  `BuildConfig.SKIN_API` names the server, `ROJA_SKIN_API` points a build at another.
 - **The native mirror.** When the page starts the camera, `NativeMirror.kt` opens it with
   CameraX, runs MediaPipe's face landmarker on each frame (on the GPU; on the CPU where
   the GPU is only emulated in software, as on the emulator) and hands the frame, with the

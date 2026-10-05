@@ -5,7 +5,7 @@
 // The mirror (app.js) owns the camera and the landmarks. It calls tick() every frame
 // while this panel is showing; the panel asks it for a measurement through scan()
 // when it wants one, a few times a second at most.
-import {questions,requiredQuestions,assess,combineScans,record,axes,fitzNames,concernNames} from './skin.js?v=18';
+import {questions,requiredQuestions,assess,combineScans,record,axes,fitzNames,concernNames} from './skin.js?v=19';
 
 const QUALITY={
   size:'صورت به اندازهٔ کافی نزدیک است',
@@ -15,7 +15,12 @@ const QUALITY={
   colour:'رنگ نور طبیعی است (نه زرد یا آبی)',
   sharp:'تصویر واضح است'
 };
-const API='api/skin';
+// On the web the API sits on this origin. In the Android app the page comes out of the
+// APK, so there is nothing at a relative address and the app names the server it was
+// built against. Knowing the address reaches nothing on its own: in the app the panel
+// stays off the network until its owner turns saving on, below.
+const API=window.RojaAndroid?.skinApi?.()||'api/skin';
+const IN_APP=!!window.RojaAndroid;
 const SCANS=6;
 
 export function createSkinPanel({el,fa,pct,toman,toast,addToCart,scan,mirror}){
@@ -23,6 +28,10 @@ export function createSkinPanel({el,fa,pct,toman,toast,addToCart,scan,mirror}){
   const answers={using:[],irritants:[]};
   let step='capture';               // capture | questions | result
   let live=null,lastScan=0,collecting=null,scanResult=null,result=null,saved=null;
+  // Whether this panel may talk to the server at all. On the web it shares the page's
+  // origin and always may; in the app, which otherwise never reaches the network, its
+  // owner turns it on in renderFollow() first.
+  let netOk=!IN_APP;
 
   /* ---- step 1: the picture ---- */
   function renderQuality(){
@@ -165,6 +174,15 @@ export function createSkinPanel({el,fa,pct,toman,toast,addToCart,scan,mirror}){
   const date=t=>new Intl.DateTimeFormat('fa-IR',{dateStyle:'medium'}).format(new Date(t));
   async function renderFollow(){
     const box=$('skin-follow');
+    // In the app, ask before the first request. Until this is answered the app makes no
+    // network request of any kind, so the rest of the panel stays wholly on the phone.
+    if(!netOk){
+      box.replaceChildren(
+        el('p',{class:'help',text:'این برنامه به‌خودی‌خود به اینترنت وصل نمی‌شود. اگر بخواهی نتیجهٔ این تحلیل روی سرور رُژا نگه داشته شود تا چند هفته بعد با تحلیل تازه مقایسه‌اش کنی، باید ارتباط با سرور را فعال کنی. عکس فرستاده نمی‌شود؛ فقط عددهای تحلیل و پاسخ‌هایت، و آن هم تنها اگر در گام بعد موافقت کنی.'}),
+        el('div',{class:'row-actions'},el('button',{class:'ghost',type:'button',text:'فعال‌کردن ارتباط با سرور',
+          onclick:()=>{netOk=true;renderFollow();}})));
+      return;
+    }
     const consent=el('input',{type:'checkbox',id:'skin-consent'});
     const save=el('button',{class:'primary',type:'button',disabled:'',text:saved?'ذخیره شد':'ذخیرهٔ نتیجه'});
     if(saved)save.disabled=true;

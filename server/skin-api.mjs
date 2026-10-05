@@ -27,6 +27,9 @@ const q={
 };
 const PER_OWNER=200;
 const MAX_BODY=8*1024;
+// The Android app's page is served from the APK under this origin, so its requests are
+// cross-origin and need saying so. The website shares this origin and needs nothing.
+const APP_ORIGIN='https://appassets.androidplatform.net';
 
 /* ---- validation: a record is rebuilt from what is allowed, nothing is passed through ---- */
 class Invalid extends Error{}
@@ -78,6 +81,14 @@ function send(res,status,body){
   res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});
   res.end(body==null?'':JSON.stringify(body));
 }
+// Only the app's origin is answered, and only for the key header it sends. No cookie or
+// other credential is involved, so none is allowed.
+function allowApp(req,res){
+  if(req.headers.origin!==APP_ORIGIN)return false;
+  res.setHeader('Access-Control-Allow-Origin',APP_ORIGIN);
+  res.setHeader('Vary','Origin');
+  return true;
+}
 function readJson(req){
   return new Promise((resolve,reject)=>{
     if(!/^application\/json\b/.test(req.headers['content-type']||''))return reject(new Invalid('content-type'));
@@ -97,6 +108,15 @@ function handle(req,res){
   const url=new URL(req.url,'http://local');
   const path=url.pathname.replace(/^\/api\/skin/,'');
   if(!url.pathname.startsWith('/api/skin'))return send(res,404,{error:'not found'});
+  const app=allowApp(req,res);
+  // The browser asks before sending the key header. Answered before the key is looked
+  // for, since the question itself carries none.
+  if(req.method==='OPTIONS'){
+    if(!app)return send(res,403,{error:'origin'});
+    res.writeHead(204,{'Access-Control-Allow-Methods':'GET, POST, DELETE',
+      'Access-Control-Allow-Headers':'Content-Type, X-Roja-Key','Access-Control-Max-Age':'600'});
+    return res.end();
+  }
   const owner=ownerOf(req);
   if(!owner)return send(res,401,{error:'key'});
   (async()=>{

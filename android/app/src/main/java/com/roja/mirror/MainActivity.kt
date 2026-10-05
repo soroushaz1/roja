@@ -357,6 +357,15 @@ class MainActivity : ComponentActivity() {
             mirror?.wantExtras = on
         }
 
+        /**
+         * Where the skin check can keep a result, asked for by skin-panel.js. The site
+         * uses a relative address; the app is served from the APK and needs the server
+         * named. Telling the page the address starts nothing: the panel reaches the
+         * server only after its owner turns saving on, and never sends the picture.
+         */
+        @JavascriptInterface
+        fun skinApi(): String = BuildConfig.SKIN_API
+
         /** The picture as drawn, delivered to rojaNative.onSnapshot as a PNG data URL (or null). */
         @JavascriptInterface
         fun mirrorSnapshot() {

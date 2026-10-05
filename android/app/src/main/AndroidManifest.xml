@@ -1,9 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- No INTERNET permission, on purpose: the whole site ships inside the app, so the
-     camera picture has no way off the phone. -->
+<!-- The whole site ships inside the app, so nothing it shows comes from the internet.
+     INTERNET is here for one optional thing only: keeping a skin check on the server to
+     compare with later ones, which the panel asks for and does not start until its owner
+     turns it on. The picture itself is never sent; see skin-panel.js. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.INTERNET" />
     <!-- Photo mode works without a camera, so the app installs on any device. -->
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
 

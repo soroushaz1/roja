@@ -49,6 +49,13 @@ android {
         versionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
         versionName = "1.0.$versionCode"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // Where the skin check can keep a result, for the app only: the page is served
+        // from the APK, so it cannot reach the API by a relative address as it does on
+        // the web. Point a build at another server with ROJA_SKIN_API.
+        buildConfigField(
+            "String", "SKIN_API",
+            "\"${System.getenv("ROJA_SKIN_API") ?: "https://pythonpath.ir/api/skin"}\""
+        )
         // Phones: 64 and 32-bit ARM. MediaPipe has native code for nothing else, and an x86
         // device or emulator (Android 11 and later) runs ARM code by translation, but only
         // if the APK holds no x86 code at all to make it choose x86 instead.
