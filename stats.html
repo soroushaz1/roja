@@ -27,12 +27,14 @@ button{background:var(--rose);color:#2A0E1A;font-weight:800;border-color:transpa
 .kpi span{color:var(--faint);font-size:12px}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px}
 section{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;min-width:0}
-.row{display:grid;grid-template-columns:16px minmax(0,1fr) 44px;gap:8px;align-items:center;padding:3px 0;font-size:13px}
+.row{display:grid;grid-template-columns:16px minmax(0,1fr) minmax(44px,auto);gap:8px;align-items:center;padding:3px 0;font-size:13px}
 .row i{width:14px;height:14px;border-radius:50%;border:1px solid #FFFFFF22}
 .row .name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .row .bar{grid-column:2/4;height:4px;border-radius:2px;background:var(--surface-2);overflow:hidden;margin-top:-2px}
 .row .bar s{display:block;height:100%;background:var(--rose)}
-.row b{text-align:left;font-variant-numeric:tabular-nums;color:var(--brass)}
+.row b{text-align:left;white-space:nowrap;font-variant-numeric:tabular-nums;color:var(--brass)}
+.row b.step{display:flex;gap:8px;justify-content:flex-end;align-items:baseline}
+.row b.step small{color:var(--faint);font-weight:400;font-size:12px}
 .empty{color:var(--faint);font-size:13px}
 .days{display:flex;align-items:flex-end;gap:2px;height:90px}
 .days div{flex:1;background:var(--rose);border-radius:2px 2px 0 0;min-height:1px}
@@ -42,7 +44,7 @@ section{background:var(--surface);border:1px solid var(--line);border-radius:12p
 <body>
 <main>
   <h1>آمار استفادهٔ رُژا</h1>
-  <p>شمار ناشناس روزانه: کدام رنگ‌ها، استایل‌ها و عمل‌ها امتحان شده‌اند، کدام محصول در فروشگاه همکار باز شده و چند بار چیزی فرستاده شده. هیچ شناسه‌ای از بازدیدکننده نگه داشته نمی‌شود.</p>
+  <p>شمار ناشناس روزانه: کدام رنگ‌ها، استایل‌ها و عمل‌ها امتحان شده‌اند، کدام محصول در فروشگاه همکار باز شده، چند بار چیزی فرستاده شده و بازدیدها تا کجا پیش رفته‌اند؛ برای همهٔ آینه‌ها یا آینهٔ یک فروشگاه. هیچ شناسه‌ای از بازدیدکننده نگه داشته نمی‌شود.</p>
   <form id="form">
     <input id="key" type="password" autocomplete="current-password" placeholder="کلید آمار (ROJA_STATS_KEY)" required aria-label="کلید آمار">
     <select id="days" aria-label="بازه">
@@ -51,6 +53,7 @@ section{background:var(--surface);border:1px solid var(--line);border-radius:12p
       <option value="90">۹۰ روز اخیر</option>
       <option value="365">یک سال</option>
     </select>
+    <select id="shop" aria-label="آینه" hidden></select>
     <button type="submit">نمایش</button>
   </form>
   <p class="status" id="status"></p>

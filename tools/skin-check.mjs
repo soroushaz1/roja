@@ -1,5 +1,6 @@
 // Checks for the skin check: the scoring and routine (skin.js) and the server that
-// keeps results (server/skin-api.mjs), against a throwaway database.
+// keeps results (server/skin-api.mjs), against a throwaway database; and the usage
+// counts the same server keeps (server/stats.mjs).
 //
 //   node tools/skin-check.mjs
 import assert from 'node:assert/strict';
@@ -8,6 +9,7 @@ import {mkdtempSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
+import {DatabaseSync} from 'node:sqlite';
 import {assess,record,fitzFromIta,combineScans,imageScores,questions} from '../skin.js';
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
@@ -97,8 +99,17 @@ await check('a picture too small or blurred adds no detail scores, only what it 
 /* ---- the server ---- */
 const dir=mkdtempSync(path.join(tmpdir(),'roja-skin-'));
 const port=51000+Math.floor(Math.random()*800);
+// A counts table from before shops were counted, to be moved over when the server starts.
+const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Tehran'}).format(new Date());
+{
+  const old=new DatabaseSync(path.join(dir,'test.db'));
+  old.exec('CREATE TABLE counts(day TEXT NOT NULL, event TEXT NOT NULL, item TEXT NOT NULL, n INTEGER NOT NULL, PRIMARY KEY(day,event,item)) WITHOUT ROWID;');
+  old.prepare('INSERT INTO counts VALUES (?,?,?,?)').run(today,'share','link',3);
+  old.close();
+}
+const statsKey='0123456789abcdef';
 const server=spawn(process.execPath,[path.join(root,'server/skin-api.mjs')],
-  {env:{...process.env,ROJA_PORT:String(port),ROJA_DB:path.join(dir,'test.db')},stdio:['ignore','pipe','inherit']});
+  {env:{...process.env,ROJA_PORT:String(port),ROJA_DB:path.join(dir,'test.db'),ROJA_STATS_KEY:statsKey},stdio:['ignore','pipe','inherit']});
 await new Promise((resolve,reject)=>{server.stdout.once('data',resolve);server.once('exit',c=>reject(new Error(`server exited ${c}`)));});
 const key='0123456789abcdef0123456789abcdef',other='fedcba9876543210fedcba9876543210';
 const api=(method,p='',{body,k=key,raw}={})=>fetch(`http://127.0.0.1:${port}/api/skin${p}`,{method,
@@ -148,6 +159,22 @@ try{
     assert.equal((await api('DELETE')).status,204);
     assert.equal((await (await api('GET')).json()).items.length,0);
     assert.equal((await (await api('GET','',{k:other})).json()).items.length,1);
+  });
+  const stats=(method,body,headers={})=>fetch(`http://127.0.0.1:${port}/api/stats?days=2`,{method,
+    headers:{...headers,...(body?{'Content-Type':'application/json'}:{})},body:body&&JSON.stringify(body)});
+  await check('usage counts are kept per shop, older counts as Roja\'s own',async()=>{
+    assert.equal((await stats('POST',{events:[['step','open'],['step','open'],['step','face']],shop:'khanoumi'})).status,204);
+    assert.equal((await stats('POST',{events:[['step','open']]})).status,204);
+    assert.equal((await stats('POST',{events:[['step','open']],shop:'elsewhere'})).status,400);
+    assert.equal((await stats('POST',{events:[['step','open']],shop:'__proto__'})).status,400);
+    assert.equal((await stats('POST',{events:[['step','paid']]})).status,400);
+    assert.equal((await stats('GET')).status,403);
+    const {rows,shops}=await (await stats('GET',null,{'X-Roja-Stats-Key':statsKey})).json();
+    const n=(shop,event,item)=>rows.find(r=>r[4]===shop&&r[1]===event&&r[2]===item)?.[3];
+    assert.equal(n('khanoumi','step','open'),2);
+    assert.equal(n('','step','open'),1);
+    assert.equal(n('','share','link'),3);
+    assert.equal(shops.khanoumi,'خانومی');
   });
 }finally{
   server.kill();
