@@ -10,6 +10,8 @@ import {CANON,CANON_ASPECT,TRIANGLES} from './facemesh.js?v=19';
 import {createSkinScanner} from './skin-scan.js?v=19';
 import {createSkinPanel} from './skin-panel.js?v=19';
 import {skincareById} from './skin.js?v=19';
+import {count} from './usage.js?v=19';
+import {shop} from './shop.js?v=19';
 
 const $=id=>document.getElementById(id);
 // GitHub Pages ignores the ?v= query, and browsers and its CDN keep a page for up to ten
@@ -223,7 +225,7 @@ function select(id){
   const shade=product.shades.find(s=>s.id===id);
   if(!shade)throw new Error('Unknown shade');
   makeupState[product.id].shade=id;enableProduct(product);
-  updateSelection();
+  updateSelection();count('shade',id);
   return {product:product.id,id,variant:shade.variantId,name:shade.name};
 }
 function selectProduct(id,apply=true){
@@ -256,6 +258,7 @@ function afterMakeupChange(look=true){
 }
 
 function applyLook(look){
+  count('look',looks.includes(look)?look.id:look.id?'mine':'link');
   for(const item of products)makeupState[item.id].enabled=false;
   for(const [pid,shade,intensity,style,fade] of look.items){
     const item=byProduct(pid);if(!item)continue;
@@ -348,9 +351,9 @@ async function sendLookLink(){
   if(!currentItems().length){toast('روی صورت آرایشی نیست که لینکش فرستاده شود.');return;}
   const url=lookLink(), text='این ترکیب آرایش را روی صورت خودت در آینهٔ رُژا امتحان کن:';
   if(!native&&navigator.share){
-    try{await navigator.share({title:'رُژا',text,url});return;}catch(e){if(e?.name==='AbortError')return;}
+    try{await navigator.share({title:'رُژا',text,url});count('share','link',{each:true});return;}catch(e){if(e?.name==='AbortError')return;}
   }
-  try{await navigator.clipboard.writeText(url);toast('لینک این ترکیب کپی شد. هر کس بازش کند، همین آرایش روی صورت خودش می‌نشیند.');}
+  try{await navigator.clipboard.writeText(url);count('share','link',{each:true});toast('لینک این ترکیب کپی شد. هر کس بازش کند، همین آرایش روی صورت خودش می‌نشیند.');}
   catch{toast('کپی لینک روی این مرورگر ممکن نشد.');}
 }
 // #look=… in the address: put that look on the mirror, then take it out of the address
@@ -565,7 +568,7 @@ function renderActiveList(){
   }));
 }
 function setStrength(id,value){
-  if(value>0)active.set(id,value);else active.delete(id);
+  if(value>0){active.set(id,value);count('procedure',id);}else active.delete(id);
   $('procedure-reset').hidden=!anyProcedure();
   buildTray();renderActiveList();updateSeam();invalidate({masks:true,measure:true});
 }
@@ -1617,7 +1620,7 @@ async function runMulti(){
   brandMark(x,c.width,1);
   const shot=await addShot(c,`${product.name}: ${tiles.map(t=>t.shade.name).join('، ')}`);
   if(!shot)return;
-  multi.shot=shot;
+  multi.shot=shot;shot.grid=true;
   $('multi-image').src=shot.url;$('multi-image').alt=shot.label;
   $('multi-share').hidden=!canShare(shot);
   $('multi-pick').hidden=true;$('multi-result').hidden=false;
@@ -1654,7 +1657,10 @@ function renderGallery(){
 function shotFile(shot){return shot.file||=new File([shot.blob],`roja-${shot.time.getTime()}.png`,{type:'image/png'});}
 function canShare(shot){try{return !native&&!!navigator.canShare?.({files:[shotFile(shot)]});}catch{return false;}}
 async function shareShot(shot){
-  try{await navigator.share({files:[shotFile(shot)],title:'رُژا',text:`${shot.label}، امتحان‌شده در آینهٔ رُژا: https://pythonpath.ir/`});}
+  try{
+    await navigator.share({files:[shotFile(shot)],title:'رُژا',text:`${shot.label}، امتحان‌شده در آینهٔ رُژا: https://pythonpath.ir/`});
+    count('share',shot.grid?'multi':'shot',{each:true});
+  }
   catch(e){if(e?.name!=='AbortError')toast('اشتراک‌گذاری ممکن نشد. عکس را ذخیره کن و از گالری بفرست.');}
 }
 // A browser downloads the file; the Android app's WebView cannot download a blob:
@@ -1688,10 +1694,11 @@ function renderLights(){
 function addToCart(item,shade,quiet=false){
   const key=`${item.id}:${shade.variantId}`;
   cart.set(key,(cart.get(key)||0)+1);renderCart();
+  count('cart',key,{each:true});
   if(!quiet)toast(`${item.name} ${shade.name} به سبد نمونه اضافه شد.`);
 }
 function renderCart(){
-  saveSoon();
+  saveSoon();renderOrder();
   $('count').textContent=fa.format([...cart.values()].reduce((a,b)=>a+b,0));
   $('cart-items').replaceChildren();
   if(!cart.size){
@@ -1714,6 +1721,59 @@ function renderCart(){
   }
   $('cart-total').hidden=false;$('cart-sum').textContent=toman(sum);
 }
+function cartLines(){
+  return [...cart].map(([key,qty])=>{
+    const [pid,sid]=key.split(':');
+    const item=byProduct(pid)||skincareById(pid), shade=item.shades.find(s=>s.variantId===sid);
+    return {item,shade,qty,sid};
+  });
+}
+
+/* ---------- ordering ---------------------------------------------------- */
+// The cart goes to the shop as a message in WhatsApp or Telegram (shop.js says where),
+// written out in full so the shop can answer it as it is. Nothing is stored or paid here.
+function orderText(){
+  const lines=cartLines();
+  const sum=lines.reduce((a,l)=>a+l.item.price*l.qty,0);
+  return ['سلام، این سفارش از آینهٔ رُژا است:',
+    ...lines.map((l,i)=>`${fa.format(i+1)}. ${l.item.name}، ${l.shade.name}${l.item.code?` (${l.item.code} / ${fa.format(Number(l.sid))})`:''} × ${fa.format(l.qty)}: ${toman(l.item.price*l.qty)}`),
+    `جمع: ${toman(sum)}`,
+    'لطفاً موجودی و هزینهٔ ارسال را اعلام کنید.'].join('\n');
+}
+function renderOrder(){
+  const any=cart.size>0, wa=/^\d{8,15}$/.test(shop.whatsapp), tg=/^[A-Za-z]\w{3,31}$/.test(shop.telegram);
+  $('order').hidden=!any;
+  $('order-whatsapp').hidden=!wa;$('order-telegram').hidden=!tg;$('order-send').hidden=wa||tg;
+  $('order-note').textContent=wa||tg
+    ?'سفارش به‌صورت پیام آماده در واتس‌اپ یا تلگرام فروشگاه باز می‌شود؛ بفرستش تا موجودی و هزینهٔ ارسال را بگویند.'
+    :'لیست سفارش را برای فروشگاه یا هر کس دیگری بفرست.';
+}
+// A browser opens it in a new tab; the Android app hands any address that is not its
+// own to the phone, which opens WhatsApp or Telegram.
+function openOutside(url){
+  if(native){location.href=url;return;}
+  if(!window.open(url,'_blank','noopener'))location.href=url;
+}
+async function copyText(text){try{await navigator.clipboard.writeText(text);return true;}catch{return false;}}
+$('order-whatsapp').onclick=()=>{
+  count('order','whatsapp',{each:true});
+  openOutside(`https://wa.me/${shop.whatsapp}?text=${encodeURIComponent(orderText())}`);
+};
+// A Telegram link cannot carry the text to a person, so it goes on the clipboard first.
+$('order-telegram').onclick=async()=>{
+  count('order','telegram',{each:true});
+  const copied=await copyText(orderText());
+  toast(copied?'متن سفارش کپی شد؛ در گفت‌وگوی تلگرام بچسبان و بفرست.':'تلگرام باز می‌شود؛ متن سفارش کپی نشد، لطفاً اقلام را بنویس.');
+  setTimeout(()=>openOutside(`https://t.me/${shop.telegram}`),copied?600:1500);
+};
+$('order-send').onclick=async()=>{
+  const text=orderText();
+  if(!native&&navigator.share){
+    try{await navigator.share({title:'سفارش رُژا',text});count('order','share',{each:true});return;}catch(e){if(e?.name==='AbortError')return;}
+  }
+  if(await copyText(text)){count('order','share',{each:true});toast('لیست سفارش کپی شد.');}
+  else toast('کپی روی این مرورگر ممکن نشد.');
+};
 
 /* ---------- remembered between visits ----------------------------------- */
 // The look on the face and the sample cart stay on this device, in its local storage,

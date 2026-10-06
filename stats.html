@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#140C11">
+<title>رُژا | آمار استفاده</title>
+<link rel="icon" href="favicon.svg">
+<link rel="preload" href="fonts/Estedad-var.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+@font-face{font-family:'Estedad';src:url('fonts/Estedad-var.woff2') format('woff2-variations');font-weight:100 900;font-display:swap}
+:root{--bg:#140C11;--surface:#1D1319;--surface-2:#241820;--line:#3C2A35;--text:#F6ECF1;--muted:#BBA1AD;--faint:#9A8591;--rose:#EC5A84;--brass:#D1AC3A}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.7 'Estedad',Tahoma,sans-serif}
+main{max-width:1080px;margin:0 auto;padding:24px 16px 48px}
+h1{font-size:22px;margin:0 0 4px}
+h2{font-size:15px;margin:0 0 10px}
+p{color:var(--muted);margin:0 0 16px}
+form{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px}
+input,select,button{font:inherit;color:var(--text);background:var(--surface-2);border:1px solid var(--line);border-radius:9px;padding:8px 12px}
+input{flex:1 1 220px;min-width:0}
+button{background:var(--rose);color:#2A0E1A;font-weight:800;border-color:transparent;cursor:pointer}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.kpi b{display:block;font-size:22px;color:var(--brass);font-variant-numeric:tabular-nums}
+.kpi span{color:var(--faint);font-size:12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px}
+section{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;min-width:0}
+.row{display:grid;grid-template-columns:16px minmax(0,1fr) 44px;gap:8px;align-items:center;padding:3px 0;font-size:13px}
+.row i{width:14px;height:14px;border-radius:50%;border:1px solid #FFFFFF22}
+.row .name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .bar{grid-column:2/4;height:4px;border-radius:2px;background:var(--surface-2);overflow:hidden;margin-top:-2px}
+.row .bar s{display:block;height:100%;background:var(--rose)}
+.row b{text-align:left;font-variant-numeric:tabular-nums;color:var(--brass)}
+.empty{color:var(--faint);font-size:13px}
+.days{display:flex;align-items:flex-end;gap:2px;height:90px}
+.days div{flex:1;background:var(--rose);border-radius:2px 2px 0 0;min-height:1px}
+.status{color:var(--faint)}
+</style>
+</head>
+<body>
+<main>
+  <h1>آمار استفادهٔ رُژا</h1>
+  <p>شمار ناشناس روزانه: کدام رنگ‌ها، استایل‌ها و عمل‌ها امتحان شده‌اند، چه چیزی به سبد رفته و چند بار چیزی فرستاده یا سفارش داده شده. هیچ شناسه‌ای از بازدیدکننده نگه داشته نمی‌شود.</p>
+  <form id="form">
+    <input id="key" type="password" autocomplete="current-password" placeholder="کلید آمار (ROJA_STATS_KEY)" required aria-label="کلید آمار">
+    <select id="days" aria-label="بازه">
+      <option value="7">۷ روز اخیر</option>
+      <option value="30" selected>۳۰ روز اخیر</option>
+      <option value="90">۹۰ روز اخیر</option>
+      <option value="365">یک سال</option>
+    </select>
+    <button type="submit">نمایش</button>
+  </form>
+  <p class="status" id="status"></p>
+  <div id="out"></div>
+</main>
+<script type="module" src="stats-page.js"></script>
+</body>
+</html>

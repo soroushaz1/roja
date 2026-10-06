@@ -1,0 +1,84 @@
+// The page behind stats.html: reads the anonymous counts from /api/stats with the key
+// set on the server, and names every item from the site's own catalogue.
+import {products,looks,byProduct} from './catalog.js';
+import {procedures} from './procedures.js';
+import {skincareById} from './skin.js';
+
+const $=id=>document.getElementById(id);
+const fa=new Intl.NumberFormat('fa-IR');
+const date=new Intl.DateTimeFormat('fa-IR-u-ca-persian',{year:'numeric',month:'long',day:'numeric'});
+const day=d=>date.format(new Date(`${d}T12:00:00Z`));
+const el=(tag,attrs={},...kids)=>{
+  const node=document.createElement(tag);
+  for(const [k,v] of Object.entries(attrs)){if(k==='text')node.textContent=v;else if(k==='style')Object.assign(node.style,v);else node.setAttribute(k,v);}
+  node.append(...kids);return node;
+};
+const shadeById=new Map(products.flatMap(p=>p.shades.map(s=>[s.id,{p,s}])));
+const names={
+  shade:id=>{const x=shadeById.get(id);return x?{name:`${x.p.name}، ${x.s.name}`,color:x.s.color}:{name:id};},
+  look:id=>({name:looks.find(l=>l.id===id)?.name||(id==='mine'?'استایل‌های ذخیره‌شده':id==='link'?'از لینک فرستاده‌شده':id)}),
+  procedure:id=>({name:procedures.find(p=>p.id===id)?.name||id}),
+  cart:key=>{
+    const [pid,sid]=key.split(':'), item=byProduct(pid)||skincareById(pid), shade=item?.shades.find(s=>s.variantId===sid);
+    return item?{name:`${item.name}، ${shade?.name||sid}`,color:shade?.color}:{name:key};
+  },
+  share:id=>({name:{shot:'عکس',multi:'تصویر چند رنگ',link:'لینک استایل'}[id]||id}),
+  order:id=>({name:{whatsapp:'واتس‌اپ',telegram:'تلگرام',share:'فرستادن لیست'}[id]||id})
+};
+const titles={shade:'رنگ‌های پرامتحان',look:'استایل‌ها',procedure:'عمل‌های زیبایی',cart:'افزوده به سبد',share:'اشتراک‌گذاری',order:'سفارش'};
+
+try{$('key').value=localStorage.getItem('roja-stats-key')||'';}catch{}
+$('form').onsubmit=e=>{e.preventDefault();load();};
+if($('key').value)load();
+
+async function load(){
+  const key=$('key').value.trim();
+  try{localStorage.setItem('roja-stats-key',key);}catch{}
+  $('status').textContent='در حال خواندن…';
+  let data;
+  try{
+    const r=await fetch(`api/stats?days=${$('days').value}`,{headers:{'X-Roja-Stats-Key':key},cache:'no-store'});
+    if(r.status===403){$('status').textContent='کلید درست نیست، یا روی سرور تنظیم نشده.';$('out').replaceChildren();return;}
+    if(!r.ok)throw new Error(r.status);
+    data=await r.json();
+  }catch(e){$('status').textContent=`خواندن آمار ممکن نشد (${e.message}).`;return;}
+  $('status').textContent=`از ${day(data.from)} تا ${day(data.to)}`;
+  render(data);
+}
+
+function render({from,to,rows}){
+  const by={};
+  for(const [day,event,item,n] of rows){((by[event]||={})[item]=(by[event][item]||0)+n);}
+  const sum=event=>Object.values(by[event]||{}).reduce((a,b)=>a+b,0);
+  const cartValue=Object.entries(by.cart||{}).reduce((a,[key,n])=>{
+    const [pid]=key.split(':'), item=byProduct(pid)||skincareById(pid);return a+(item?.price||0)*n;},0);
+  const kpi=(value,label)=>el('div',{class:'kpi'},el('b',{text:value}),el('span',{text:label}));
+
+  // Activity per day: every count, so a quiet day shows as one.
+  const perDay=new Map();
+  for(let t=new Date(from+'T12:00:00Z');t.toISOString().slice(0,10)<=to;t=new Date(t.getTime()+864e5))perDay.set(t.toISOString().slice(0,10),0);
+  for(const [day,,,n] of rows)perDay.set(day,(perDay.get(day)||0)+n);
+  const peak=Math.max(1,...perDay.values());
+
+  const list=event=>{
+    const items=Object.entries(by[event]||{}).sort((a,b)=>b[1]-a[1]).slice(0,15);
+    const top=items[0]?.[1]||1;
+    return el('section',{},el('h2',{text:titles[event]}),
+      ...(items.length?items.map(([id,n])=>{
+        const {name,color}=names[event](id);
+        return el('div',{class:'row'},el('i',{style:{background:color||'transparent',borderColor:color?'#FFFFFF22':'transparent'}}),
+          el('span',{class:'name',text:name,title:name}),el('b',{text:fa.format(n)}),
+          el('span',{class:'bar'},el('s',{style:{width:`${n/top*100}%`}})));
+      }):[el('p',{class:'empty',text:'هنوز چیزی ثبت نشده.'})]));
+  };
+  $('out').replaceChildren(
+    el('div',{class:'kpis'},
+      kpi(fa.format(sum('shade')),'رنگ امتحان‌شده'),
+      kpi(fa.format(sum('look')),'استایل امتحان‌شده'),
+      kpi(fa.format(sum('cart')),'افزوده به سبد'),
+      kpi(fa.format(cartValue),'ارزش افزوده به سبد (تومان)'),
+      kpi(fa.format(sum('order')),'سفارش فرستاده‌شده')),
+    el('section',{style:{marginBottom:'12px'}},el('h2',{text:'فعالیت روزانه'}),
+      el('div',{class:'days'},...[...perDay].map(([d,n])=>el('div',{title:`${day(d)}: ${fa.format(n)}`,style:{height:`${n/peak*100}%`}})))),
+    el('div',{class:'grid'},...['shade','look','cart','procedure','share','order'].map(list)));
+}

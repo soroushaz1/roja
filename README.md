@@ -66,8 +66,11 @@ satin, cream, gloss, shimmer, metallic, dewy) and a sample price.
   take snapshots of the mirror to compare two of them later, save them, or send them
   through the phone's share sheet (Instagram, Telegram, WhatsApp…) where the browser
   allows it. Snapshots stay in the page's memory until you save or share them.
-- **Sample cart** with quantities, prices and a total; "add the whole look" puts every
-  product on the face in the cart. No order is ever placed.
+- **Cart** with quantities, prices and a total; "add the whole look" puts every product
+  on the face in the cart. An order goes to the shop as a ready-written message in
+  WhatsApp or Telegram (the shop's number and username are set in `shop.js`; Telegram
+  cannot take the text in a link, so it is copied first). With neither set, the order
+  is offered as text to share or copy. Nothing is paid or stored on the site.
 - **Remembered** — the look on the face and the cart are kept in the browser's local
   storage, so a reload or the next visit starts where the last one stopped.
 - **First visit.** When the mirror first comes on, five short notes point at the shades,
@@ -177,7 +180,14 @@ the face cut out of the frame, reduced on the page to a few numbers and let go.
 The look you put together, your saved looks and the sample cart are kept in the browser's
 own storage on this device and never sent anywhere.
 
-The one thing that can leave the device is a skin check result, and only when you tick the
+Anonymous usage counts leave the device in batches: which shades, looks and procedures
+were tried, what went in the cart, how often something was shared or ordered — pairs
+like `shade vlv-3`. The server (`server/stats.mjs`) checks each against the catalogue
+and keeps only a total per item per day: no key, cookie, address or time of day, and
+nginx keeps no access log for it. Nothing is counted from the Android app or a
+development server.
+
+The other thing that can leave the device is a skin check result, and only when you tick the
 box and press save: its scores and your answers, no picture, no name or account. A random key
 made on your device (kept in its local storage, sent in a request header) names your results
 on the server; only a hash of it is stored, and the same screen deletes everything kept
@@ -240,7 +250,17 @@ Keyboard: **B** brush, **[ ]** brush size, **Ctrl+Z** undo a stroke, **C** compa
 The site runs at [pythonpath.ir](https://pythonpath.ir/) (204.48.27.227, Ubuntu, nginx), with
 `www.` redirected to it. nginx serves the files and passes `/api/skin` to
 `server/skin-api.mjs`, a small Node service (no dependencies; `node:sqlite`) that keeps skin
-check results; it rebuilds every record from the fields it allows and stores nothing else.
+check results and the anonymous usage counts (`/api/stats`); it rebuilds every record
+from the fields it allows and stores nothing else.
+
+The counts are read on `stats.html`, with a key set on the server only:
+
+```bash
+echo "ROJA_STATS_KEY=$(openssl rand -hex 16)" > /etc/roja-api.env && chmod 600 /etc/roja-api.env
+systemctl restart roja-api
+```
+
+Without it the counts are still kept, but nobody can read them.
 
 ```bash
 tools/deploy.sh             # the working copy to the server: site, API, unit, nginx site

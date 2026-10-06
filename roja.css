@@ -630,3 +630,5 @@ footer{
 .tour-bar .primary{padding:6px 16px}
 .tour-target{outline:2px solid var(--rose);outline-offset:3px;border-radius:var(--radius-sm)}
 #multi-image{display:block;max-width:100%;max-height:60vh;margin:12px auto 0;border-radius:var(--radius);border:1px solid var(--line)}
+.order{margin-top:14px}
+.order .quiet{margin:0;line-height:1.8}

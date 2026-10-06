@@ -390,7 +390,8 @@
 
 <footer>
   <span>تصویر دوربین و عکس روی همین دستگاه پردازش می‌شود و ارسال یا ذخیره نمی‌شود.</span>
-  <span>رنگ‌ها و قیمت‌ها نمونه‌اند و سبد آزمایشی است؛ پرداختی ثبت نمی‌شود.</span>
+  <span>رنگ‌ها و قیمت‌ها نمونه‌اند؛ پرداختی در این صفحه انجام نمی‌شود.</span>
+  <span>فقط شمار ناشناس رنگ‌ها، استایل‌ها و عمل‌های امتحان‌شده ثبت می‌شود؛ بدون شناسه، کوکی یا نشانی.</span>
 </footer>
 
 <dialog id="cart">
@@ -398,9 +399,17 @@
     <h2>سبد نمونه</h2>
     <button id="close" class="ghost">بستن</button>
   </div>
-  <p class="quiet">این سبد فقط برای امتحان تجربهٔ فروشگاه است. هیچ سفارشی ثبت نمی‌شود.</p>
+  <p class="quiet" id="cart-note">سبد روی همین دستگاه می‌ماند. پرداختی در این صفحه انجام نمی‌شود.</p>
   <div id="cart-items"></div>
   <div class="cart-total" id="cart-total" hidden><span>جمع نمونه</span><strong id="cart-sum"></strong></div>
+  <div class="order" id="order" hidden>
+    <p class="quiet" id="order-note"></p>
+    <div class="row-actions">
+      <button id="order-whatsapp" class="primary" type="button" hidden>سفارش در واتس‌اپ</button>
+      <button id="order-telegram" class="ghost" type="button" hidden>سفارش در تلگرام</button>
+      <button id="order-send" class="primary" type="button" hidden>فرستادن لیست سفارش</button>
+    </div>
+  </div>
 </dialog>
 
 <dialog id="gallery">
