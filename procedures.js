@@ -5,7 +5,7 @@
 // surgeon would achieve — each `note` says what the preview leaves out. `kind`,
 // `lasts` and `recovery` are general, commonly quoted ranges, not advice: they vary
 // with the person, the method and the practitioner.
-import {controls, zeroAmounts, regions} from './deform.js?v=18';
+import {controls, zeroAmounts, regions} from './deform.js?v=19';
 
 export {regions};
 export const kinds={surgery:'جراحی',injection:'تزریقی',nonsurgical:'غیرجراحی'};

@@ -58,10 +58,13 @@ satin, cream, gloss, shimmer, metallic, dewy) and a sample price.
 - **Lighting preview.** See the look under window daylight, golden-hour sun, office
   fluorescent light, a warm evening room or a camera flash.
 - **Photos.** Use a photo instead of the camera (pick a file or drop it on the mirror), and
-  take snapshots of the mirror to compare two of them later or save them. Snapshots stay
-  in the page's memory until you save them.
+  take snapshots of the mirror to compare two of them later, save them, or send them
+  through the phone's share sheet (Instagram, Telegram, WhatsApp…) where the browser
+  allows it. Snapshots stay in the page's memory until you save or share them.
 - **Sample cart** with quantities, prices and a total; "add the whole look" puts every
   product on the face in the cart. No order is ever placed.
+- **Remembered** — the look on the face and the cart are kept in the browser's local
+  storage, so a reload or the next visit starts where the last one stopped.
 
 **عمل‌های زیبایی — procedures.** Seventeen procedures in six regions, each a set of weights
 over a shared field of localised deformers: rhinoplasty (natural, semi-fantasy or fantasy),
@@ -162,6 +165,9 @@ stored. The only pixels read back are the ones you ask for: a snapshot you take 
 page until you save it or close the page), while the shade finder runs a few small skin
 patches that the face worker averages into one colour, and while the skin check measures,
 the face cut out of the frame, reduced on the page to a few numbers and let go.
+
+The look you put together and the sample cart are kept in the browser's own storage on
+this device and never sent anywhere.
 
 The one thing that can leave the device is a skin check result, and only when you tick the
 box and press save: its scores and your answers, no picture, no name or account. A random key

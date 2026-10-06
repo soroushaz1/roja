@@ -1,15 +1,15 @@
-import {products,categories,finishes,looks,byProduct} from './catalog.js?v=18';
-import {layerSpecs,createMaskPainter,renderFallback,createSmoother,landmarksByType,frameLandmarks,hexToRgb} from './makeup.js?v=18';
-import {createStage,layerModes} from './stage.js?v=18';
-import {controls,regions,controlLandmarks,controlRange,deformers,textureLayers} from './deform.js?v=18';
-import {procedures,byId,amountsFor,resolve,kinds} from './procedures.js?v=18';
-import {renderDebug,nearest} from './debug.js?v=18';
-import {createBrush,brushModes} from './brush.js?v=18';
-import {metrics,measure,points as placed,symmetry,pose as poseOf} from './measure.js?v=18';
-import {CANON,CANON_ASPECT,TRIANGLES} from './facemesh.js?v=18';
-import {createSkinScanner} from './skin-scan.js?v=18';
-import {createSkinPanel} from './skin-panel.js?v=18';
-import {skincareById} from './skin.js?v=18';
+import {products,categories,finishes,looks,byProduct} from './catalog.js?v=19';
+import {layerSpecs,createMaskPainter,renderFallback,createSmoother,landmarksByType,frameLandmarks,hexToRgb} from './makeup.js?v=19';
+import {createStage,layerModes} from './stage.js?v=19';
+import {controls,regions,controlLandmarks,controlRange,deformers,textureLayers} from './deform.js?v=19';
+import {procedures,byId,amountsFor,resolve,kinds} from './procedures.js?v=19';
+import {renderDebug,nearest} from './debug.js?v=19';
+import {createBrush,brushModes} from './brush.js?v=19';
+import {metrics,measure,points as placed,symmetry,pose as poseOf} from './measure.js?v=19';
+import {CANON,CANON_ASPECT,TRIANGLES} from './facemesh.js?v=19';
+import {createSkinScanner} from './skin-scan.js?v=19';
+import {createSkinPanel} from './skin-panel.js?v=19';
+import {skincareById} from './skin.js?v=19';
 
 const $=id=>document.getElementById(id);
 // GitHub Pages ignores the ?v= query, and browsers and its CDN keep a page for up to ten
@@ -17,7 +17,7 @@ const $=id=>document.getElementById(id);
 // newer script, which would then look for elements that page does not have. Such a
 // page is loaded afresh, once; if it is still the old one, it says a new version is
 // on its way instead of failing.
-const RELEASE='18';
+const RELEASE='19';
 if(document.documentElement.dataset.release!==RELEASE){
   let tried=null;
   try{tried=sessionStorage.getItem('roja-reloaded');sessionStorage.setItem('roja-reloaded',RELEASE);}catch{}
@@ -249,6 +249,7 @@ function selectProduct(id,apply=true){
 }
 function afterMakeupChange(look=true){
   if(look)updateLook();
+  saveSoon();
   invalidate({masks:true});
   updateSeam();
 }
@@ -934,7 +935,7 @@ function onTracker(d){
 function ensureTracker(){
   if(tracker||trackerStarting)return;
   let w=null;
-  try{w=new Worker(new URL(`face-worker.js?v=18${gpuQuery}`,import.meta.url));}catch(e){perf.lastError=`worker: ${e.message}`;}
+  try{w=new Worker(new URL(`face-worker.js?v=19${gpuQuery}`,import.meta.url));}catch(e){perf.lastError=`worker: ${e.message}`;}
   if(!w){useTracker('page','no worker');return;}
   ready=false;busy=false;
   tracker={kind:'worker',post:(m,transfer)=>w.postMessage(m,transfer),close:()=>w.terminate()};
@@ -954,7 +955,7 @@ async function useTracker(kind,reason){
   const token=++trackerGeneration;
   try{
     const Vision=await import('./vendor/vision_bundle.mjs');
-    await import('./face-core.js?v=18');
+    await import('./face-core.js?v=19');
     const core=self.rojaFaceCore(Vision,new URL('./',import.meta.url).href);
     const found=await core.init();
     if(token!==trackerGeneration){core.close();return;}
@@ -1366,6 +1367,9 @@ async function snapshot(){
   const s=Math.max(1,w/640);
   x.font=`800 ${15*s}px Estedad, Tahoma, sans-serif`;x.fillStyle='#FFFFFFB0';x.textAlign='right';x.textBaseline='top';x.direction='rtl';
   x.fillText('رُژا',w-12*s,10*s);
+  // Where a shared picture came from, small enough not to sit on the look.
+  x.font=`500 ${10*s}px Estedad, Tahoma, sans-serif`;x.fillStyle='#FFFFFF90';x.direction='ltr';
+  x.fillText('pythonpath.ir',w-12*s,30*s);
   const label=mode==='skin'?'تحلیل پوست':mode==='procedure'
     ?([...active.keys()].map(id=>byId(id).short).join('، ')||'بدون عمل')
     :(products.filter(p=>makeupState[p.id].enabled).map(p=>`${p.name} ${shadeOf(p,makeupState[p.id].shade).name}`).join('، ')||'بدون آرایش');
@@ -1375,7 +1379,7 @@ async function snapshot(){
     while(shots.length>12){URL.revokeObjectURL(shots.pop().url);}
     $('shots-count').textContent=fa.format(shots.length);
     $('flash').classList.remove('on');void $('flash').offsetWidth;$('flash').classList.add('on');
-    toast('عکس گرفته شد. از «عکس‌ها» می‌توانی مقایسه یا ذخیره‌اش کنی.');
+    toast('عکس گرفته شد. از «عکس‌ها» می‌توانی مقایسه، ذخیره یا ارسالش کنی.');
   },'image/png');
 }
 function renderGallery(){
@@ -1396,12 +1400,21 @@ function renderGallery(){
       el('div',{class:'shot-bar'},el('span',{text:`${time.format(shot.time)} · ${shot.label}`,title:shot.label}),
         el('a',{href:shot.url,download:`roja-${i+1}.png`,'aria-label':'ذخیرهٔ عکس',title:'ذخیره',
           onclick:e=>{if(native){e.preventDefault();saveBlob(shot.blob,`roja-${Date.now()}.png`);}}},icon('i-download')),
+        ...(canShare(shot)?[el('button',{type:'button','aria-label':'اشتراک‌گذاری عکس',title:'اشتراک',onclick:()=>shareShot(shot)},icon('i-share'))]:[]),
         el('button',{type:'button','aria-label':'حذف عکس',title:'حذف',onclick:()=>{URL.revokeObjectURL(shot.url);shots.splice(shots.indexOf(shot),1);
           $('shots-count').textContent=fa.format(shots.length);renderGallery();}},icon('i-trash'))));
   }));
   const picked=shots.filter(s=>s.picked);
   $('gallery-compare').hidden=picked.length!==2;
   if(picked.length===2)$('gallery-compare').replaceChildren(...picked.map(s=>el('figure',{},el('img',{src:s.url,alt:s.label}),el('figcaption',{text:s.label}))));
+}
+// Straight to Instagram, Telegram, WhatsApp… through the phone's own share sheet, where
+// the browser can hand over a file (most phones; not the Android app's WebView).
+function shotFile(shot){return shot.file||=new File([shot.blob],`roja-${shot.time.getTime()}.png`,{type:'image/png'});}
+function canShare(shot){try{return !native&&!!navigator.canShare?.({files:[shotFile(shot)]});}catch{return false;}}
+async function shareShot(shot){
+  try{await navigator.share({files:[shotFile(shot)],title:'رُژا',text:`${shot.label}، امتحان‌شده در آینهٔ رُژا: https://pythonpath.ir/`});}
+  catch(e){if(e?.name!=='AbortError')toast('اشتراک‌گذاری ممکن نشد. عکس را ذخیره کن و از گالری بفرست.');}
 }
 // A browser downloads the file; the Android app's WebView cannot download a blob:
 // URL, so there the bytes go to the app, which saves them to the gallery or Downloads.
@@ -1437,6 +1450,7 @@ function addToCart(item,shade,quiet=false){
   if(!quiet)toast(`${item.name} ${shade.name} به سبد نمونه اضافه شد.`);
 }
 function renderCart(){
+  saveSoon();
   $('count').textContent=fa.format([...cart.values()].reduce((a,b)=>a+b,0));
   $('cart-items').replaceChildren();
   if(!cart.size){
@@ -1458,6 +1472,39 @@ function renderCart(){
       el('button',{class:'ghost',type:'button','aria-label':`حذف ${item.name} ${shade.name}`,text:'حذف',onclick:()=>{cart.delete(key);renderCart();}})));
   }
   $('cart-total').hidden=false;$('cart-sum').textContent=toman(sum);
+}
+
+/* ---------- remembered between visits ----------------------------------- */
+// The look on the face and the sample cart stay on this device, in its local storage,
+// so a reload or the next visit starts where the last one stopped. Nothing here leaves
+// the device. A saved product or shade the catalogue no longer has is skipped.
+const SAVED='roja-saved';
+let saveTimer=0;
+function saveSoon(){clearTimeout(saveTimer);saveTimer=setTimeout(saveNow,400);}
+function saveNow(){
+  clearTimeout(saveTimer);
+  try{localStorage.setItem(SAVED,JSON.stringify({v:1,product:product.id,makeup:makeupState,cart:[...cart]}));}catch{}
+}
+function restoreSaved(){
+  let saved=null;
+  try{saved=JSON.parse(localStorage.getItem(SAVED));}catch{}
+  if(saved?.v!==1)return false;
+  const level=(v,fallback)=>Number.isFinite(v)&&v>=0&&v<=100?v:fallback;
+  for(const [pid,s] of Object.entries(saved.makeup||{})){
+    const item=byProduct(pid), state=makeupState[pid];
+    if(!item||!state||!s||!item.shades.some(x=>x.id===s.shade))continue;
+    state.shade=s.shade;state.enabled=!!s.enabled;
+    state.intensity=level(s.intensity,state.intensity);state.fade=level(s.fade,state.fade);
+    if(item.styles?.some(x=>x.id===s.style))state.style=s.style;
+  }
+  if(byProduct(saved.product)){product=byProduct(saved.product);category=product.category;}
+  for(const [key,qty] of Array.isArray(saved.cart)?saved.cart:[]){
+    const [pid,sid]=String(key).split(':');
+    const item=byProduct(pid)||skincareById(pid);
+    if(item?.shades.some(s=>s.variantId===sid)&&Number.isInteger(qty)&&qty>0&&qty<100)cart.set(key,qty);
+  }
+  // Worth a word only when it differs from a first visit: more than the starting lipstick, or a cart.
+  return cart.size>0||products.some(p=>makeupState[p.id].enabled!==(p.id==='velvet'));
 }
 
 /* ---------- the skin check ---------------------------------------------- */
@@ -1483,11 +1530,11 @@ $('shades').addEventListener('keydown',e=>{
 });
 $('intensity').oninput=()=>{
   makeupState[product.id].intensity=Number($('intensity').value);
-  $('amount').textContent=pct($('intensity').value);invalidate({masks:true});
+  $('amount').textContent=pct($('intensity').value);invalidate({masks:true});saveSoon();
 };
 $('fade').oninput=()=>{
   makeupState[product.id].fade=Number($('fade').value);
-  $('fade-amount').textContent=pct($('fade').value);invalidate({masks:true});
+  $('fade-amount').textContent=pct($('fade').value);invalidate({masks:true});saveSoon();
 };
 $('natural-blend').onchange=()=>invalidate({masks:true});
 $('product-toggle').onclick=()=>{
@@ -1703,8 +1750,9 @@ document.addEventListener('keydown',e=>{
 // The seam is positioned in pixels, so it has to be replaced when the box changes.
 window.addEventListener('resize',()=>{if(seamOn)placeSeam();});
 document.addEventListener('fullscreenchange',()=>{if(seamOn)placeSeam();});
+document.addEventListener('visibilitychange',()=>{if(document.hidden)saveNow();});
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&source?.kind==='camera')stop('با خارج‌شدن از صفحه، دوربین خاموش شد.');});
-window.addEventListener('pagehide',()=>{stop();if(tracker){tracker.close();tracker=null;ready=false;}});
+window.addEventListener('pagehide',()=>{saveNow();stop();if(tracker){tracker.close();tracker=null;ready=false;}});
 $('start').onclick=start;
 $('photo-input').onchange=()=>{const file=$('photo-input').files[0];$('photo-input').value='';openPhoto(file);};
 $('stop').onclick=()=>stop(source?.kind==='photo'?'عکس بسته شد.':'دوربین خاموش شد.');
@@ -1715,11 +1763,13 @@ viewport.addEventListener('drop',e=>{const file=[...e.dataTransfer.files].find(f
 renderBrushModes();
 setRange('brush-size',brushState.size);$('brush-size-amount').textContent=pct(brushState.size);
 renderLooks();renderLights();
+const restored=restoreSaved();
 selectProduct(product.id,false);
 setMode('makeup');
 renderCart();updateBrushInfo();
 placeSeam();
 document.querySelectorAll('input[type=range]').forEach(paintRange);
+if(restored)toast('آرایش و سبد دفعهٔ قبل برگشت. «پاک‌کردن آرایش» همه را از صورت برمی‌دارد.');
 
 // The Android back button: close whatever is open on top first. Returns whether it
 // did anything, so the app knows when to leave instead.
