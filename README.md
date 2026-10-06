@@ -274,6 +274,13 @@ Without it the counts are still kept, but nobody can read them.
 tools/deploy.sh             # the working copy to the server: site, API, unit, nginx site
 ```
 
+Every push to `main` that touches the site is deployed by `.github/workflows/deploy.yml`, which
+runs the same `tools/deploy.sh` and then checks that pythonpath.ir serves the new release; it
+can also be run by hand from the Actions tab. It needs two repository secrets:
+`ROJA_DEPLOY_KEY`, a private SSH key made for it alone (its public half in the server's
+`/root/.ssh/authorized_keys`), and `ROJA_KNOWN_HOSTS`, the output of `ssh-keyscan 204.48.27.227`,
+so the key is only ever offered to this server.
+
 `tools/deploy.sh` runs `tools/skin-check.mjs` first, then puts the site in
 `/var/www/pythonpath` and the API in `/opt/roja-api` (each swapped in whole), installs
 `server/roja-api.service` (its own throwaway user, writing only `/var/lib/roja-api`) and
