@@ -1,10 +1,15 @@
-// Anonymous usage counts: which shades, looks and procedures are tried, what goes in
-// the cart and how often things are shared or ordered. Each count is a pair like
-// ['shade','vlv-3'], sent in batches to server/stats.mjs, which keeps only a per-day
-// total for each. No key, cookie, picture or answer is ever part of it.
+// Anonymous usage counts: which shades, looks and procedures are tried, what is opened in
+// the shop, how often things are shared, and how far a visit got. Each count is a pair
+// like ['shade','vlv-3'], sent in batches with the id of the shop whose mirror it is to
+// server/stats.mjs, which keeps only a per-day total for each. No key, cookie, picture
+// or answer is ever part of it.
 //
 // Not from the Android app (its pages are not on the site) or a development server.
+import {currentShop} from './shops.js?v=24';
+
 const API='api/stats';
+// The shop whose mirror this is, so each shop's counts can be read on their own.
+const shop=currentShop()?.id||'';
 const on=!window.RojaAndroid&&location.protocol==='https:'&&!['localhost','127.0.0.1','[::1]'].includes(location.hostname);
 const queue=[];
 const seen=new Set();
@@ -20,7 +25,7 @@ export function count(event,item,{each=false}={}){
 }
 export function flush(){
   if(!queue.length)return;
-  const body=JSON.stringify({events:queue.splice(0,100)});
+  const body=JSON.stringify({events:queue.splice(0,100),...(shop&&{shop})});
   try{
     if(!navigator.sendBeacon?.(API,new Blob([body],{type:'application/json'})))
       fetch(API,{method:'POST',headers:{'Content-Type':'application/json'},body,keepalive:true}).catch(()=>{});

@@ -26,7 +26,7 @@ tar -cz "${SITE[@]}" | ssh_ 'set -e
   rm -rf /var/www/pythonpath.old'
 
 echo "api → /opt/roja-api"
-tar -cz skin.js catalog.js procedures.js deform.js server | ssh_ 'set -e
+tar -cz skin.js catalog.js procedures.js deform.js shops.js server | ssh_ 'set -e
   rm -rf /opt/roja-api.new && mkdir -p /opt/roja-api.new
   tar -xz -C /opt/roja-api.new
   chmod -R a+rX /opt/roja-api.new

@@ -10,10 +10,10 @@
 // Frames arrive as VideoFrames, ImageBitmaps or ImageData and are let go as soon as
 // they are measured. Nothing is kept, sent anywhere or stored.
 const here=p=>new URL(p,self.location.href).href;
-importScripts(here('vendor/vision_bundle.js'),here('face-core.js?v=23'));
+importScripts(here('vendor/vision_bundle.js'),here('face-core.js?v=24'));
 const core=rojaFaceCore(Vision,self.location.href);
 const prefer={'1':'GPU','force':'GPU!'}[new URLSearchParams(self.location.search).get('gpu')]||'CPU';
-core.init(prefer).then(
+core.init(prefer,(loaded,total)=>postMessage({type:'progress',loaded,total})).then(
   info=>postMessage({type:'ready',topology:info,delegate:info.delegate,gpuError:info.gpuError}),
   e=>postMessage({type:'error',stage:'init',message:String(e&&e.message||e)})
 );

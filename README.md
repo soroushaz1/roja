@@ -140,6 +140,10 @@ the mirror stays where it is. `?shop=demo` is a demo shop whose "buy" lands on `
 the page that explains all this to shops. A look sent from a shop's mirror opens in that
 shop's mirror.
 
+`stats.html` shows the usage counts for every mirror together, for Roja's own site, or for
+one shop's mirror: what was tried, what was opened in the shop, and how far visits got,
+from opening the page to opening the shop.
+
 ## How it works
 
 - **Face tracking** — MediaPipe Face Landmarker, 478 points with head pose and expression
@@ -216,9 +220,11 @@ The look you put together and your saved looks are kept in the browser's
 own storage on this device and never sent anywhere.
 
 Anonymous usage counts leave the device in batches: which shades, looks and procedures
-were tried, which product was opened in the shop, how often something was shared — pairs
-like `shade vlv-3`. The server (`server/stats.mjs`) checks each against the catalogue
-and keeps only a total per item per day: no key, cookie, address or time of day, and
+were tried, which product was opened in the shop, how often something was shared, and how
+far the visit got (page opened, camera or photo started, face found, a shade tried, the
+shop opened) — pairs like `shade vlv-3`, with the id of the shop whose mirror it is. The
+server (`server/stats.mjs`) checks each against the catalogue and `shops.js` and keeps
+only a total per item per shop per day: no key, cookie, address or time of day, and
 nginx keeps no access log for it. Nothing is counted from the Android app or a
 development server.
 
@@ -369,7 +375,8 @@ it on the GPU regardless, for comparing the two.
 
 ## First load
 
-About 15 MB, mostly the face model and its WebAssembly runtime, then cached. That is the
+About 15 MB, mostly the face model and its WebAssembly runtime, then cached. While they
+come down, the mirror shows how far along they are. That is the
 cost of doing the tracking on the device instead of sending the camera somewhere.
 
 ## Licence

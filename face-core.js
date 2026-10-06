@@ -9,11 +9,11 @@ self.rojaFaceCore=function(Vision,base){
   const {FaceLandmarker,FilesetResolver}=Vision;
   const here=p=>new URL(p,base).href;
   const pairs=list=>(list||[]).map(c=>[c.start,c.end]);
-  let detector=null,files=null,delegate='CPU',gpuError='';
+  let detector=null,files=null,model=null,wasmUrl='',delegate='CPU',gpuError='';
 
   function create(kind){
     return FaceLandmarker.createFromOptions(files,{
-      baseOptions:{modelAssetPath:here('vendor/face_landmarker.task'),delegate:kind},
+      baseOptions:{modelAssetBuffer:model.slice(),delegate:kind},
       runningMode:'VIDEO',numFaces:1,
       minFaceDetectionConfidence:.55,minTrackingConfidence:.55,
       // Head pose feeds the "face the camera" hint and the debug readout; the
@@ -35,11 +35,51 @@ self.rojaFaceCore=function(Vision,base){
       return /swiftshader|llvmpipe|softpipe|software|basic render/i.test(name)?name:false;
     }catch{return true;}
   }
+  // The model and the runtime this browser will use (~15 MB the first time) are fetched
+  // here rather than by MediaPipe, so the page can show how far along they are. Each is
+  // fetched once and handed over from memory: the model as bytes, the runtime as a blob
+  // address in place of its file's.
+  async function download(onProgress){
+    const found=await FilesetResolver.forVisionTasks(here('vendor/wasm'));
+    const urls=[here(found.wasmBinaryPath),here('vendor/face_landmarker.task')];
+    // With gzip on the way the server sends no length, so the files' own sizes stand in.
+    const SIZES={'vision_wasm_internal.wasm':11756954,'vision_wasm_nosimd_internal.wasm':10960242,'face_landmarker.task':3758596};
+    const loaded=urls.map(()=>0), total=urls.map(()=>0);
+    let last=0;
+    const report=()=>{
+      const now=Date.now();
+      if(now-last<150)return;
+      last=now;
+      try{onProgress?.(loaded.reduce((a,b)=>a+b,0),total.reduce((a,b)=>a+b,0));}catch{}
+    };
+    const fetchOne=async(url,i)=>{
+      const response=await fetch(url);
+      if(!response.ok)throw new Error(`${url.split('/').pop()}: ${response.status}`);
+      const length=!response.headers.get('content-encoding')&&Number(response.headers.get('content-length'));
+      total[i]=length||SIZES[url.split('/').pop()]||0;
+      if(!response.body)return new Uint8Array(await response.arrayBuffer());
+      const reader=response.body.getReader(), parts=[];
+      for(;;){
+        const {done,value}=await reader.read();
+        if(done)break;
+        parts.push(value);loaded[i]+=value.length;
+        if(loaded[i]>total[i])total[i]=loaded[i];
+        report();
+      }
+      const bytes=new Uint8Array(loaded[i]);
+      let at=0;for(const part of parts){bytes.set(part,at);at+=part.length;}
+      return bytes;
+    };
+    const [wasm,task]=await Promise.all(urls.map(fetchOne));
+    model=task;
+    wasmUrl=URL.createObjectURL(new Blob([wasm],{type:'application/wasm'}));
+    files={...found,wasmBinaryPath:wasmUrl};
+  }
   // On the GPU the model runs several times faster than on the CPU. Where the GPU
   // cannot run it (no WebGL2 here, a driver MediaPipe rejects, a software GPU), the
   // CPU does. 'GPU!' insists on the GPU even so (the test harness uses it).
-  async function init(prefer='CPU'){
-    files=files||await FilesetResolver.forVisionTasks(here('vendor/wasm'));
+  async function init(prefer='CPU',onProgress){
+    if(!files)await download(onProgress);
     detector?.close();detector=null;
     if(prefer==='GPU'){
       const soft=softwareGL();
@@ -120,5 +160,5 @@ self.rojaFaceCore=function(Vision,base){
     return message;
   }
 
-  return {init,handle,get delegate(){return delegate;},close(){try{detector?.close();}catch{}}};
+  return {init,handle,get delegate(){return delegate;},close(){try{detector?.close();}catch{}if(wasmUrl)URL.revokeObjectURL(wasmUrl);}};
 };

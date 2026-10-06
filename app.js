@@ -1,17 +1,17 @@
-import {products,categories,finishes,looks,byProduct} from './catalog.js?v=23';
-import {layerSpecs,createMaskPainter,renderFallback,createSmoother,landmarksByType,frameLandmarks,hexToRgb} from './makeup.js?v=23';
-import {createStage,layerModes} from './stage.js?v=23';
-import {controls,regions,controlLandmarks,controlRange,deformers,textureLayers} from './deform.js?v=23';
-import {procedures,byId,amountsFor,resolve,kinds} from './procedures.js?v=23';
-import {renderDebug,nearest} from './debug.js?v=23';
-import {createBrush,brushModes} from './brush.js?v=23';
-import {metrics,measure,points as placed,symmetry,pose as poseOf} from './measure.js?v=23';
-import {CANON,CANON_ASPECT,TRIANGLES} from './facemesh.js?v=23';
-import {createSkinScanner} from './skin-scan.js?v=23';
-import {createSkinPanel} from './skin-panel.js?v=23';
-import {skincareById} from './skin.js?v=23';
-import {count} from './usage.js?v=23';
-import {currentShop,shopUrl,searchWords} from './shops.js?v=23';
+import {products,categories,finishes,looks,byProduct} from './catalog.js?v=24';
+import {layerSpecs,createMaskPainter,renderFallback,createSmoother,landmarksByType,frameLandmarks,hexToRgb} from './makeup.js?v=24';
+import {createStage,layerModes} from './stage.js?v=24';
+import {controls,regions,controlLandmarks,controlRange,deformers,textureLayers} from './deform.js?v=24';
+import {procedures,byId,amountsFor,resolve,kinds} from './procedures.js?v=24';
+import {renderDebug,nearest} from './debug.js?v=24';
+import {createBrush,brushModes} from './brush.js?v=24';
+import {metrics,measure,points as placed,symmetry,pose as poseOf} from './measure.js?v=24';
+import {CANON,CANON_ASPECT,TRIANGLES} from './facemesh.js?v=24';
+import {createSkinScanner} from './skin-scan.js?v=24';
+import {createSkinPanel} from './skin-panel.js?v=24';
+import {skincareById} from './skin.js?v=24';
+import {count} from './usage.js?v=24';
+import {currentShop,shopUrl,searchWords} from './shops.js?v=24';
 
 const $=id=>document.getElementById(id);
 // GitHub Pages ignores the ?v= query, and browsers and its CDN keep a page for up to ten
@@ -19,7 +19,7 @@ const $=id=>document.getElementById(id);
 // newer script, which would then look for elements that page does not have. Such a
 // page is loaded afresh, once; if it is still the old one, it says a new version is
 // on its way instead of failing.
-const RELEASE='23';
+const RELEASE='24';
 if(document.documentElement.dataset.release!==RELEASE){
   let tried=null;
   try{tried=sessionStorage.getItem('roja-reloaded');sessionStorage.setItem('roja-reloaded',RELEASE);}catch{}
@@ -77,6 +77,7 @@ const viewport=$('viewport');
 // which then offers no buying, only the way to put the mirror on a shop. Inside a
 // shop's page (an iframe) the page around it is that shop.
 const shop=currentShop();
+count('step','open');
 const embedded=(()=>{try{return window.parent!==window;}catch{return true;}})();
 document.documentElement.classList.toggle('has-shop',!!shop);
 document.documentElement.classList.toggle('embedded',embedded);
@@ -240,7 +241,7 @@ function select(id){
   const shade=product.shades.find(s=>s.id===id);
   if(!shade)throw new Error('Unknown shade');
   makeupState[product.id].shade=id;enableProduct(product);
-  updateSelection();count('shade',id);
+  updateSelection();count('shade',id);count('step','shade');
   return {product:product.id,id,variant:shade.variantId,name:shade.name};
 }
 function selectProduct(id,apply=true){
@@ -1082,8 +1083,9 @@ const syncing=()=>inStep&&!stepBroken&&!!shown&&performance.now()-shownAt<400;
 // iOS 17 have no WebGL inside workers) the same code runs on the page instead: a
 // little slower, but the mirror works.
 function onTracker(d){
+  if(d.type==='progress'){showLoading(d.loaded,d.total);return;}
   if(d.type==='ready'){
-    clearTimeout(initTimer);ready=true;topology=d.topology;
+    clearTimeout(initTimer);ready=true;topology=d.topology;showLoading(null);
     delegate=d.delegate||'CPU';if(d.gpuError)gpuError=d.gpuError;
     if(delegate!=='GPU')fastFrames=false;
     if(source){status(statusText());enableTools(true);}
@@ -1096,6 +1098,7 @@ function onTracker(d){
     perf.detections++;perf.latency=performance.now()-sentAt;perf.inferMs=ema(perf.inferMs,d.ms||0);
     if(frame){shown?.close();shown=frame;shownAt=performance.now();shownVersion++;}
     landmarks=smoother.smooth(d.landmarks,sentAt);
+    if(landmarks)count('step','face');
     if(source.kind==='photo')photoPasses++;
     poseAngles=d.landmarks?poseOf(d.matrix):null;
     if(d.blendshapes)blendshapes=d.blendshapes;
@@ -1115,7 +1118,7 @@ function onTracker(d){
 function ensureTracker(){
   if(tracker||trackerStarting)return;
   let w=null;
-  try{w=new Worker(new URL(`face-worker.js?v=23${gpuQuery}`,import.meta.url));}catch(e){perf.lastError=`worker: ${e.message}`;}
+  try{w=new Worker(new URL(`face-worker.js?v=24${gpuQuery}`,import.meta.url));}catch(e){perf.lastError=`worker: ${e.message}`;}
   if(!w){useTracker('page','no worker');return;}
   ready=false;busy=false;
   tracker={kind:'worker',post:(m,transfer)=>w.postMessage(m,transfer),close:()=>w.terminate()};
@@ -1135,9 +1138,9 @@ async function useTracker(kind,reason){
   const token=++trackerGeneration;
   try{
     const Vision=await import('./vendor/vision_bundle.mjs');
-    await import('./face-core.js?v=23');
+    await import('./face-core.js?v=24');
     const core=self.rojaFaceCore(Vision,new URL('./',import.meta.url).href);
-    const found=await core.init();
+    const found=await core.init('CPU',(loaded,total)=>{if(token===trackerGeneration)onTracker({type:'progress',loaded,total});});
     if(token!==trackerGeneration){core.close();return;}
     tracker={kind,post:m=>setTimeout(()=>{
       let out;
@@ -1151,6 +1154,20 @@ async function useTracker(kind,reason){
     trackerStarting=false;
     if(token===trackerGeneration)shutdown('آینه روی این مرورگر آماده نشد. آخرین نسخهٔ Safari یا Chrome را امتحان کن.'+code(e));
   }
+}
+// How far the face model and its runtime have come down, on the mirror, while they do.
+// From the cache it is over before it is seen; the first time it is ~15 MB.
+const mb=new Intl.NumberFormat('fa-IR',{maximumFractionDigits:0});
+const percent=new Intl.NumberFormat('fa-IR',{style:'percent'});
+function showLoading(loaded,total){
+  const box=$('loading');
+  if(loaded==null||!total||!source){box.hidden=true;return;}
+  const part=Math.min(.99,loaded/total);
+  box.hidden=false;
+  $('loading-bar').style.width=`${part*100}%`;
+  $('loading-track').setAttribute('aria-valuenow',Math.round(part*100));
+  $('loading-percent').textContent=percent.format(part);
+  $('loading-text').textContent=`${mb.format(loaded/1048576)} از ${mb.format(total/1048576)} مگابایت`;
 }
 function shutdown(message){
   if(tracker)tracker.close();tracker=null;ready=false;busy=false;trackerStarting=false;trackerGeneration++;
@@ -1169,6 +1186,7 @@ function goLive(){
   landmarks=null;poseAngles=null;photoPasses=0;
   overlay.width=source.width;overlay.height=source.height;
   enableTools(ready||!!source.native);
+  count('step',source.kind==='photo'?'photo':'camera');
   if(!source.native)ensureTracker();
   native?.keepScreenOn?.(true);
   cancelAnimationFrame(raf);raf=requestAnimationFrame(frame);
@@ -1196,7 +1214,7 @@ function stop(message='دوربین خاموش شد.'){
   $('welcome').hidden=false;$('start').disabled=false;
   $('start').lastChild.textContent='روشن‌کردن دوربین';
   $('stop').disabled=true;$('toolbar').hidden=true;$('seam').hidden=true;seamOn=false;
-  $('guide').hidden=true;$('badge').hidden=true;$('hud').hidden=true;$('brush-cursor').hidden=true;$('tap-start').hidden=true;
+  $('guide').hidden=true;$('badge').hidden=true;$('hud').hidden=true;$('loading').hidden=true;$('brush-cursor').hidden=true;$('tap-start').hidden=true;
   if(brushState.on)setBrush(false);
   enableTools(false);
   if(finder.state==='sampling'){finder.state='idle';wantSkin=false;renderFinder();}
@@ -1739,7 +1757,7 @@ function buyLink(link,item,shade){
   if(!shop){link.removeAttribute('href');return link;}
   link.href=shopUrl(shop,item,shade);
   link.onclick=e=>{
-    count('buy',`${item.id}:${shade.variantId}`,{each:true});
+    count('buy',`${item.id}:${shade.variantId}`,{each:true});count('step','buy');
     if(embedded){
       try{window.parent.postMessage({type:'roja:buy',shop:shop.id,
         product:{id:item.id,name:item.name,type:item.type||item.kind},
