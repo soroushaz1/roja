@@ -1,17 +1,31 @@
 <!doctype html>
-<html lang="fa" dir="rtl" data-release="18">
+<html lang="fa" dir="rtl" data-release="19">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#140C11">
 <meta name="description" content="رُژا؛ آینهٔ زنده برای امتحان آرایش روی صورت خودت پیش از خرید، با براش پخش و محوکردن، استایل‌های آماده، پیدا کردن رنگ کرم‌پودر، تحلیل پوست با فیتزپاتریک و باومن و روتین مراقبت، و دیدن نتیجهٔ تقریبی عمل‌های زیبایی.">
 <title>رُژا | آینهٔ زنده</title>
+<link rel="canonical" href="https://pythonpath.ir/">
+<!-- The preview a link gets in Telegram, WhatsApp, Instagram and the like. -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="رُژا">
+<meta property="og:locale" content="fa_IR">
+<meta property="og:url" content="https://pythonpath.ir/">
+<meta property="og:title" content="رُژا | آرایش را پیش از خرید روی صورت خودت امتحان کن">
+<meta property="og:description" content="آینهٔ زنده در مرورگر: رنگ رژ، کرم‌پودر و سایه را روی صورت خودت ببین، نوع پوستت را بشناس و نتیجهٔ تقریبی عمل‌های زیبایی را ببین. تصویر از گوشی‌ات بیرون نمی‌رود.">
+<meta property="og:image" content="https://pythonpath.ir/icons/share.jpg">
+<meta property="og:image:type" content="image/jpeg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="آینهٔ رُژا با رژ قرمز روی صورت و پنل انتخاب رنگ">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="favicon.svg">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <meta name="mobile-web-app-capable" content="yes">
 <link rel="preload" href="fonts/Estedad-var.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="roja.css?v=18">
+<link rel="stylesheet" href="roja.css?v=19">
 </head>
 <body>
 
@@ -31,6 +45,7 @@
   <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></symbol>
   <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9.5 7V4.5h5V7M6 7l1 13h10l1-13"/></symbol>
   <symbol id="i-app" viewBox="0 0 24 24"><rect x="6.5" y="2.5" width="11" height="19" rx="2.5"/><path d="M12 7v6.5M9.4 11L12 13.6l2.6-2.6M10.5 18.2h3"/></symbol>
+  <symbol id="i-share" viewBox="0 0 24 24"><circle cx="18" cy="5.5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="18.5" r="2.5"/><path d="M8.2 10.8l7.6-4.1M8.2 13.2l7.6 4.1"/></symbol>
   <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7.5 10.5L12 15l4.5-4.5M4 20h16"/></symbol>
   <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M18.5 16.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"/></symbol>
   <symbol id="i-drop" viewBox="0 0 24 24"><path d="M12 3.5s6 6.4 6 10.5a6 6 0 0 1-12 0c0-4.1 6-10.5 6-10.5z"/></symbol>
@@ -187,6 +202,7 @@
         <button id="product-toggle" class="ghost"></button>
       </div>
       <button id="pin-shade" class="ghost wide" aria-pressed="false">مقایسهٔ این رنگ با رنگ دیگر</button>
+      <button id="multi-open" class="ghost wide" type="button">چند رنگ کنار هم</button>
 
       <section class="card" id="brush-card">
         <div class="card-head"><svg class="ico"><use href="#i-brush"/></svg><h3>براش پخش و محوکردن</h3></div>
@@ -214,6 +230,8 @@
         <div class="card-head"><svg class="ico"><use href="#i-sparkle"/></svg><h3>استایل‌های آماده</h3></div>
         <p class="help">یک ترکیب کامل را با یک لمس امتحان کن؛ بعد هر محصول را جدا عوض کن.</p>
         <div class="looks" id="looks"></div>
+        <p class="eyebrow mine-head" id="my-looks-head" hidden>استایل‌های من</p>
+        <div class="looks" id="my-looks"></div>
       </section>
 
       <div class="divider"></div>
@@ -223,6 +241,18 @@
         <button id="add-look" class="ghost">همه به سبد</button>
         <button id="clear-look" class="ghost">پاک‌کردن آرایش</button>
       </div>
+      <div class="row-actions">
+        <button id="save-look" class="ghost" type="button">ذخیرهٔ این ترکیب</button>
+        <button id="link-look" class="ghost" type="button">فرستادن لینک</button>
+      </div>
+      <form class="save-look" id="save-look-form" hidden>
+        <label for="look-name">اسم این ترکیب</label>
+        <div class="save-look-row">
+          <input id="look-name" type="text" maxlength="30" autocomplete="off" placeholder="مثلاً مهمانی شب" required>
+          <button class="primary" type="submit">ذخیره</button>
+          <button class="ghost" type="button" id="save-look-cancel">انصراف</button>
+        </div>
+      </form>
       <label class="check"><input id="natural-blend" type="checkbox" checked>حفظ بافت و سایه‌روشن پوست زیر رنگ</label>
       <p class="quiet" id="product-limitation"></p>
       <p class="quiet">رنگ روی صفحه با نور محیط، دوربین و رنگ طبیعی پوست تفاوت می‌کند.</p>
@@ -360,7 +390,9 @@
 
 <footer>
   <span>تصویر دوربین و عکس روی همین دستگاه پردازش می‌شود و ارسال یا ذخیره نمی‌شود.</span>
-  <span>رنگ‌ها و قیمت‌ها نمونه‌اند و سبد آزمایشی است؛ پرداختی ثبت نمی‌شود.</span>
+  <span>رنگ‌ها و قیمت‌ها نمونه‌اند؛ پرداختی در این صفحه انجام نمی‌شود.</span>
+  <span>فقط شمار ناشناس رنگ‌ها، استایل‌ها و عمل‌های امتحان‌شده ثبت می‌شود؛ بدون شناسه، کوکی یا نشانی.</span>
+  <nav class="footer-links" aria-label="صفحه‌ها"><a href="makeup/">آرایش</a><a href="procedures/">عمل‌های زیبایی</a><a href="faq/">پرسش‌های رایج</a><a href="privacy/">حریم خصوصی</a></nav>
 </footer>
 
 <dialog id="cart">
@@ -368,9 +400,17 @@
     <h2>سبد نمونه</h2>
     <button id="close" class="ghost">بستن</button>
   </div>
-  <p class="quiet">این سبد فقط برای امتحان تجربهٔ فروشگاه است. هیچ سفارشی ثبت نمی‌شود.</p>
+  <p class="quiet" id="cart-note">سبد روی همین دستگاه می‌ماند. پرداختی در این صفحه انجام نمی‌شود.</p>
   <div id="cart-items"></div>
   <div class="cart-total" id="cart-total" hidden><span>جمع نمونه</span><strong id="cart-sum"></strong></div>
+  <div class="order" id="order" hidden>
+    <p class="quiet" id="order-note"></p>
+    <div class="row-actions">
+      <button id="order-whatsapp" class="primary" type="button" hidden>سفارش در واتس‌اپ</button>
+      <button id="order-telegram" class="ghost" type="button" hidden>سفارش در تلگرام</button>
+      <button id="order-send" class="primary" type="button" hidden>فرستادن لیست سفارش</button>
+    </div>
+  </div>
 </dialog>
 
 <dialog id="gallery">
@@ -382,6 +422,37 @@
   <div class="compare-view" id="gallery-compare" hidden></div>
   <div class="shots" id="gallery-shots"></div>
 </dialog>
+
+<dialog id="multi" aria-labelledby="multi-title">
+  <div class="dialog-head">
+    <h2 id="multi-title">چند رنگ کنار هم</h2>
+    <button id="multi-close" class="ghost" type="button">بستن</button>
+  </div>
+  <p class="quiet" id="multi-help">تا چهار رنگ را انتخاب کن. از صورتت با هر رنگ یک عکس گرفته و کنار هم در یک تصویر چیده می‌شود که می‌توانی ذخیره یا ارسالش کنی. برای نتیجهٔ بهتر سرت را ثابت نگه دار یا تصویر را ثابت کن.</p>
+  <div id="multi-pick">
+    <div class="multi-shades" id="multi-shades" role="group" aria-label="رنگ‌ها"></div>
+    <div class="row-actions">
+      <button id="multi-run" class="primary" type="button">ساختن تصویر مقایسه</button>
+    </div>
+  </div>
+  <div id="multi-result" hidden>
+    <img id="multi-image" alt="">
+    <div class="row-actions">
+      <button id="multi-share" class="primary" type="button" hidden>ارسال</button>
+      <button id="multi-save" class="ghost" type="button">ذخیره</button>
+      <button id="multi-again" class="ghost" type="button">رنگ‌های دیگر</button>
+    </div>
+  </div>
+</dialog>
+
+<div class="tour" id="tour" role="dialog" aria-live="polite" aria-labelledby="tour-text" hidden>
+  <p id="tour-text"></p>
+  <div class="tour-bar">
+    <span class="quiet" id="tour-step"></span>
+    <button class="ghost" type="button" id="tour-skip">رد کردن</button>
+    <button class="primary" type="button" id="tour-next">بعدی</button>
+  </div>
+</div>
 
 <dialog id="app-dialog" aria-labelledby="app-title">
   <div class="dialog-head">
@@ -425,6 +496,6 @@
 })();
 </script>
 <script nomodule>document.getElementById('status').textContent='این مرورگر قدیمی است و این برنامه را اجرا نمی‌کند. آخرین نسخهٔ Safari یا Chrome را نصب کن.';</script>
-<script type="module" src="app.js?v=18"></script>
+<script type="module" src="app.js?v=19"></script>
 </body>
 </html>

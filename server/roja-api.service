@@ -9,6 +9,9 @@ ExecStart=/usr/local/bin/node /opt/roja-api/server/skin-api.mjs
 Environment=ROJA_PORT=51840
 Environment=ROJA_DB=/var/lib/roja-api/skin.db
 Environment=NODE_ENV=production
+# ROJA_STATS_KEY=… here unlocks reading the usage counts (stats.html). Kept on the
+# server only, never in the repository; without it the counts are written but unreadable.
+EnvironmentFile=-/etc/roja-api.env
 Restart=on-failure
 RestartSec=3
 # Its own throwaway user; it can write only its database directory.

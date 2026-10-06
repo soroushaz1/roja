@@ -1,5 +1,6 @@
-// Roja's one server-side part: keeping a skin check, when its owner asks, so a later
-// check can be compared with it. nginx serves the site and passes /api/skin here.
+// Roja's server-side part: keeping a skin check, when its owner asks, so a later check
+// can be compared with it, and the anonymous usage counts (stats.mjs). nginx serves the
+// site and passes /api/skin and /api/stats here.
 //
 // What is kept is the profile and the answers (skin.js record()), never a picture; no
 // name, address or account. A random key made on the visitor's device names its
@@ -11,6 +12,7 @@ import http from 'node:http';
 import {createHash,randomUUID} from 'node:crypto';
 import {DatabaseSync} from 'node:sqlite';
 import {questions,axes,concernNames} from '../skin.js';
+import {createStats} from './stats.mjs';
 
 const PORT=Number(process.env.ROJA_PORT||51840);
 const db=new DatabaseSync(process.env.ROJA_DB||'roja-skin.db');
@@ -93,8 +95,13 @@ const ownerOf=req=>{
   return typeof key==='string'&&/^[0-9a-f]{32}$/.test(key)?createHash('sha256').update(key).digest('hex'):null;
 };
 
+let stats=null;
 function handle(req,res){
   const url=new URL(req.url,'http://local');
+  if(url.pathname==='/api/stats')return void stats(req,res,url).catch(e=>{
+    if(e instanceof Invalid)send(res,400,{error:'invalid',field:e.message});
+    else{console.error(e);if(!res.headersSent)send(res,500,{error:'server'});}
+  });
   const path=url.pathname.replace(/^\/api\/skin/,'');
   if(!url.pathname.startsWith('/api/skin'))return send(res,404,{error:'not found'});
   const owner=ownerOf(req);
@@ -129,4 +136,5 @@ function handle(req,res){
   });
 }
 
+stats=createStats(db,{send,readJson,Invalid});
 http.createServer(handle).listen(PORT,'127.0.0.1',()=>console.log(`roja skin api on 127.0.0.1:${PORT}`));

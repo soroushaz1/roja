@@ -1,15 +1,17 @@
-import {products,categories,finishes,looks,byProduct} from './catalog.js?v=18';
-import {layerSpecs,createMaskPainter,renderFallback,createSmoother,landmarksByType,frameLandmarks,hexToRgb} from './makeup.js?v=18';
-import {createStage,layerModes} from './stage.js?v=18';
-import {controls,regions,controlLandmarks,controlRange,deformers,textureLayers} from './deform.js?v=18';
-import {procedures,byId,amountsFor,resolve,kinds} from './procedures.js?v=18';
-import {renderDebug,nearest} from './debug.js?v=18';
-import {createBrush,brushModes} from './brush.js?v=18';
-import {metrics,measure,points as placed,symmetry,pose as poseOf} from './measure.js?v=18';
-import {CANON,CANON_ASPECT,TRIANGLES} from './facemesh.js?v=18';
-import {createSkinScanner} from './skin-scan.js?v=18';
-import {createSkinPanel} from './skin-panel.js?v=18';
-import {skincareById} from './skin.js?v=18';
+import {products,categories,finishes,looks,byProduct} from './catalog.js?v=19';
+import {layerSpecs,createMaskPainter,renderFallback,createSmoother,landmarksByType,frameLandmarks,hexToRgb} from './makeup.js?v=19';
+import {createStage,layerModes} from './stage.js?v=19';
+import {controls,regions,controlLandmarks,controlRange,deformers,textureLayers} from './deform.js?v=19';
+import {procedures,byId,amountsFor,resolve,kinds} from './procedures.js?v=19';
+import {renderDebug,nearest} from './debug.js?v=19';
+import {createBrush,brushModes} from './brush.js?v=19';
+import {metrics,measure,points as placed,symmetry,pose as poseOf} from './measure.js?v=19';
+import {CANON,CANON_ASPECT,TRIANGLES} from './facemesh.js?v=19';
+import {createSkinScanner} from './skin-scan.js?v=19';
+import {createSkinPanel} from './skin-panel.js?v=19';
+import {skincareById} from './skin.js?v=19';
+import {count} from './usage.js?v=19';
+import {shop} from './shop.js?v=19';
 
 const $=id=>document.getElementById(id);
 // GitHub Pages ignores the ?v= query, and browsers and its CDN keep a page for up to ten
@@ -17,7 +19,7 @@ const $=id=>document.getElementById(id);
 // newer script, which would then look for elements that page does not have. Such a
 // page is loaded afresh, once; if it is still the old one, it says a new version is
 // on its way instead of failing.
-const RELEASE='18';
+const RELEASE='19';
 if(document.documentElement.dataset.release!==RELEASE){
   let tried=null;
   try{tried=sessionStorage.getItem('roja-reloaded');sessionStorage.setItem('roja-reloaded',RELEASE);}catch{}
@@ -199,7 +201,8 @@ function updateLook(){
     $('look-items').append(el('span',{class:'quiet',text:'بدون آرایش. یک محصول و رنگ انتخاب کن یا یک استایل آماده را بزن.'}));
   $('product-toggle').textContent=makeupState[product.id].enabled?'برداشتن از صورت':'گذاشتن روی صورت';
   $('product-toggle').setAttribute('aria-pressed',String(makeupState[product.id].enabled));
-  $('add-look').disabled=!products.some(p=>makeupState[p.id].enabled);
+  const any=products.some(p=>makeupState[p.id].enabled);
+  $('add-look').disabled=$('save-look').disabled=$('link-look').disabled=!any;
   if(mode==='makeup')updateTrayState();
 }
 function updateSelection(){
@@ -222,7 +225,7 @@ function select(id){
   const shade=product.shades.find(s=>s.id===id);
   if(!shade)throw new Error('Unknown shade');
   makeupState[product.id].shade=id;enableProduct(product);
-  updateSelection();
+  updateSelection();count('shade',id);
   return {product:product.id,id,variant:shade.variantId,name:shade.name};
 }
 function selectProduct(id,apply=true){
@@ -249,16 +252,18 @@ function selectProduct(id,apply=true){
 }
 function afterMakeupChange(look=true){
   if(look)updateLook();
+  saveSoon();
   invalidate({masks:true});
   updateSeam();
 }
 
 function applyLook(look){
+  count('look',looks.includes(look)?look.id:look.id?'mine':'link');
   for(const item of products)makeupState[item.id].enabled=false;
-  for(const [pid,shade,intensity,style] of look.items){
+  for(const [pid,shade,intensity,style,fade] of look.items){
     const item=byProduct(pid);if(!item)continue;
     const sid=shade==='auto'?(finder.result?.picks?.[pid]||makeupState[pid].shade):shade;
-    Object.assign(makeupState[pid],{shade:sid,intensity,enabled:true,fade:item.fade??45});
+    Object.assign(makeupState[pid],{shade:sid,intensity,enabled:true,fade:fade??item.fade??45});
     if(style)makeupState[pid].style=style;
   }
   pin=null;
@@ -276,14 +281,166 @@ function applyLook(look){
   }else toast(`استایل «${look.name}» روی صورت است. هر محصول را می‌توانی جدا عوض کنی.`);
 }
 function renderLooks(){
-  $('looks').replaceChildren(...looks.map(look=>{
-    const dots=el('span',{class:'dots'},...look.items.slice(0,6).map(([pid,sid])=>{
-      const item=byProduct(pid),shade=sid==='auto'?item.shades[Math.floor(item.shades.length/2)]:shadeOf(item,sid);
-      return el('i',{style:{background:shade.color}});
-    }));
-    return el('button',{class:'look-card',type:'button',onclick:()=>applyLook(look),data:{look:look.id}},
-      dots,el('strong',{text:look.name}),el('small',{text:look.description}));
+  $('looks').replaceChildren(...looks.map(look=>el('button',{class:'look-card',type:'button',onclick:()=>applyLook(look),data:{look:look.id}},
+    lookDots(look.items),el('strong',{text:look.name}),el('small',{text:look.description}))));
+  renderMyLooks();
+}
+
+/* ---- my looks, and a look as a link ------------------------------------ */
+// A look is a list of [product, shade, intensity, style, fade]: the same shape as the
+// ready-made ones, plus the edge. Kept on this device; a link carries it in the part
+// after # , which the browser never sends to the server.
+const MY_LOOKS='roja-looks';
+function currentItems(){
+  return products.filter(p=>makeupState[p.id].enabled).map(p=>{const st=makeupState[p.id];return [p.id,st.shade,st.intensity,st.style||'',st.fade];});
+}
+// Whatever came from storage or a link: only products and shades the catalogue has,
+// levels in range, one product of each kind.
+function cleanItems(items){
+  const out=[], kinds=new Set();
+  const level=v=>{v=Number(v);return Number.isFinite(v)?Math.round(Math.min(100,Math.max(0,v))):null;};
+  for(const raw of Array.isArray(items)?items:[]){
+    if(!Array.isArray(raw))continue;
+    const [pid,sid,intensity,style,fade]=raw, item=byProduct(pid);
+    if(!item||kinds.has(item.type)||!item.shades.some(x=>x.id===sid))continue;
+    kinds.add(item.type);
+    out.push([pid,sid,level(intensity)??item.intensity,item.styles?.some(x=>x.id===style)?style:'',level(fade)??item.fade??45]);
+  }
+  return out;
+}
+function myLooks(){
+  let list=[];
+  try{list=JSON.parse(localStorage.getItem(MY_LOOKS))||[];}catch{}
+  return (Array.isArray(list)?list:[]).map(l=>({id:String(l?.id||''),name:String(l?.name||'').slice(0,30),items:cleanItems(l?.items)}))
+    .filter(l=>l.id&&l.name&&l.items.length);
+}
+function storeMyLooks(list){
+  try{localStorage.setItem(MY_LOOKS,JSON.stringify(list));return true;}catch{return false;}
+}
+function lookDots(items){
+  return el('span',{class:'dots'},...items.slice(0,6).map(([pid,sid])=>{
+    const item=byProduct(pid),shade=sid==='auto'?item.shades[Math.floor(item.shades.length/2)]:shadeOf(item,sid);
+    return el('i',{style:{background:shade.color}});
   }));
+}
+function renderMyLooks(){
+  const list=myLooks();
+  $('my-looks-head').hidden=!list.length;
+  $('my-looks').replaceChildren(...list.map(look=>el('div',{class:'mine-card'},
+    el('button',{class:'look-card',type:'button',onclick:()=>applyLook(look),data:{look:look.id}},
+      lookDots(look.items),el('strong',{text:look.name}),el('small',{text:`${fa.format(look.items.length)} محصول`})),
+    el('button',{class:'look-del',type:'button','aria-label':`حذف استایل ${look.name}`,title:'حذف',text:'×',
+      onclick:()=>{storeMyLooks(myLooks().filter(l=>l.id!==look.id));renderMyLooks();toast(`«${look.name}» حذف شد.`);}}))));
+}
+function saveMyLook(name){
+  const items=currentItems();
+  if(!items.length){toast('روی صورت آرایشی نیست که ذخیره شود.');return false;}
+  const list=myLooks().filter(l=>l.name!==name);
+  list.unshift({id:Date.now().toString(36),name,items});
+  if(!storeMyLooks(list.slice(0,12))){toast('ذخیره ممکن نشد؛ حافظهٔ این مرورگر در دسترس نیست.');return false;}
+  renderMyLooks();
+  toast(`«${name}» در «استایل‌های من» ذخیره شد.`);
+  return true;
+}
+function lookLink(){
+  // The app's own pages live inside it; a link has to point at the site.
+  const base=!native&&/^https?:$/.test(location.protocol)?location.origin+location.pathname:'https://pythonpath.ir/';
+  return `${base}#look=${encodeURIComponent(currentItems().map(i=>i.join('.')).join('~'))}`;
+}
+async function sendLookLink(){
+  if(!currentItems().length){toast('روی صورت آرایشی نیست که لینکش فرستاده شود.');return;}
+  const url=lookLink(), text='این ترکیب آرایش را روی صورت خودت در آینهٔ رُژا امتحان کن:';
+  if(!native&&navigator.share){
+    try{await navigator.share({title:'رُژا',text,url});count('share','link',{each:true});return;}catch(e){if(e?.name==='AbortError')return;}
+  }
+  try{await navigator.clipboard.writeText(url);count('share','link',{each:true});toast('لینک این ترکیب کپی شد. هر کس بازش کند، همین آرایش روی صورت خودش می‌نشیند.');}
+  catch{toast('کپی لینک روی این مرورگر ممکن نشد.');}
+}
+// A link into the mirror, from a shared look or one of the site's own pages:
+//   #look=…        that look on the face
+//   #product=velvet  that product, on the face
+//   #procedure=rhinoplasty  that procedure, at its usual strength
+//   #skin          the skin check
+// Taken out of the address once used, so a reload does not apply it again over later
+// changes. Returns whether there was one.
+function lookFromLink(){
+  const m=/^#(look|product|procedure|skin)(?:=(.*))?$/.exec(location.hash);
+  if(!m)return false;
+  history.replaceState(null,'',location.pathname+location.search);
+  const [,kind,value='']=m;
+  if(kind==='skin'){setMode('skin');return true;}
+  if(kind==='product'){
+    if(byProduct(value)){setMode('makeup');selectProduct(value);}
+    return true;
+  }
+  if(kind==='procedure'){
+    if(byId(value)){setMode('procedure');if(!active.has(value))setStrength(value,60);showProcedure(value);}
+    return true;
+  }
+  let raw='';try{raw=decodeURIComponent(m[1]);}catch{}
+  const items=cleanItems(raw.split('~').map(part=>part.split('.')));
+  if(!items.length){toast('این لینک استایلی ندارد که روی آینه بنشیند.');return true;}
+  setMode('makeup');applyLook({name:'لینک',items});
+  return true;
+}
+
+/* ---- the first-visit tour ---------------------------------------------- */
+// Four short notes, each next to the control it is about, the first time the mirror
+// comes on. Skipped or finished, it does not come back.
+const TOUR='roja-tour';
+const tourSteps=[
+  ['shades','رنگ را از اینجا انتخاب کن؛ همان لحظه روی صورتت می‌نشیند.'],
+  ['tray','محصول را از اینجا عوض کن: رژ، سایه، خط چشم، کرم‌پودر و بقیه.'],
+  ['brush-toggle','با «براش» رنگ را روی صورت پخش، محو یا پاک کن.'],
+  ['compare','«مقایسه» خطی روی صورت می‌گذارد؛ بکشش تا با و بی آرایش را کنار هم ببینی.'],
+  ['snap','عکس بگیر تا ذخیره‌اش کنی یا برای دوستت بفرستی.']
+];
+let tourAt=-1;
+function tourSeen(){try{return localStorage.getItem(TOUR)==='done';}catch{return true;}}
+function startTour(){
+  if(tourAt>=0||tourSeen()||mode!=='makeup'||document.querySelector('dialog[open]'))return;
+  tourAt=0;showTourStep();
+}
+function tourTarget(){
+  for(;tourAt<tourSteps.length;tourAt++){
+    const t=$(tourSteps[tourAt][0]);
+    if(t&&t.offsetParent&&t.getClientRects().length)return t;
+  }
+  return null;
+}
+function showTourStep(){
+  document.querySelector('.tour-target')?.classList.remove('tour-target');
+  const t=tourTarget();
+  if(!t){endTour();return;}
+  t.classList.add('tour-target');
+  t.scrollIntoView({block:'nearest'});
+  $('tour-text').textContent=tourSteps[tourAt][1];
+  $('tour-step').textContent=`${fa.format(tourAt+1)} از ${fa.format(tourSteps.length)}`;
+  $('tour-next').textContent=tourAt===tourSteps.length-1?'تمام':'بعدی';
+  $('tour').hidden=false;
+  placeTour();
+}
+function placeTour(){
+  if(tourAt<0)return;
+  const t=$(tourSteps[tourAt][0]), box=$('tour');
+  if(!t)return;
+  // A toolbar button: beside the whole toolbar, so the note covers none of its buttons.
+  const r=(t.closest('#toolbar')||t).getBoundingClientRect(), b=box.getBoundingClientRect(), gap=10, vw=innerWidth, vh=innerHeight;
+  let top=r.bottom+gap, left=r.left+r.width/2-b.width/2;
+  if(top+b.height>vh-8)top=r.top-gap-b.height;
+  if(top<8)top=Math.min(vh-b.height-8,Math.max(8,r.top+r.height/2-b.height/2));
+  if(t.closest('#toolbar')){
+    const tr=t.getBoundingClientRect();
+    top=Math.min(vh-b.height-8,Math.max(8,tr.top+tr.height/2-b.height/2));
+    left=r.right+gap+b.width<vw-8?r.right+gap:r.left-gap-b.width;
+  }
+  box.style.top=`${Math.round(top)}px`;
+  box.style.left=`${Math.round(Math.min(vw-b.width-8,Math.max(8,left)))}px`;
+}
+function endTour(){
+  document.querySelector('.tour-target')?.classList.remove('tour-target');
+  $('tour').hidden=true;tourAt=-1;
+  try{localStorage.setItem(TOUR,'done');}catch{}
 }
 
 /* ---- the shade finder -------------------------------------------------- */
@@ -426,7 +583,7 @@ function renderActiveList(){
   }));
 }
 function setStrength(id,value){
-  if(value>0)active.set(id,value);else active.delete(id);
+  if(value>0){active.set(id,value);count('procedure',id);}else active.delete(id);
   $('procedure-reset').hidden=!anyProcedure();
   buildTray();renderActiveList();updateSeam();invalidate({masks:true,measure:true});
 }
@@ -934,7 +1091,7 @@ function onTracker(d){
 function ensureTracker(){
   if(tracker||trackerStarting)return;
   let w=null;
-  try{w=new Worker(new URL(`face-worker.js?v=18${gpuQuery}`,import.meta.url));}catch(e){perf.lastError=`worker: ${e.message}`;}
+  try{w=new Worker(new URL(`face-worker.js?v=19${gpuQuery}`,import.meta.url));}catch(e){perf.lastError=`worker: ${e.message}`;}
   if(!w){useTracker('page','no worker');return;}
   ready=false;busy=false;
   tracker={kind:'worker',post:(m,transfer)=>w.postMessage(m,transfer),close:()=>w.terminate()};
@@ -954,7 +1111,7 @@ async function useTracker(kind,reason){
   const token=++trackerGeneration;
   try{
     const Vision=await import('./vendor/vision_bundle.mjs');
-    await import('./face-core.js?v=18');
+    await import('./face-core.js?v=19');
     const core=self.rojaFaceCore(Vision,new URL('./',import.meta.url).href);
     const found=await core.init();
     if(token!==trackerGeneration){core.close();return;}
@@ -992,6 +1149,7 @@ function goLive(){
   native?.keepScreenOn?.(true);
   cancelAnimationFrame(raf);raf=requestAnimationFrame(frame);
   updateSeam();invalidate({masks:true,measure:true});
+  setTimeout(startTour,1200);
 }
 
 function stop(message='دوربین خاموش شد.'){
@@ -1336,12 +1494,14 @@ function toggleFreeze(){
   status(statusText());
 }
 
-async function snapshot(){
-  if(!source)return;
+// The mirror as it is now, as a canvas: what a snapshot saves and what the several-shade
+// comparison is cut from. Null when there is nothing to take.
+async function capture({marks=true}={}){
+  if(!source)return null;
   const {w,h}=frameSize();
   // Natively, the picture comes from the renderer, as drawn.
   const picture=source.native?await nativePicture():null;
-  if(source.native&&!picture){toast('عکس گرفته نشد. دوباره امتحان کن.');return;}
+  if(source.native&&!picture)return null;
   const c=document.createElement('canvas');c.width=w;c.height=h;
   const x=c.getContext('2d');
   // Saved as seen: the preview is mirrored, so the saved picture is too.
@@ -1354,7 +1514,7 @@ async function snapshot(){
     x.drawImage(overlay,0,0,w,h);x.globalCompositeOperation='source-over';
   }
   x.restore();
-  if(seamOn){
+  if(seamOn&&marks){
     const sx=seam*w,s=Math.max(1,w/640);
     x.fillStyle='#D1AC3A';x.fillRect(sx-s,0,2*s,h);
     const [before,after]=seamLabels();
@@ -1363,20 +1523,123 @@ async function snapshot(){
       x.fillStyle='#140C11CC';x.fillRect(align==='left'?px-6*s:px-m-6*s,h-30*s,m+12*s,22*s);x.fillStyle='#F4E3B0';x.fillText(text,px,h-12*s);};
     tag(before,12*s,'left');tag(after,w-12*s,'right');
   }
-  const s=Math.max(1,w/640);
+  if(marks)brandMark(x,w,Math.max(1,w/640));
+  return c;
+}
+function brandMark(x,w,s){
   x.font=`800 ${15*s}px Estedad, Tahoma, sans-serif`;x.fillStyle='#FFFFFFB0';x.textAlign='right';x.textBaseline='top';x.direction='rtl';
   x.fillText('رُژا',w-12*s,10*s);
+  // Where a shared picture came from, small enough not to sit on the look.
+  x.font=`500 ${10*s}px Estedad, Tahoma, sans-serif`;x.fillStyle='#FFFFFF90';x.direction='ltr';
+  x.fillText('pythonpath.ir',w-12*s,30*s);
+}
+async function snapshot(){
+  const c=await capture();
+  if(!c){if(source)toast('عکس گرفته نشد. دوباره امتحان کن.');return;}
   const label=mode==='skin'?'تحلیل پوست':mode==='procedure'
     ?([...active.keys()].map(id=>byId(id).short).join('، ')||'بدون عمل')
     :(products.filter(p=>makeupState[p.id].enabled).map(p=>`${p.name} ${shadeOf(p,makeupState[p.id].shade).name}`).join('، ')||'بدون آرایش');
-  c.toBlob(blob=>{
-    if(!blob){toast('ذخیرهٔ عکس روی این مرورگر ممکن نشد.');return;}
-    shots.unshift({url:URL.createObjectURL(blob),blob,label,time:new Date(),picked:false});
-    while(shots.length>12){URL.revokeObjectURL(shots.pop().url);}
-    $('shots-count').textContent=fa.format(shots.length);
-    $('flash').classList.remove('on');void $('flash').offsetWidth;$('flash').classList.add('on');
-    toast('عکس گرفته شد. از «عکس‌ها» می‌توانی مقایسه یا ذخیره‌اش کنی.');
-  },'image/png');
+  const shot=await addShot(c,label);
+  if(!shot)return;
+  $('flash').classList.remove('on');void $('flash').offsetWidth;$('flash').classList.add('on');
+  toast('عکس گرفته شد. از «عکس‌ها» می‌توانی مقایسه، ذخیره یا ارسالش کنی.');
+}
+async function addShot(c,label){
+  const blob=await new Promise(resolve=>c.toBlob(resolve,'image/png'));
+  if(!blob){toast('ذخیرهٔ عکس روی این مرورگر ممکن نشد.');return null;}
+  const shot={url:URL.createObjectURL(blob),blob,label,time:new Date(),picked:false};
+  shots.unshift(shot);
+  while(shots.length>12){URL.revokeObjectURL(shots.pop().url);}
+  $('shots-count').textContent=fa.format(shots.length);
+  return shot;
+}
+
+/* ---------- several shades side by side --------------------------------- */
+// One picture of the face in each chosen shade of the current product, cut around the
+// face and laid out together: the comparison a counter gives by swatching on the hand.
+const multi={picked:[],shot:null,busy:false};
+const nextFrame=()=>new Promise(resolve=>requestAnimationFrame(resolve));
+async function rendered(){
+  for(let i=0;i<40&&masksDirty;i++)await nextFrame();
+  await nextFrame();await nextFrame();
+  if(source?.native)await new Promise(resolve=>setTimeout(resolve,350));
+}
+function openMulti(){
+  const list=product.shades, at=list.findIndex(s=>s.id===selected().id);
+  multi.picked=[0,1,2,3].map(i=>list[(at+i)%list.length].id).filter((id,i,a)=>a.indexOf(id)===i);
+  renderMulti();
+  $('multi-pick').hidden=false;$('multi-result').hidden=true;
+  $('multi').showModal();
+}
+function renderMulti(){
+  $('multi-shades').replaceChildren(...product.shades.map(shade=>el('button',{type:'button','aria-pressed':String(multi.picked.includes(shade.id)),
+    onclick:()=>{
+      const i=multi.picked.indexOf(shade.id);
+      if(i>=0)multi.picked.splice(i,1);else{multi.picked.push(shade.id);if(multi.picked.length>4)multi.picked.shift();}
+      renderMulti();
+    }},el('i',{style:{background:swatchStyle(shade)}}),shade.name)));
+  $('multi-run').disabled=multi.picked.length<2;
+  $('multi-run').textContent=`ساختن تصویر مقایسه (${fa.format(multi.picked.length)} رنگ)`;
+}
+// The face's box in the saved (mirrored) picture, widened and made 3:4.
+function faceBox(w,h){
+  let x0=1,x1=0,y0=1,y1=0;
+  for(const l of landmarks){x0=Math.min(x0,1-l.x);x1=Math.max(x1,1-l.x);y0=Math.min(y0,l.y);y1=Math.max(y1,l.y);}
+  const cx=(x0+x1)/2*w, cy=(y0+y1)/2*h;
+  let bh=(y1-y0)*h*1.45, bw=bh*3/4;
+  bw=Math.max(bw,(x1-x0)*w*1.35);bh=bw*4/3;
+  const fit=Math.min(1,w/bw,h/bh);bw*=fit;bh*=fit;
+  return {x:Math.min(w-bw,Math.max(0,cx-bw/2)),y:Math.min(h-bh,Math.max(0,cy-bh/2)),w:bw,h:bh};
+}
+async function runMulti(){
+  if(multi.busy)return;
+  if(!source||!landmarks){toast('اول دوربین را روشن کن یا عکسی انتخاب کن تا صورت پیدا شود.');return;}
+  multi.busy=true;$('multi-run').disabled=true;
+  const state=makeupState[product.id], kept={...state}, keptEnabled=products.filter(p=>makeupState[p.id].enabled).map(p=>p.id);
+  // Each picture whole, without the seam of a comparison that may be on.
+  const keptSeam={compare,pin};compare=false;pin=null;updateSeam();
+  const tiles=[];
+  try{
+    for(const sid of multi.picked){
+      state.shade=sid;enableProduct(product);updateSelection();
+      await rendered();
+      const c=await capture({marks:false});
+      if(!c||!landmarks)throw new Error('lost');
+      tiles.push({canvas:c,box:faceBox(c.width,c.height),shade:shadeOf(product,sid)});
+    }
+  }catch{toast('تصویر مقایسه ساخته نشد. صورت را روبه‌روی دوربین نگه دار و دوباره امتحان کن.');}
+  finally{
+    Object.assign(state,kept);
+    for(const p of products)makeupState[p.id].enabled=keptEnabled.includes(p.id);
+    ({compare,pin}=keptSeam);updatePinButton();
+    updateSelection();
+    multi.busy=false;renderMulti();
+  }
+  if(tiles.length!==multi.picked.length)return;
+  const cols=tiles.length===4?2:tiles.length, rows=Math.ceil(tiles.length/cols);
+  const tw=360, th=480, bar=44, pad=8;
+  const c=document.createElement('canvas');c.width=cols*tw+(cols+1)*pad;c.height=rows*(th+bar)+(rows+1)*pad;
+  const x=c.getContext('2d');
+  x.fillStyle='#140C11';x.fillRect(0,0,c.width,c.height);
+  tiles.forEach((t,i)=>{
+    const col=cols-1-(i%cols), row=Math.floor(i/cols);       // right to left, as the page reads
+    const left=pad+col*(tw+pad), top=pad+row*(th+bar+pad);
+    x.drawImage(t.canvas,t.box.x,t.box.y,t.box.w,t.box.h,left,top,tw,th);
+    x.fillStyle='#1D1319';x.fillRect(left,top+th,tw,bar);
+    x.fillStyle=t.shade.color;x.beginPath();x.arc(left+tw-24,top+th+bar/2,11,0,Math.PI*2);x.fill();
+    x.fillStyle='#F6ECF1';x.font='600 16px Estedad, Tahoma, sans-serif';x.textAlign='right';x.textBaseline='middle';x.direction='rtl';
+    x.fillText(t.shade.name,left+tw-44,top+th+bar/2);
+    x.fillStyle='#9A8591';x.font='12px Estedad, Tahoma, sans-serif';x.textAlign='left';x.direction='ltr';
+    x.fillText(`${product.code} / ${t.shade.variantId}`,left+12,top+th+bar/2);
+  });
+  brandMark(x,c.width,1);
+  const shot=await addShot(c,`${product.name}: ${tiles.map(t=>t.shade.name).join('، ')}`);
+  if(!shot)return;
+  multi.shot=shot;shot.grid=true;
+  $('multi-image').src=shot.url;$('multi-image').alt=shot.label;
+  $('multi-share').hidden=!canShare(shot);
+  $('multi-pick').hidden=true;$('multi-result').hidden=false;
+  if(!$('multi').open)$('multi').showModal();
 }
 function renderGallery(){
   const list=$('gallery-shots');
@@ -1396,12 +1659,24 @@ function renderGallery(){
       el('div',{class:'shot-bar'},el('span',{text:`${time.format(shot.time)} · ${shot.label}`,title:shot.label}),
         el('a',{href:shot.url,download:`roja-${i+1}.png`,'aria-label':'ذخیرهٔ عکس',title:'ذخیره',
           onclick:e=>{if(native){e.preventDefault();saveBlob(shot.blob,`roja-${Date.now()}.png`);}}},icon('i-download')),
+        ...(canShare(shot)?[el('button',{type:'button','aria-label':'اشتراک‌گذاری عکس',title:'اشتراک',onclick:()=>shareShot(shot)},icon('i-share'))]:[]),
         el('button',{type:'button','aria-label':'حذف عکس',title:'حذف',onclick:()=>{URL.revokeObjectURL(shot.url);shots.splice(shots.indexOf(shot),1);
           $('shots-count').textContent=fa.format(shots.length);renderGallery();}},icon('i-trash'))));
   }));
   const picked=shots.filter(s=>s.picked);
   $('gallery-compare').hidden=picked.length!==2;
   if(picked.length===2)$('gallery-compare').replaceChildren(...picked.map(s=>el('figure',{},el('img',{src:s.url,alt:s.label}),el('figcaption',{text:s.label}))));
+}
+// Straight to Instagram, Telegram, WhatsApp… through the phone's own share sheet, where
+// the browser can hand over a file (most phones; not the Android app's WebView).
+function shotFile(shot){return shot.file||=new File([shot.blob],`roja-${shot.time.getTime()}.png`,{type:'image/png'});}
+function canShare(shot){try{return !native&&!!navigator.canShare?.({files:[shotFile(shot)]});}catch{return false;}}
+async function shareShot(shot){
+  try{
+    await navigator.share({files:[shotFile(shot)],title:'رُژا',text:`${shot.label}، امتحان‌شده در آینهٔ رُژا: https://pythonpath.ir/`});
+    count('share',shot.grid?'multi':'shot',{each:true});
+  }
+  catch(e){if(e?.name!=='AbortError')toast('اشتراک‌گذاری ممکن نشد. عکس را ذخیره کن و از گالری بفرست.');}
 }
 // A browser downloads the file; the Android app's WebView cannot download a blob:
 // URL, so there the bytes go to the app, which saves them to the gallery or Downloads.
@@ -1434,9 +1709,11 @@ function renderLights(){
 function addToCart(item,shade,quiet=false){
   const key=`${item.id}:${shade.variantId}`;
   cart.set(key,(cart.get(key)||0)+1);renderCart();
+  count('cart',key,{each:true});
   if(!quiet)toast(`${item.name} ${shade.name} به سبد نمونه اضافه شد.`);
 }
 function renderCart(){
+  saveSoon();renderOrder();
   $('count').textContent=fa.format([...cart.values()].reduce((a,b)=>a+b,0));
   $('cart-items').replaceChildren();
   if(!cart.size){
@@ -1458,6 +1735,92 @@ function renderCart(){
       el('button',{class:'ghost',type:'button','aria-label':`حذف ${item.name} ${shade.name}`,text:'حذف',onclick:()=>{cart.delete(key);renderCart();}})));
   }
   $('cart-total').hidden=false;$('cart-sum').textContent=toman(sum);
+}
+function cartLines(){
+  return [...cart].map(([key,qty])=>{
+    const [pid,sid]=key.split(':');
+    const item=byProduct(pid)||skincareById(pid), shade=item.shades.find(s=>s.variantId===sid);
+    return {item,shade,qty,sid};
+  });
+}
+
+/* ---------- ordering ---------------------------------------------------- */
+// The cart goes to the shop as a message in WhatsApp or Telegram (shop.js says where),
+// written out in full so the shop can answer it as it is. Nothing is stored or paid here.
+function orderText(){
+  const lines=cartLines();
+  const sum=lines.reduce((a,l)=>a+l.item.price*l.qty,0);
+  return ['سلام، این سفارش از آینهٔ رُژا است:',
+    ...lines.map((l,i)=>`${fa.format(i+1)}. ${l.item.name}، ${l.shade.name}${l.item.code?` (${l.item.code} / ${fa.format(Number(l.sid))})`:''} × ${fa.format(l.qty)}: ${toman(l.item.price*l.qty)}`),
+    `جمع: ${toman(sum)}`,
+    'لطفاً موجودی و هزینهٔ ارسال را اعلام کنید.'].join('\n');
+}
+function renderOrder(){
+  const any=cart.size>0, wa=/^\d{8,15}$/.test(shop.whatsapp), tg=/^[A-Za-z]\w{3,31}$/.test(shop.telegram);
+  $('order').hidden=!any;
+  $('order-whatsapp').hidden=!wa;$('order-telegram').hidden=!tg;$('order-send').hidden=wa||tg;
+  $('order-note').textContent=wa||tg
+    ?'سفارش به‌صورت پیام آماده در واتس‌اپ یا تلگرام فروشگاه باز می‌شود؛ بفرستش تا موجودی و هزینهٔ ارسال را بگویند.'
+    :'لیست سفارش را برای فروشگاه یا هر کس دیگری بفرست.';
+}
+// A browser opens it in a new tab; the Android app hands any address that is not its
+// own to the phone, which opens WhatsApp or Telegram.
+function openOutside(url){
+  if(native){location.href=url;return;}
+  if(!window.open(url,'_blank','noopener'))location.href=url;
+}
+async function copyText(text){try{await navigator.clipboard.writeText(text);return true;}catch{return false;}}
+$('order-whatsapp').onclick=()=>{
+  count('order','whatsapp',{each:true});
+  openOutside(`https://wa.me/${shop.whatsapp}?text=${encodeURIComponent(orderText())}`);
+};
+// A Telegram link cannot carry the text to a person, so it goes on the clipboard first.
+$('order-telegram').onclick=async()=>{
+  count('order','telegram',{each:true});
+  const copied=await copyText(orderText());
+  toast(copied?'متن سفارش کپی شد؛ در گفت‌وگوی تلگرام بچسبان و بفرست.':'تلگرام باز می‌شود؛ متن سفارش کپی نشد، لطفاً اقلام را بنویس.');
+  setTimeout(()=>openOutside(`https://t.me/${shop.telegram}`),copied?600:1500);
+};
+$('order-send').onclick=async()=>{
+  const text=orderText();
+  if(!native&&navigator.share){
+    try{await navigator.share({title:'سفارش رُژا',text});count('order','share',{each:true});return;}catch(e){if(e?.name==='AbortError')return;}
+  }
+  if(await copyText(text)){count('order','share',{each:true});toast('لیست سفارش کپی شد.');}
+  else toast('کپی روی این مرورگر ممکن نشد.');
+};
+
+/* ---------- remembered between visits ----------------------------------- */
+// The look on the face and the sample cart stay on this device, in its local storage,
+// so a reload or the next visit starts where the last one stopped. Nothing here leaves
+// the device. A saved product or shade the catalogue no longer has is skipped.
+const SAVED='roja-saved';
+let saveTimer=0;
+function saveSoon(){clearTimeout(saveTimer);saveTimer=setTimeout(saveNow,400);}
+function saveNow(){
+  clearTimeout(saveTimer);
+  try{localStorage.setItem(SAVED,JSON.stringify({v:1,product:product.id,makeup:makeupState,cart:[...cart]}));}catch{}
+}
+function restoreSaved(){
+  let saved=null;
+  try{saved=JSON.parse(localStorage.getItem(SAVED));}catch{}
+  if(saved?.v!==1)return false;
+  const level=(v,fallback)=>Number.isFinite(v)&&v>=0&&v<=100?v:fallback;
+  for(const [pid,s] of Object.entries(saved.makeup||{})){
+    const item=byProduct(pid), state=makeupState[pid];
+    if(!item||!state||!s||!item.shades.some(x=>x.id===s.shade))continue;
+    state.shade=s.shade;state.enabled=!!s.enabled;
+    state.intensity=level(s.intensity,state.intensity);state.fade=level(s.fade,state.fade);
+    if(item.styles?.some(x=>x.id===s.style))state.style=s.style;
+  }
+  if(byProduct(saved.product)){product=byProduct(saved.product);category=product.category;}
+  for(const [key,qty] of Array.isArray(saved.cart)?saved.cart:[]){
+    const [pid,sid]=String(key).split(':');
+    const item=byProduct(pid)||skincareById(pid);
+    if(item?.shades.some(s=>s.variantId===sid)&&Number.isInteger(qty)&&qty>0&&qty<100)cart.set(key,qty);
+  }
+  // Worth a word only when it differs from a first visit: more than the starting lipstick, or a cart.
+  return cart.size>0||products.some(p=>makeupState[p.id].enabled!==(p.id==='velvet'));
 }
 
 /* ---------- the skin check ---------------------------------------------- */
@@ -1483,11 +1846,11 @@ $('shades').addEventListener('keydown',e=>{
 });
 $('intensity').oninput=()=>{
   makeupState[product.id].intensity=Number($('intensity').value);
-  $('amount').textContent=pct($('intensity').value);invalidate({masks:true});
+  $('amount').textContent=pct($('intensity').value);invalidate({masks:true});saveSoon();
 };
 $('fade').oninput=()=>{
   makeupState[product.id].fade=Number($('fade').value);
-  $('fade-amount').textContent=pct($('fade').value);invalidate({masks:true});
+  $('fade-amount').textContent=pct($('fade').value);invalidate({masks:true});saveSoon();
 };
 $('natural-blend').onchange=()=>invalidate({masks:true});
 $('product-toggle').onclick=()=>{
@@ -1502,6 +1865,28 @@ $('add-look').onclick=()=>{
 };
 $('clear-look').onclick=()=>{for(const item of products)makeupState[item.id].enabled=false;pin=null;updatePinButton();afterMakeupChange();};
 $('pin-shade').onclick=togglePin;
+$('multi-open').onclick=openMulti;
+$('multi-run').onclick=runMulti;
+$('multi-close').onclick=()=>$('multi').close();
+$('multi-again').onclick=()=>{$('multi-pick').hidden=false;$('multi-result').hidden=true;};
+$('multi-save').onclick=()=>{if(multi.shot)saveBlob(multi.shot.blob,`roja-${Date.now()}.png`);};
+$('multi-share').onclick=()=>{if(multi.shot)shareShot(multi.shot);};
+$('save-look').onclick=()=>{
+  if(!currentItems().length){toast('روی صورت آرایشی نیست که ذخیره شود.');return;}
+  $('save-look-form').hidden=false;$('look-name').value='';$('look-name').focus();
+};
+$('save-look-cancel').onclick=()=>{$('save-look-form').hidden=true;};
+$('save-look-form').onsubmit=e=>{
+  e.preventDefault();
+  const name=$('look-name').value.trim().slice(0,30);
+  if(name&&saveMyLook(name))$('save-look-form').hidden=true;
+};
+$('link-look').onclick=sendLookLink;
+window.addEventListener('hashchange',lookFromLink);
+$('tour-next').onclick=()=>{tourAt++;showTourStep();};
+$('tour-skip').onclick=endTour;
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&tourAt>=0)endTour();});
+window.addEventListener('resize',placeTour);
 $('finder-run').onclick=runFinder;
 $('basket').onclick=()=>{renderCart();$('cart').showModal();};
 $('close').onclick=()=>$('cart').close();
@@ -1515,9 +1900,11 @@ if(!native&&!iOS){
   $('welcome-app').hidden=!android;
   $('app-qr').hidden=android;                 // on the phone itself there is nothing to scan
 }
+// The reading pages are the website's, not the app's: in the app they open in the browser.
+if(native)document.querySelectorAll('.footer-links a').forEach(a=>{a.href='https://pythonpath.ir/'+a.getAttribute('href');});
 $('app-open').onclick=$('welcome-app-open').onclick=()=>$('app-dialog').showModal();
 $('app-close').onclick=()=>$('app-dialog').close();
-for(const dialog of [$('cart'),$('gallery'),$('app-dialog')])dialog.addEventListener('click',e=>{if(e.target===dialog)dialog.close();});
+for(const dialog of [$('cart'),$('gallery'),$('app-dialog'),$('multi')])dialog.addEventListener('click',e=>{if(e.target===dialog)dialog.close();});
 
 $('strength').oninput=()=>{
   const value=Number($('strength').value);
@@ -1703,8 +2090,9 @@ document.addEventListener('keydown',e=>{
 // The seam is positioned in pixels, so it has to be replaced when the box changes.
 window.addEventListener('resize',()=>{if(seamOn)placeSeam();});
 document.addEventListener('fullscreenchange',()=>{if(seamOn)placeSeam();});
+document.addEventListener('visibilitychange',()=>{if(document.hidden)saveNow();});
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&source?.kind==='camera')stop('با خارج‌شدن از صفحه، دوربین خاموش شد.');});
-window.addEventListener('pagehide',()=>{stop();if(tracker){tracker.close();tracker=null;ready=false;}});
+window.addEventListener('pagehide',()=>{saveNow();stop();if(tracker){tracker.close();tracker=null;ready=false;}});
 $('start').onclick=start;
 $('photo-input').onchange=()=>{const file=$('photo-input').files[0];$('photo-input').value='';openPhoto(file);};
 $('stop').onclick=()=>stop(source?.kind==='photo'?'عکس بسته شد.':'دوربین خاموش شد.');
@@ -1715,17 +2103,20 @@ viewport.addEventListener('drop',e=>{const file=[...e.dataTransfer.files].find(f
 renderBrushModes();
 setRange('brush-size',brushState.size);$('brush-size-amount').textContent=pct(brushState.size);
 renderLooks();renderLights();
+const restored=restoreSaved();
 selectProduct(product.id,false);
 setMode('makeup');
 renderCart();updateBrushInfo();
 placeSeam();
 document.querySelectorAll('input[type=range]').forEach(paintRange);
+if(!lookFromLink()&&restored)toast('آرایش و سبد دفعهٔ قبل برگشت. «پاک‌کردن آرایش» همه را از صورت برمی‌دارد.');
 
 // The Android back button: close whatever is open on top first. Returns whether it
 // did anything, so the app knows when to leave instead.
 window.rojaBack=()=>{
   const dialog=document.querySelector('dialog[open]');
   if(dialog){dialog.close();return true;}
+  if(tourAt>=0){endTour();return true;}
   if(!$('light-menu').hidden){$('light-menu').hidden=true;$('light-toggle').setAttribute('aria-expanded','false');return true;}
   if(brushState.on){setBrush(false);return true;}
   if(document.fullscreenElement){document.exitFullscreen?.();return true;}

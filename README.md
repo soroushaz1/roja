@@ -52,16 +52,30 @@ satin, cream, gloss, shimmer, metallic, dewy) and a sample price.
   suggests the nearest foundation, skin tint and concealer shades, with an undertone
   estimate. Looks that include a skin product use it automatically.
 - **Looks.** Six ready-made combinations (natural, office, evening, smoky, bridal, bold lip)
-  in one tap; each product can then be changed on its own.
+  in one tap; each product can then be changed on its own. The combination on the face
+  can be saved under a name of your own ("my looks", kept on this device), or sent as a
+  link: whoever opens it gets the same look on their own face. The look travels in the
+  part of the address after `#`, which the browser never sends to the server.
 - **Compare.** A seam across the face: with and without makeup, or — after pinning a
-  shade — two shades of the same product side by side.
+  shade — two shades of the same product side by side. "Several shades" takes the face
+  in up to four shades of the current product and lays them out in one picture, cut
+  around the face, to save or send.
 - **Lighting preview.** See the look under window daylight, golden-hour sun, office
   fluorescent light, a warm evening room or a camera flash.
 - **Photos.** Use a photo instead of the camera (pick a file or drop it on the mirror), and
-  take snapshots of the mirror to compare two of them later or save them. Snapshots stay
-  in the page's memory until you save them.
-- **Sample cart** with quantities, prices and a total; "add the whole look" puts every
-  product on the face in the cart. No order is ever placed.
+  take snapshots of the mirror to compare two of them later, save them, or send them
+  through the phone's share sheet (Instagram, Telegram, WhatsApp…) where the browser
+  allows it. Snapshots stay in the page's memory until you save or share them.
+- **Cart** with quantities, prices and a total; "add the whole look" puts every product
+  on the face in the cart. An order goes to the shop as a ready-written message in
+  WhatsApp or Telegram (the shop's number and username are set in `shop.js`; Telegram
+  cannot take the text in a link, so it is copied first). With neither set, the order
+  is offered as text to share or copy. Nothing is paid or stored on the site.
+- **Remembered** — the look on the face and the cart are kept in the browser's local
+  storage, so a reload or the next visit starts where the last one stopped.
+- **First visit.** When the mirror first comes on, five short notes point at the shades,
+  the products, the brush, compare and the snapshot button. Skipped or finished, they do
+  not come back.
 
 **عمل‌های زیبایی — procedures.** Seventeen procedures in six regions, each a set of weights
 over a shared field of localised deformers: rhinoplasty (natural, semi-fantasy or fantasy),
@@ -155,6 +169,14 @@ scores) in the panel or on the mirror, and an export of all of it as JSON.
 
 No build step, no framework, no bundler. Plain ES modules served as files.
 
+**Reading pages** — `procedures/<id>/`, `makeup/<id>/`, an index of each, `faq/`, `privacy/`,
+`sitemap.xml` and `robots.txt` are plain HTML made by `tools/build-pages.mjs` from
+`procedures.js` and `catalog.js`, so search engines (and anyone without a camera) can find
+each procedure and product. They are committed like the rest of the site; run the tool
+again after changing either file (`tools/deploy.sh` refuses to deploy stale ones). Each
+page leads into the mirror with that item chosen, through the address: `#product=velvet`,
+`#procedure=rhinoplasty`, `#skin`, or `#look=…` for a shared look.
+
 ## Privacy
 
 The camera frame, or the photo you pick, is processed on the device and never sent or
@@ -163,7 +185,17 @@ page until you save it or close the page), while the shade finder runs a few sma
 patches that the face worker averages into one colour, and while the skin check measures,
 the face cut out of the frame, reduced on the page to a few numbers and let go.
 
-The one thing that can leave the device is a skin check result, and only when you tick the
+The look you put together, your saved looks and the sample cart are kept in the browser's
+own storage on this device and never sent anywhere.
+
+Anonymous usage counts leave the device in batches: which shades, looks and procedures
+were tried, what went in the cart, how often something was shared or ordered — pairs
+like `shade vlv-3`. The server (`server/stats.mjs`) checks each against the catalogue
+and keeps only a total per item per day: no key, cookie, address or time of day, and
+nginx keeps no access log for it. Nothing is counted from the Android app or a
+development server.
+
+The other thing that can leave the device is a skin check result, and only when you tick the
 box and press save: its scores and your answers, no picture, no name or account. A random key
 made on your device (kept in its local storage, sent in a request header) names your results
 on the server; only a hash of it is stored, and the same screen deletes everything kept
@@ -226,7 +258,17 @@ Keyboard: **B** brush, **[ ]** brush size, **Ctrl+Z** undo a stroke, **C** compa
 The site runs at [pythonpath.ir](https://pythonpath.ir/) (204.48.27.227, Ubuntu, nginx), with
 `www.` redirected to it. nginx serves the files and passes `/api/skin` to
 `server/skin-api.mjs`, a small Node service (no dependencies; `node:sqlite`) that keeps skin
-check results; it rebuilds every record from the fields it allows and stores nothing else.
+check results and the anonymous usage counts (`/api/stats`); it rebuilds every record
+from the fields it allows and stores nothing else.
+
+The counts are read on `stats.html`, with a key set on the server only:
+
+```bash
+echo "ROJA_STATS_KEY=$(openssl rand -hex 16)" > /etc/roja-api.env && chmod 600 /etc/roja-api.env
+systemctl restart roja-api
+```
+
+Without it the counts are still kept, but nobody can read them.
 
 ```bash
 tools/deploy.sh             # the working copy to the server: site, API, unit, nginx site
