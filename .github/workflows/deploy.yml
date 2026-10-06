@@ -51,10 +51,10 @@ jobs:
           echo "::error::Set the ROJA_DEPLOY_KEY and ROJA_KNOWN_HOSTS repository secrets (see the top of .github/workflows/deploy.yml)."
           exit 1
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # deploy.sh runs the skin checks and the page check with Node before sending anything.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
 
