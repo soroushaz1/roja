@@ -229,7 +229,7 @@ const LIPS=[61,0,291,17,40,270,91,321];
     // People shut one eye to draw liner. A shut lid folds the lash line onto the lower
     // one, and anything drawn between them smears across the eye.
     const blink=await page.evaluate(async()=>{
-      const m=await import('./makeup.js?v=19');
+      const m=await import('./makeup.js?v=20');
       const W=640,H=480,lm=window.testLandmarks;
       const eye=m.eyeContours[0],n=eye.upper.length;
       // Which half of the frame this eye sits on, measured against the nose.

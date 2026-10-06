@@ -3,6 +3,6 @@
 //   telegram — the username without @: 'roja_shop'
 // Left empty, the cart offers the order as text to share or copy instead.
 export const shop={
-  whatsapp:'',
-  telegram:''
+  whatsapp:'989116571248',
+  telegram:'soroushamel'
 };
