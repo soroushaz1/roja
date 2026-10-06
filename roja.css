@@ -1,7 +1,8 @@
 /* Roja — a studio instrument for looking at your own face.
-   The face is the only bright thing on the page; everything else recedes.
-   Palette is آینه و شمعدان: dark lacquer, rose, brass. Rose means "this is on",
-   brass means "this is a measurement". They never stand in for each other. */
+   The face is the brightest thing on the page. The page is ivory and rose by day and
+   dark lacquer by night (the system's choice, or the header switch); the mirror itself
+   is always dark, so the face stands out in both. Rose means "this is on", brass means
+   "this is a measurement". They never stand in for each other. */
 
 @font-face{
   font-family:'Estedad';
@@ -11,6 +12,43 @@
 }
 
 :root{
+  --bg:#FAF6F3;
+  --bg-deep:#F1E9E4;
+  --surface:#FFFFFF;
+  --surface-2:#F8F2EE;
+  --raised:#FFFFFF;
+  --line:#E5D8D1;
+  --line-soft:#EEE4DE;
+  --text:#2A1C23;
+  --muted:#6E5862;
+  --faint:#97838C;
+  --rose:#D6336A;
+  --rose-2:#B92458;
+  --rose-soft:#D6336A14;
+  --brass:#A87B1E;
+  --brass-soft:#C9A2271A;
+  --brass-ink:#7A5810;
+  --danger:#B85D0E;
+  --danger-soft:#FBF0E4;
+  --danger-ink:#7A4510;
+  --ok:#1F8A57;
+  --hover:#2A1C230A;
+  --chrome:#FAF6F3E6;
+  --panel:var(--surface);
+  --card:var(--surface-2);
+  --glow:radial-gradient(1100px 520px at 50% -12%,#F6D9E266,transparent 70%),radial-gradient(800px 480px at 100% 110%,#F3E4CF55,transparent 60%);
+  --shadow:0 18px 40px -22px #4A1D3040;
+  --shadow-sm:0 6px 16px -10px #4A1D3033;
+  --backdrop:#2A1C2366;
+  --on-rose:#fff;
+  --radius:14px;
+  --radius-sm:10px;
+  --font:'Estedad','Vazirmatn',system-ui,'Segoe UI',Tahoma,sans-serif;
+  color-scheme:light;
+}
+/* Dark: chosen, or the system's when nothing was chosen. The mirror is dark in both,
+   so everything drawn over it (tools, notes, the start screen) takes these too. */
+:root[data-theme=dark],.stage{
   --bg:#140C11;
   --bg-deep:#0C070A;
   --surface:#1D1319;
@@ -24,15 +62,57 @@
   --rose:#EC5A84;
   --rose-2:#D63E6A;
   --rose-soft:#EC5A8424;
-  --rose-deep:#7E2C46;
   --brass:#D1AC3A;
   --brass-soft:#D1AC3A1F;
+  --brass-ink:#F4E3B0;
   --danger:#E8A34F;
+  --danger-soft:#251A16;
+  --danger-ink:#E3C5A6;
   --ok:#7CD9A8;
-  --radius:12px;
-  --radius-sm:9px;
+  --hover:#FFFFFF10;
+  --chrome:#140C11CC;
+  --panel:linear-gradient(180deg,#1D1319F2,#170F14F2);
+  --card:linear-gradient(180deg,#FFFFFF08,#FFFFFF03);
+  --glow:radial-gradient(1200px 600px at 50% -10%,#3A162944,transparent 70%),radial-gradient(900px 500px at 100% 110%,#2A142033,transparent 60%);
   --shadow:0 18px 40px -18px #000C;
-  --font:'Estedad','Vazirmatn',system-ui,'Segoe UI',Tahoma,sans-serif;
+  --shadow-sm:0 6px 16px -10px #000A;
+  --backdrop:#0B0709CC;
+  --on-rose:#2A0E1A;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme=light]){
+  --bg:#140C11;
+    --bg-deep:#0C070A;
+    --surface:#1D1319;
+    --surface-2:#241820;
+    --raised:#2E1F29;
+    --line:#3C2A35;
+    --line-soft:#2A1D25;
+    --text:#F6ECF1;
+    --muted:#BBA1AD;
+    --faint:#9A8591;
+    --rose:#EC5A84;
+    --rose-2:#D63E6A;
+    --rose-soft:#EC5A8424;
+    --brass:#D1AC3A;
+    --brass-soft:#D1AC3A1F;
+    --brass-ink:#F4E3B0;
+    --danger:#E8A34F;
+    --danger-soft:#251A16;
+    --danger-ink:#E3C5A6;
+    --ok:#7CD9A8;
+    --hover:#FFFFFF10;
+    --chrome:#140C11CC;
+    --panel:linear-gradient(180deg,#1D1319F2,#170F14F2);
+    --card:linear-gradient(180deg,#FFFFFF08,#FFFFFF03);
+    --glow:radial-gradient(1200px 600px at 50% -10%,#3A162944,transparent 70%),radial-gradient(900px 500px at 100% 110%,#2A142033,transparent 60%);
+    --shadow:0 18px 40px -18px #000C;
+    --shadow-sm:0 6px 16px -10px #000A;
+    --backdrop:#0B0709CC;
+    --on-rose:#2A0E1A;
+    color-scheme:dark;
+  }
 }
 
 *{box-sizing:border-box}
@@ -42,10 +122,7 @@ html:not(.native-live){background:var(--bg)}
    hole where the native mirror, drawn under the page, shows through. */
 body::before{
   content:'';position:fixed;inset:0;z-index:-1;pointer-events:none;
-  background:
-    radial-gradient(1200px 600px at 50% -10%,#3A162944,transparent 70%),
-    radial-gradient(900px 500px at 100% 110%,#2A142033,transparent 60%),
-    var(--bg);
+  background:var(--glow),var(--bg);
 }
 html.native-live body::before{
   -webkit-mask:linear-gradient(#000 0 0) var(--hole-x,0) var(--hole-y,0)/var(--hole-w,0) var(--hole-h,0) no-repeat,linear-gradient(#000 0 0);
@@ -83,20 +160,20 @@ button,.file-button,a.button{font:inherit;color:inherit;cursor:pointer;border-ra
   display:inline-flex;align-items:center;justify-content:center;gap:7px;transition:border-color .15s,background .15s,color .15s,transform .1s}
 button:active:not(:disabled){transform:translateY(1px)}
 .ghost{border-color:var(--line);background:var(--surface-2);padding:8px 14px;color:var(--text)}
-.ghost:hover{border-color:var(--rose);color:#fff}
+.ghost:hover{border-color:var(--rose);color:var(--text);background:var(--surface)}
 .ghost[aria-pressed=true]{border-color:var(--rose);background:var(--rose-soft)}
-.primary{background:linear-gradient(135deg,#F2729A,var(--rose-2));color:#2A0E1A;border-color:transparent;padding:11px 22px;font-weight:800;
-  box-shadow:0 8px 22px -10px #EC5A84AA}
+.primary{background:linear-gradient(135deg,var(--rose),var(--rose-2));color:var(--on-rose);border-color:transparent;padding:11px 22px;font-weight:800;
+  box-shadow:0 10px 24px -12px var(--rose)}
 .primary:hover{filter:brightness(1.07)}
 /* A link styled as a button: `a.button` would otherwise take its background away. */
-a.button.primary{background:linear-gradient(135deg,#F2729A,var(--rose-2));color:#2A0E1A}
+a.button.primary{background:linear-gradient(135deg,var(--rose),var(--rose-2));color:var(--on-rose)}
 a.button.ghost{background:var(--surface-2);border-color:var(--line)}
 a.button.ghost:hover{border-color:var(--rose)}
 .wide{width:100%}
 a.button{text-decoration:none}
 /* A button that reads as a link, inside a sentence. */
 button.link{display:inline;padding:0;border:0;color:var(--rose);text-decoration:underline;text-underline-offset:3px}
-button.link:hover{color:#fff}
+button.link:hover{color:var(--text)}
 button:disabled{opacity:.4;cursor:default}
 button:disabled:hover{border-color:var(--line);filter:none}
 
@@ -110,9 +187,9 @@ input[type=range]::-moz-range-track{height:4px;background:var(--line);border-rad
 input[type=range]::-moz-range-progress{height:4px;background:var(--brass);border-radius:4px}
 input[type=range]::-webkit-slider-thumb{
   -webkit-appearance:none;width:17px;height:17px;border-radius:50%;
-  background:#F4E3B0;margin-top:-6.5px;border:3px solid var(--brass);box-shadow:0 2px 8px #0008;
+  background:var(--surface);margin-top:-6.5px;border:3px solid var(--brass);box-shadow:0 2px 8px #0004;
 }
-input[type=range]::-moz-range-thumb{width:12px;height:12px;border:3px solid var(--brass);border-radius:50%;background:#F4E3B0}
+input[type=range]::-moz-range-thumb{width:12px;height:12px;border:3px solid var(--brass);border-radius:50%;background:var(--surface)}
 input[type=number]{
   width:100%;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:var(--radius-sm);
   padding:8px 11px;font:inherit;margin-top:6px;
@@ -126,7 +203,7 @@ input[type=number]{
 .segmented{display:flex;gap:4px;padding:4px;border-radius:11px;background:var(--bg-deep);border:1px solid var(--line-soft)}
 .segmented button{flex:1;padding:7px 8px;font-size:12.5px;color:var(--muted);border-radius:8px;white-space:nowrap}
 .segmented button:hover{color:var(--text)}
-.segmented button[aria-checked=true]{background:var(--raised);color:var(--text);border-color:var(--rose);box-shadow:0 2px 10px -4px #000}
+.segmented button[aria-checked=true]{background:var(--raised);color:var(--text);border-color:var(--rose);box-shadow:var(--shadow-sm)}
 .segmented.four{flex-wrap:wrap}
 .segmented.four button{flex:1 1 calc(50% - 4px)}
 
@@ -143,7 +220,7 @@ select{
 .topbar{
   display:flex;align-items:center;justify-content:space-between;gap:16px;
   padding:10px 20px;border-bottom:1px solid var(--line-soft);
-  background:#140C11CC;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);position:relative;z-index:5;
+  background:var(--chrome);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);position:relative;z-index:5;
 }
 /* Clicking the mark reloads the page, so it is a real link: keyboard, middle-click
    and open-in-new-tab all keep working. */
@@ -162,7 +239,7 @@ select{
 .modes button{padding:8px 18px;border-radius:10px;color:var(--muted);font-weight:600;white-space:nowrap}
 .modes button:hover{color:var(--text)}
 .modes button[aria-selected=true]{background:linear-gradient(180deg,var(--raised),var(--surface-2));color:var(--text);
-  border-color:var(--rose);box-shadow:0 6px 18px -10px #EC5A84}
+  border-color:transparent;box-shadow:var(--shadow-sm)}
 .modes button[aria-selected=true] .ico{color:var(--rose)}
 
 .top-actions{display:flex;gap:8px}
@@ -179,10 +256,10 @@ select{
 /* ---- the mirror -------------------------------------------------------- */
 .stage{
   position:relative;flex:1;min-height:340px;
-  background:radial-gradient(ellipse at center,#1A1116,var(--bg-deep) 70%);
-  border:1px solid var(--line-soft);border-radius:20px;
+  background:radial-gradient(ellipse at center,#1F151B,#0C070A 72%);
+  border:1px solid #2A1D25;border-radius:22px;color:var(--text);
   isolation:isolate;overflow:hidden;
-  box-shadow:inset 0 0 0 1px #FFFFFF08,var(--shadow);
+  box-shadow:inset 0 0 0 1px #FFFFFF08,0 30px 60px -30px #2A0E1A88;
 }
 .stage.live{border-color:#D1AC3A44}
 .stage video,.stage canvas{
@@ -218,14 +295,14 @@ select{
 
 .guide{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;z-index:1}
 .tap-start{position:absolute;left:50%;bottom:18px;translate:-50% 0;z-index:5;padding:11px 18px;border-radius:999px;
-  background:linear-gradient(135deg,#F2729A,var(--rose-2));color:#2A0E1A;font-weight:800;box-shadow:0 8px 22px -8px #EC5A84}
+  background:linear-gradient(135deg,var(--rose),var(--rose-2));color:#fff;font-weight:800;box-shadow:0 8px 22px -8px var(--rose)}
 .guide i{width:min(38%,240px);aspect-ratio:3/4;border-radius:50%;border:2px dashed #FFFFFF55;box-shadow:0 0 0 2000px #0000002A;
   animation:breathe 2.4s ease-in-out infinite}
 @keyframes breathe{50%{border-color:#EC5A84AA;transform:scale(1.02)}}
 
 .badge{
   position:absolute;top:12px;inset-inline-start:12px;z-index:3;
-  background:#140C11D9;border:1px solid var(--line);color:var(--muted);
+  background:#140C11D9;border:1px solid #3C2A35;color:var(--muted);
   padding:5px 11px;border-radius:999px;font-size:12px;pointer-events:none;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);
 }
 .badge b{color:var(--text);font-weight:600}
@@ -263,14 +340,14 @@ select{
 .toolbar::-webkit-scrollbar{display:none}
 .tool{flex-direction:column;gap:1px;width:52px;padding:7px 2px 5px;border-radius:10px;color:var(--muted);font-size:10.5px}
 .tool .ico{width:20px;height:20px}
-.tool:hover:not(:disabled){color:var(--text);background:#FFFFFF10}
-.tool[aria-pressed=true],.tool[aria-expanded=true]{color:#fff;background:var(--rose-soft);border-color:var(--rose)}
+.tool:hover:not(:disabled){color:var(--text);background:var(--hover)}
+.tool[aria-pressed=true],.tool[aria-expanded=true]{color:var(--text);background:var(--rose-soft);border-color:var(--rose)}
 .menu{
   position:absolute;top:12px;inset-inline-end:78px;min-width:170px;z-index:6;
   background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:5px;box-shadow:var(--shadow);
 }
 .menu button{width:100%;justify-content:flex-start;padding:7px 10px;font-size:13px;border-radius:8px;color:var(--muted)}
-.menu button:hover{background:#FFFFFF0D;color:var(--text)}
+.menu button:hover{background:var(--hover);color:var(--text)}
 .menu button[aria-checked=true]{color:var(--text);background:var(--rose-soft)}
 .menu button i{width:12px;height:12px;border-radius:50%;flex:none;border:1px solid #0006}
 
@@ -286,7 +363,7 @@ select{
   display:grid;place-items:center;color:var(--brass);font-size:14px;box-shadow:0 4px 14px #000A;
 }
 .seam-tag{
-  position:absolute;bottom:12px;font-size:11.5px;color:#F4E3B0;
+  position:absolute;bottom:12px;font-size:11.5px;color:var(--brass-ink);
   background:#140C11D9;padding:3px 9px;border-radius:999px;white-space:nowrap;border:1px solid #D1AC3A55;
   max-width:40%;overflow:hidden;text-overflow:ellipsis;
 }
@@ -312,7 +389,7 @@ select{
   color:var(--muted);white-space:nowrap;font-size:13.5px;position:relative;
 }
 .chip:hover{color:var(--text);border-color:var(--faint)}
-.chip[aria-pressed=true]{border-color:var(--rose);color:var(--text);background:var(--raised);box-shadow:0 6px 16px -10px #EC5A84}
+.chip[aria-pressed=true]{border-color:var(--rose);color:var(--text);background:var(--rose-soft);box-shadow:var(--shadow-sm)}
 .chip .dot{width:10px;height:10px;border-radius:50%;border:1px solid #0006;flex:none}
 .chip.on::after{content:'';position:absolute;top:3px;inset-inline-end:5px;width:6px;height:6px;border-radius:50%;background:var(--rose);box-shadow:0 0 0 2px var(--bg)}
 .chip .on{color:var(--rose);font-variant-numeric:tabular-nums;font-size:12px}
@@ -320,7 +397,7 @@ select{
 /* ---- inspector --------------------------------------------------------- */
 .inspector{
   border-inline-start:1px solid var(--line-soft);
-  padding:20px;background:linear-gradient(180deg,#1D1319F2,#170F14F2);
+  padding:20px;background:var(--panel);
   min-height:0;overflow-y:auto;          /* the only thing that scrolls */
   display:flex;flex-direction:column;gap:6px;scrollbar-width:thin;scrollbar-color:var(--line) transparent;
 }
@@ -332,7 +409,7 @@ select{
 .tag{font-size:11.5px;padding:2px 10px;border-radius:999px;border:1px solid var(--line);color:var(--muted);background:var(--surface-2)}
 .note{
   border-inline-start:2px solid var(--danger);
-  padding:10px 12px;background:#251A16;color:#E3C5A6;font-size:12.5px;
+  padding:10px 12px;background:var(--danger-soft);color:var(--danger-ink);font-size:12.5px;
   border-radius:0 var(--radius-sm) var(--radius-sm) 0;margin:14px 0;line-height:1.8;
 }
 .quiet{color:var(--faint);font-size:12px}
@@ -340,7 +417,7 @@ select{
 .row-actions{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
 .row-actions > *{flex:1 1 auto}
 
-.card{border:1px solid var(--line-soft);background:linear-gradient(180deg,#FFFFFF08,#FFFFFF03);border-radius:var(--radius);padding:14px 14px 16px;margin-top:12px}
+.card{border:1px solid var(--line-soft);background:var(--card);border-radius:var(--radius);padding:14px 14px 16px;margin-top:12px}
 .card-head{display:flex;align-items:center;gap:8px;margin-bottom:6px}
 .card-head .ico{color:var(--rose)}
 .card-head h3{flex:1}
@@ -351,15 +428,15 @@ select{
 
 /* Buying happens on the partner store: one clear way there, never a cart. */
 .buy-card{margin-top:4px;padding:12px;border-radius:var(--radius);border:1px solid #EC5A8433;
-  background:radial-gradient(120% 140% at 100% 0%,#EC5A841F,transparent 60%),var(--surface-2)}
+  background:radial-gradient(120% 140% at 100% 0%,var(--rose-soft),transparent 60%),var(--surface-2)}
 .buy-card .primary{padding:12px 16px}
 .buy-card .quiet{margin:8px 0 0;text-align:center}
 .primary .out,.ghost .ico:last-child:not(:first-child){width:15px;height:15px;opacity:.75}
 #add-look{margin-top:12px}
-.buy-pill{background:linear-gradient(135deg,#F2729A,var(--rose-2));color:#2A0E1A;font-weight:800;border-color:transparent;
-  box-shadow:0 6px 18px -10px #EC5A84AA}
+.buy-pill{background:linear-gradient(135deg,var(--rose),var(--rose-2));color:var(--on-rose);font-weight:800;border-color:transparent;
+  box-shadow:0 8px 20px -12px var(--rose)}
 .buy-pill:hover{filter:brightness(1.07)}
-.buy-pill .count{color:#2A0E1A;background:#FFFFFF66;border-radius:999px;padding:0 7px;font-size:12px}
+.buy-pill .count{color:var(--rose-2);background:#FFFFFFE6;border-radius:999px;padding:0 7px;font-size:12px}
 .buy-row{display:flex;align-items:center;gap:11px;padding:10px 0;border-top:1px solid var(--line-soft)}
 .buy-row p{flex:1;margin:0;font-size:13.5px;line-height:1.6;min-width:0}
 .buy-row p small{display:block;color:var(--faint)}
@@ -455,7 +532,7 @@ details > summary + *{margin-top:10px}
 .quality li.ok::before{content:'✓';color:var(--ok)}
 .quality li.bad{color:var(--danger)}
 .quality li.bad::before{content:'!';color:var(--danger)}
-.question{border:1px solid var(--line-soft);border-radius:var(--radius);padding:10px 12px 12px;margin:10px 0;background:#FFFFFF05}
+.question{border:1px solid var(--line-soft);border-radius:var(--radius);padding:10px 12px 12px;margin:10px 0;background:var(--card)}
 .question legend{font-size:13.5px;line-height:1.8;padding:0 4px;display:flex;gap:8px}
 .question legend b{color:var(--rose);flex:none}
 .options{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;margin-top:6px}
@@ -526,7 +603,7 @@ dialog{
 .app-download .quiet{margin:0}
 .app-steps{margin:14px 0 8px;padding-inline-start:20px;list-style:persian;font-size:13px;line-height:1.9}
 #app-dialog .quiet a{color:inherit;text-underline-offset:3px}
-dialog::backdrop{background:#0B0709CC;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
+dialog::backdrop{background:var(--backdrop);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
 .dialog-head{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:12px}
 .mini{width:18px;height:18px;border-radius:50%;flex:none;border:1px solid #0006}
 
@@ -537,7 +614,7 @@ dialog::backdrop{background:#0B0709CC;-webkit-backdrop-filter:blur(4px);backdrop
 .shot-bar{display:flex;align-items:center;gap:6px;padding:6px 8px;font-size:11.5px;color:var(--muted)}
 .shot-bar span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .shot-bar a,.shot-bar button{color:var(--muted);padding:4px;border-radius:6px;display:inline-flex}
-.shot-bar a:hover,.shot-bar button:hover{color:var(--text);background:#FFFFFF10}
+.shot-bar a:hover,.shot-bar button:hover{color:var(--text);background:var(--hover)}
 .shot label{position:absolute;top:6px;inset-inline-start:6px;background:#140C11CC;border-radius:8px;padding:2px 6px;font-size:11px;display:flex;gap:5px;align-items:center;cursor:pointer}
 .compare-view{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
 .compare-view figure{margin:0;border-radius:12px;overflow:hidden;border:1px solid var(--line)}
@@ -635,7 +712,7 @@ footer > span a{color:var(--muted);text-underline-offset:3px}
 .mine-card .look-card{flex:1;min-width:0;padding-inline-end:30px}
 .look-del{position:absolute;top:4px;inset-inline-end:4px;width:24px;height:24px;padding:0;display:inline-flex;align-items:center;justify-content:center;
   border-radius:6px;color:var(--faint);font-size:15px;line-height:1}
-.look-del:hover{color:var(--text);background:#FFFFFF10}
+.look-del:hover{color:var(--text);background:var(--hover)}
 .save-look{margin-top:10px;font-size:13px;color:var(--muted)}
 .save-look-row{display:flex;gap:8px;margin-top:6px}
 .save-look input{flex:1;min-width:0;font:inherit;color:var(--text);background:var(--bg-deep);border:1px solid var(--line);border-radius:var(--radius-sm);padding:8px 10px}
@@ -665,9 +742,50 @@ html:not(.has-shop) .shop-only,html.has-shop .no-shop{display:none!important}
 html.embedded footer,html.embedded #app-open,html.embedded .biz-pill,html.embedded .biz-card,html.embedded #welcome-app{display:none!important}
 html.embedded .brand{pointer-events:none}
 .biz-card{display:flex;gap:12px;align-items:flex-start;margin-top:4px;padding:12px 14px;border-radius:var(--radius);text-decoration:none;color:inherit;
-  border:1px dashed #D1AC3A55;background:var(--brass-soft);transition:border-color .15s}
+  border:1px dashed var(--brass);background:var(--brass-soft);transition:border-color .15s}
 .biz-card:hover{border-color:var(--brass)}
 .biz-card .ico{color:var(--brass);width:22px;height:22px;margin-top:2px}
 .biz-card strong{display:block;font-size:14px}
 .biz-card small{display:block;color:var(--muted);font-size:12px;line-height:1.7;margin-top:2px}
 .biz-pill{text-decoration:none}
+
+/* ---- the makeup panel: the shade, the way to buy it, three panes --------- */
+.icon-btn{width:38px;height:38px;padding:0;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--muted)}
+.icon-btn:hover{color:var(--text);border-color:var(--rose)}
+.product-head h2{font-size:22px}
+.product-head .lede{margin:2px 0 0}
+.pick-card{display:flex;align-items:center;gap:12px;margin-top:12px;padding:10px 12px;border-radius:var(--radius);
+  background:var(--surface-2);border:1px solid var(--line-soft)}
+.pick-card .swatch{width:44px;height:44px;border-radius:12px}
+.pick-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.pick-text strong{font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pick-text small{display:flex;align-items:center;gap:8px;color:var(--faint);font-size:11.5px}
+.pick-text .tag{font-size:11px;padding:0 8px}
+.pick-card .ghost.small{flex:none}
+.buy-card{margin-top:10px}
+.biz-card{margin-top:10px}
+/* Sticky, so the panes stay one tap away however far a pane scrolls. */
+.panes{position:sticky;top:-20px;z-index:2;display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin:16px -20px 0;padding:10px 20px;
+  background:var(--panel);border-bottom:1px solid var(--line-soft)}
+.panes button{padding:8px 6px;border-radius:10px;color:var(--muted);font-weight:600;font-size:13.5px;border:1px solid transparent}
+.panes button .ico{width:16px;height:16px}
+.panes button:hover{color:var(--text);background:var(--hover)}
+.panes button[aria-selected=true]{color:var(--rose);background:var(--rose-soft);border-color:transparent}
+.panes .count{font-size:11px;color:inherit;background:var(--surface);border:1px solid var(--line-soft);border-radius:999px;padding:0 6px;line-height:1.6}
+.pane > .card:first-child{margin-top:12px}
+.pane > .check{margin-top:16px}
+.pane{animation:pane-in .18s ease both}
+@keyframes pane-in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+#look-items:empty{display:none}
+.card-head h3{font-size:14.5px}
+@media (min-width:901px){.shell{grid-template-columns:minmax(0,1fr) 400px}}
+.inspector{gap:0}
+.inspector > section > h2,.inspector .product-head{padding-top:2px}
+@media (max-width:900px){
+  .panes{top:-14px;margin:14px -16px 0;padding:8px 16px}
+  .icon-btn{width:34px;height:34px}
+  .pick-card{margin-top:10px}
+  /* The shade bar above already names the shade; keep the head short. */
+  .product-head .lede{display:none}
+  .product-head h2{font-size:19px}
+}

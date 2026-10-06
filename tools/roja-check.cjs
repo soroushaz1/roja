@@ -154,6 +154,14 @@ const LIPS=[61,0,291,17,40,270,91,321];
       assert.equal(await demo.locator('#add').isVisible(),false,'the demo offers buying without a shop');
       assert.equal(await demo.locator('#basket').isVisible(),false,'the demo shows a buy button without a shop');
       assert.equal(await demo.locator('.biz-card').isVisible(),true,'the demo does not offer the mirror to shops');
+      // Light by default here (the system's), dark from the header switch, and kept.
+      const ground=()=>demo.evaluate(()=>getComputedStyle(document.documentElement).getPropertyValue('--bg').trim());
+      assert.equal(await ground(),'#FAF6F3','the page is not light by default');
+      await demo.locator('#theme').click();
+      assert.equal(await ground(),'#140C11','the theme switch did not turn the page dark');
+      await demo.reload({waitUntil:'domcontentloaded'});
+      assert.equal(await ground(),'#140C11','the dark theme was not kept');
+      await demo.evaluate(()=>localStorage.removeItem('roja-theme'));
       await demo.close();
     }
     // The rest runs as a shop's mirror (shops.js: demo).
@@ -175,7 +183,7 @@ const LIPS=[61,0,291,17,40,270,91,321];
 
     // The guard that matters more: a deep shade must still read as a real lipstick, so
     // softening the nude can never quietly become "no colour at all".
-    await page.locator('#clear-look').click();
+    await page.evaluate(()=>document.querySelector('#clear-look').click());
     await page.locator('[data-product="velvet"]').click();
     await page.locator('#shades .shade').nth(9).click();
     await settle(page);
@@ -189,7 +197,7 @@ const LIPS=[61,0,291,17,40,270,91,321];
     report.products={};
     let totalShades=0;
     for(const id of productIds){
-      await page.locator('#clear-look').click();
+      await page.evaluate(()=>document.querySelector('#clear-look').click());
       await page.locator(`[data-product="${id}"]`).click();
       await page.locator('#shades .shade').nth(2).click();
       await page.waitForTimeout(150);await settle(page);
@@ -216,7 +224,7 @@ const LIPS=[61,0,291,17,40,270,91,321];
     report.shadeChoices=totalShades;
 
     // With nothing on, the stage is the camera frame.
-    await page.locator('#clear-look').click();await settle(page);await page.waitForTimeout(150);
+    await page.evaluate(()=>document.querySelector('#clear-look').click());await settle(page);await page.waitForTimeout(150);
     const bare=await page.evaluate(probe,{GX,GY});
     assert(bare.diff<1.5,`bare face differs from the camera by ${bare.diff}`);
     report.bareDiff=Number(bare.diff.toFixed(4));
@@ -337,6 +345,7 @@ const LIPS=[61,0,291,17,40,270,91,321];
     assert.equal(await page.locator('#seam').isVisible(),false,'the seam stayed after compare was switched off');
 
     await page.locator('[data-id="vlv-8"]').click();
+    await page.locator('#pane-color').click();      // the brush left its own pane open
     await page.locator('#pin-shade').click();
     await page.locator('[data-id="vlv-12"]').click();
     await page.waitForTimeout(150);await settle(page);
@@ -351,6 +360,8 @@ const LIPS=[61,0,291,17,40,270,91,321];
     report.shadeCompare={pinned:pinned.color.map(Math.round),current:current.color.map(Math.round)};
 
     /* ---- looks, the shade finder, lighting, snapshots ---- */
+    await page.locator('#pane-look').click();
+    assert.equal(await page.locator('#looks').isVisible(),true,'the look pane did not open');
     const lookIds=await page.evaluate(()=>[...document.querySelectorAll('[data-look]')].map(b=>b.dataset.look));
     assert(lookIds.length>=5,'the ready-made looks are missing');
     report.looks={};
@@ -368,7 +379,7 @@ const LIPS=[61,0,291,17,40,270,91,321];
     await page.waitForFunction(()=>document.querySelectorAll('#finder-result .pick').length>=3,null,{timeout:30000});
     report.finder=(await page.locator('#finder-result .pick').first().textContent()).trim();
 
-    await page.locator('#clear-look').click();await settle(page);
+    await page.evaluate(()=>document.querySelector('#clear-look').click());await settle(page);
     await page.locator('#light-toggle').click();
     await page.locator('#light-menu button',{hasText:'آفتاب عصر'}).click();
     await page.waitForTimeout(100);await settle(page);
@@ -457,7 +468,7 @@ const LIPS=[61,0,291,17,40,270,91,321];
     }
 
     /* ---- procedures ---- */
-    await page.locator('#clear-look').click();
+    await page.evaluate(()=>document.querySelector('#clear-look').click());
     await page.locator('#mode-procedure').click();
     await page.waitForFunction(()=>{const s=document.querySelector('#stage');return !s.hidden&&s.width>0;},null,{timeout:20000});
     assert.equal(await page.locator('#badge').isVisible(),true,'simulation badge missing');
@@ -648,7 +659,7 @@ const LIPS=[61,0,291,17,40,270,91,321];
     assert.equal(await page.locator('#debug').isVisible(),false,'debug overlay on by default');
 
     // Start from a known state: clear the look, then switch on one lipstick.
-    await page.locator('#clear-look').click();
+    await page.evaluate(()=>document.querySelector('#clear-look').click());
     await page.locator('[data-product="velvet"]').click();
     await page.locator('#shades .shade').nth(0).click();
     await settle(page);
@@ -1010,7 +1021,7 @@ const LIPS=[61,0,291,17,40,270,91,321];
       assert(stats.includes(engine),`${name}: the model is not on the ${engine}: ${stats}`);
       assert(stats.includes('فریم و نقاط هم‌زمان'),`${name}: frames are not shown with their own landmarks: ${stats}`);
       // With nothing on, the shown frame is the camera's picture.
-      await fast.locator('#clear-look').click();await fast.waitForTimeout(1200);
+      await fast.evaluate(()=>document.querySelector('#clear-look').click());await fast.waitForTimeout(1200);
       const plain=await fast.evaluate(probe,{GX,GY});
       assert(plain.diff<.5,`${name}: the frame shown differs from the camera by ${plain.diff.toFixed(2)}`);
       await fast.locator('#shades .shade').nth(7).click();

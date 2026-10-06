@@ -5,7 +5,7 @@
 // The mirror (app.js) owns the camera and the landmarks. It calls tick() every frame
 // while this panel is showing; the panel asks it for a measurement through scan()
 // when it wants one, a few times a second at most.
-import {questions,requiredQuestions,assess,combineScans,record,axes,fitzNames,concernNames} from './skin.js?v=22';
+import {questions,requiredQuestions,assess,combineScans,record,axes,fitzNames,concernNames} from './skin.js?v=23';
 
 const QUALITY={
   size:'صورت به اندازهٔ کافی نزدیک است',
