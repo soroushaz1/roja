@@ -13,7 +13,11 @@ uploaded or stored, and no asset is fetched from anywhere but this repository.
 > امتحان کن، با براش پخش یا محوش کن، دو رنگ را کنار هم ببین، یا نتیجهٔ تقریبی یک عمل
 > زیبایی را ببین. تصویر دوربین روی همان دستگاه پردازش می‌شود و هیچ‌جا فرستاده یا ذخیره نمی‌شود.
 
-The interface is in Persian and laid out right-to-left.
+The interface is in Persian and laid out right-to-left. It is ivory and rose by day and dark by night —
+the system's choice, or the switch in the header (kept on the device) — while the mirror
+itself is always dark, so the face is the brightest thing on screen. The makeup panel is
+three short tabs: the shade's controls, the look on the face with the ready-made looks,
+and the brush.
 
 Roja sells nothing itself. A shop puts the mirror on its site (an `iframe` or a link with
 `?shop=<id>`), and every "buy" in it leads to that shop's product, or its search for the

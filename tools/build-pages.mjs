@@ -36,7 +36,10 @@ function page({dir,title,description,h1,lead,body,crumbs=[],jsonld=[]}){
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#140C11">
+<meta name="theme-color" content="#FAF6F3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#140C11" media="(prefers-color-scheme: dark)">
+<meta name="color-scheme" content="light dark">
+<script>try{var t=localStorage.getItem('roja-theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t;}catch(e){}</script>
 <title>${esc(title)}</title>
 <meta name="description" content="${esc(description)}">
 <link rel="canonical" href="${url}">

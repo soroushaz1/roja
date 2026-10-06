@@ -1,17 +1,17 @@
-import {products,categories,finishes,looks,byProduct} from './catalog.js?v=22';
-import {layerSpecs,createMaskPainter,renderFallback,createSmoother,landmarksByType,frameLandmarks,hexToRgb} from './makeup.js?v=22';
-import {createStage,layerModes} from './stage.js?v=22';
-import {controls,regions,controlLandmarks,controlRange,deformers,textureLayers} from './deform.js?v=22';
-import {procedures,byId,amountsFor,resolve,kinds} from './procedures.js?v=22';
-import {renderDebug,nearest} from './debug.js?v=22';
-import {createBrush,brushModes} from './brush.js?v=22';
-import {metrics,measure,points as placed,symmetry,pose as poseOf} from './measure.js?v=22';
-import {CANON,CANON_ASPECT,TRIANGLES} from './facemesh.js?v=22';
-import {createSkinScanner} from './skin-scan.js?v=22';
-import {createSkinPanel} from './skin-panel.js?v=22';
-import {skincareById} from './skin.js?v=22';
-import {count} from './usage.js?v=22';
-import {currentShop,shopUrl,searchWords} from './shops.js?v=22';
+import {products,categories,finishes,looks,byProduct} from './catalog.js?v=23';
+import {layerSpecs,createMaskPainter,renderFallback,createSmoother,landmarksByType,frameLandmarks,hexToRgb} from './makeup.js?v=23';
+import {createStage,layerModes} from './stage.js?v=23';
+import {controls,regions,controlLandmarks,controlRange,deformers,textureLayers} from './deform.js?v=23';
+import {procedures,byId,amountsFor,resolve,kinds} from './procedures.js?v=23';
+import {renderDebug,nearest} from './debug.js?v=23';
+import {createBrush,brushModes} from './brush.js?v=23';
+import {metrics,measure,points as placed,symmetry,pose as poseOf} from './measure.js?v=23';
+import {CANON,CANON_ASPECT,TRIANGLES} from './facemesh.js?v=23';
+import {createSkinScanner} from './skin-scan.js?v=23';
+import {createSkinPanel} from './skin-panel.js?v=23';
+import {skincareById} from './skin.js?v=23';
+import {count} from './usage.js?v=23';
+import {currentShop,shopUrl,searchWords} from './shops.js?v=23';
 
 const $=id=>document.getElementById(id);
 // GitHub Pages ignores the ?v= query, and browsers and its CDN keep a page for up to ten
@@ -19,7 +19,7 @@ const $=id=>document.getElementById(id);
 // newer script, which would then look for elements that page does not have. Such a
 // page is loaded afresh, once; if it is still the old one, it says a new version is
 // on its way instead of failing.
-const RELEASE='22';
+const RELEASE='23';
 if(document.documentElement.dataset.release!==RELEASE){
   let tried=null;
   try{tried=sessionStorage.getItem('roja-reloaded');sessionStorage.setItem('roja-reloaded',RELEASE);}catch{}
@@ -212,7 +212,8 @@ function updateLook(){
   $('product-toggle').setAttribute('aria-pressed',String(makeupState[product.id].enabled));
   const any=products.some(p=>makeupState[p.id].enabled);
   $('add-look').disabled=$('save-look').disabled=$('link-look').disabled=!any;
-  $('count').textContent=fa.format(products.filter(p=>makeupState[p.id].enabled).length);
+  const on=products.filter(p=>makeupState[p.id].enabled).length;
+  $('count').textContent=$('look-count').textContent=fa.format(on);
   if(mode==='makeup')updateTrayState();
 }
 function updateSelection(){
@@ -221,6 +222,9 @@ function updateSelection(){
   $('shade-code').textContent=`${product.palettes?'پالت':'رنگ'} ${fa.format(Number(shade.variantId))} از ${fa.format(product.shades.length)}`;
   if(shop)buyLink($('add'),product,shade);
   $('big-swatch').style.background=swatchStyle(shade);
+  $('pick-swatch').style.background=swatchStyle(shade);
+  $('pick-name').textContent=shade.name;
+  $('pick-code').textContent=$('shade-code').textContent;
   $('shades').querySelectorAll('.shade').forEach(b=>{
     const checked=b.dataset.id===shade.id;
     b.setAttribute('aria-checked',String(checked));b.tabIndex=checked?0:-1;
@@ -670,7 +674,7 @@ function buildTray(){
       for(const item of products.filter(p=>p.category===cat.id)){
         const dot=el('i',{class:'dot'});
         chips.append(el('button',{class:'chip',type:'button',data:{product:item.id},'aria-pressed':String(item.id===product.id),
-          onclick:()=>selectProduct(item.id)},dot,item.name));
+          onclick:()=>{selectProduct(item.id);showPane('color');}},dot,item.name));
       }
     }
     updateTrayState();
@@ -1111,7 +1115,7 @@ function onTracker(d){
 function ensureTracker(){
   if(tracker||trackerStarting)return;
   let w=null;
-  try{w=new Worker(new URL(`face-worker.js?v=22${gpuQuery}`,import.meta.url));}catch(e){perf.lastError=`worker: ${e.message}`;}
+  try{w=new Worker(new URL(`face-worker.js?v=23${gpuQuery}`,import.meta.url));}catch(e){perf.lastError=`worker: ${e.message}`;}
   if(!w){useTracker('page','no worker');return;}
   ready=false;busy=false;
   tracker={kind:'worker',post:(m,transfer)=>w.postMessage(m,transfer),close:()=>w.terminate()};
@@ -1131,7 +1135,7 @@ async function useTracker(kind,reason){
   const token=++trackerGeneration;
   try{
     const Vision=await import('./vendor/vision_bundle.mjs');
-    await import('./face-core.js?v=22');
+    await import('./face-core.js?v=23');
     const core=self.rojaFaceCore(Vision,new URL('./',import.meta.url).href);
     const found=await core.init();
     if(token!==trackerGeneration){core.close();return;}
@@ -1464,6 +1468,7 @@ function grabFrame(){
 const brushActive=()=>brushState.on&&mode==='makeup'&&!!source;
 function setBrush(on){
   brushState.on=on;
+  if(on)showPane('brush');
   $('brush-on').checked=on;
   $('brush-toggle').setAttribute('aria-pressed',String(on));
   viewport.classList.toggle('painting',brushActive());
@@ -1799,6 +1804,42 @@ const skinScanner=createSkinScanner();
 const skinPanel=createSkinPanel({el,fa,pct,toast,buyLink,shop,icon,
   mirror:()=>({source:!!source,native:!!source?.native,face:!!landmarks}),
   scan:()=>source&&!source.native&&landmarks?skinScanner.scan(source.el,source.width,source.height,landmarks,poseAngles):null});
+
+/* ---------- the makeup panel's panes, and the theme ---------------------- */
+// The makeup panel is three short panes: the shade's controls, the look on the face
+// (with the ready-made ones), and the brush. Picking a product shows its controls;
+// switching the brush on shows the brush.
+function showPane(id){
+  document.querySelectorAll('.panes [data-pane]').forEach(b=>{
+    const on=b.dataset.pane===id;
+    b.setAttribute('aria-selected',String(on));b.tabIndex=on?0:-1;
+    $(`pane-${b.dataset.pane}-body`).hidden=!on;
+  });
+}
+document.querySelectorAll('.panes [data-pane]').forEach(b=>{b.onclick=()=>showPane(b.dataset.pane);});
+$('pane-color').closest('.panes').addEventListener('keydown',e=>{
+  if(!['ArrowLeft','ArrowRight'].includes(e.key))return;
+  const tabs=[...document.querySelectorAll('.panes [data-pane]')], i=tabs.findIndex(t=>t.getAttribute('aria-selected')==='true');
+  const next=tabs[(i+(e.key==='ArrowLeft'?1:-1)+tabs.length)%tabs.length];   // right to left
+  showPane(next.dataset.pane);next.focus();e.preventDefault();
+});
+// Light or dark: the system's unless the header switch chose one (kept on this device).
+function currentTheme(){
+  return document.documentElement.dataset.theme||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
+}
+function paintThemeButton(){
+  const dark=currentTheme()==='dark';
+  $('theme').setAttribute('aria-label',dark?'حالت روشن':'حالت تیره');$('theme').title=dark?'حالت روشن':'حالت تیره';
+  $('theme').querySelector('use').setAttribute('href',dark?'#i-sun':'#i-moon');
+}
+$('theme').onclick=()=>{
+  const next=currentTheme()==='dark'?'light':'dark';
+  document.documentElement.dataset.theme=next;
+  try{localStorage.setItem('roja-theme',next);}catch{}
+  paintThemeButton();
+};
+matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change',paintThemeButton);
+paintThemeButton();
 
 /* ---------- wiring ------------------------------------------------------ */
 $('mode-makeup').onclick=()=>setMode('makeup');

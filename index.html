@@ -1,9 +1,14 @@
 <!doctype html>
-<html lang="fa" dir="rtl" data-release="22">
+<html lang="fa" dir="rtl" data-release="23">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#140C11">
+<meta name="theme-color" content="#FAF6F3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#140C11" media="(prefers-color-scheme: dark)">
+<meta name="color-scheme" content="light dark">
+<!-- A theme chosen with the header switch, set before the styles so the page never
+     flashes the other one. Without a choice the system's light or dark is followed. -->
+<script>try{var t=localStorage.getItem('roja-theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t;}catch(e){}</script>
 <meta name="description" content="رُژا؛ آینهٔ زنده برای امتحان آرایش روی صورت خودت پیش از خرید، با براش پخش و محوکردن، استایل‌های آماده، پیدا کردن رنگ کرم‌پودر، تحلیل پوست با فیتزپاتریک و باومن و روتین مراقبت، و دیدن نتیجهٔ تقریبی عمل‌های زیبایی.">
 <title>رُژا | آینهٔ زنده</title>
 <link rel="canonical" href="https://pythonpath.ir/">
@@ -25,7 +30,7 @@
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <meta name="mobile-web-app-capable" content="yes">
 <link rel="preload" href="fonts/Estedad-var.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="roja.css?v=22">
+<link rel="stylesheet" href="roja.css?v=23">
 </head>
 <body>
 
@@ -53,6 +58,7 @@
   <symbol id="i-palette" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18c1.2 0 1.8-.8 1.8-1.7 0-1.3-1.1-1.6-1.1-2.8 0-1 .8-1.6 1.8-1.6H17a4 4 0 0 0 4-4C21 6.6 17 3 12 3z"/><circle cx="7.5" cy="11" r="1.2"/><circle cx="10.5" cy="7.2" r="1.2"/><circle cx="15" cy="7.4" r="1.2"/></symbol>
   <symbol id="i-layers" viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/></symbol>
   <symbol id="i-store" viewBox="0 0 24 24"><path d="M4 9.5L5.5 4h13L20 9.5"/><path d="M4 9.5a2.7 2.7 0 0 0 5.3 0 2.7 2.7 0 0 0 5.4 0 2.7 2.7 0 0 0 5.3 0"/><path d="M5.5 12v8h13v-8M10 20v-4.5h4V20"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z"/></symbol>
   <symbol id="i-bug" viewBox="0 0 24 24"><rect x="7" y="7.5" width="10" height="12" rx="5"/><path d="M9.5 7.5a2.5 2.5 0 0 1 5 0M12 12v7.5M3.5 13H7M17 13h3.5M4.5 8.5L7.5 10M19.5 8.5L16.5 10M4.5 18.5l3-1.5M19.5 18.5l-3-1.5"/></symbol>
 </svg>
 
@@ -70,6 +76,7 @@
     </button>
   </nav>
   <div class="top-actions">
+    <button id="theme" class="icon-btn" type="button" aria-label="روشن یا تیره"><svg class="ico"><use href="#i-moon"/></svg></button>
     <!-- Not in the app itself, and not on an iPhone, which has no app. -->
     <button id="app-open" class="ghost pill" aria-label="دریافت اپ اندروید رُژا" hidden>
       <svg class="ico"><use href="#i-app"/></svg><span class="label">اپ اندروید</span>
@@ -182,12 +189,15 @@
       <div class="product-head">
         <p class="eyebrow" id="product-kicker"></p>
         <h2 id="product-title"></h2>
-        <div class="product-meta">
-          <span class="tag" id="product-finish"></span>
-        </div>
         <p class="lede" id="product-description"></p>
       </div>
 
+      <!-- The shade on the face, and (in a shop's mirror) the one way to buy it. -->
+      <div class="pick-card">
+        <span class="swatch" id="pick-swatch"></span>
+        <span class="pick-text"><strong id="pick-name"></strong><small><span class="tag" id="product-finish"></span><span id="pick-code"></span></small></span>
+        <button id="product-toggle" class="ghost small"></button>
+      </div>
       <!-- Roja sells nothing: "buy" leads to the shop this mirror is for (shops.js). -->
       <div class="buy-card shop-only">
         <a id="add" class="primary button wide" target="_blank" rel="noopener">
@@ -200,9 +210,15 @@
         <span><strong>فروشگاه آرایشی داری؟</strong><small>همین آینه را روی سایت خودت بگذار تا مشتری پیش از خرید، رنگ را روی صورتش ببیند.</small></span>
       </a>
 
+      <!-- Three short panes instead of one long column. -->
+      <div class="panes" role="tablist" aria-label="بخش‌های آرایش">
+        <button type="button" role="tab" id="pane-color" data-pane="color" aria-selected="true" aria-controls="pane-color-body"><svg class="ico"><use href="#i-palette"/></svg>رنگ</button>
+        <button type="button" role="tab" id="pane-look" data-pane="look" aria-selected="false" aria-controls="pane-look-body"><svg class="ico"><use href="#i-sparkle"/></svg>ترکیب <span class="count" id="look-count"></span></button>
+        <button type="button" role="tab" id="pane-brush" data-pane="brush" aria-selected="false" aria-controls="pane-brush-body"><svg class="ico"><use href="#i-brush"/></svg>براش</button>
+      </div>
+
+      <div class="pane" id="pane-color-body" role="tabpanel" aria-labelledby="pane-color">
       <section class="card">
-        <div class="card-head"><svg class="ico"><use href="#i-palette"/></svg><h3>تنظیم رنگ</h3>
-          <button id="product-toggle" class="ghost small"></button></div>
         <div id="style-field" hidden>
           <p class="field-label">فرم</p>
           <div class="segmented" id="style-options" role="radiogroup" aria-label="فرم"></div>
@@ -228,14 +244,12 @@
         <div id="finder-result" hidden></div>
       </div>
 
-      <section class="card">
-        <div class="card-head"><svg class="ico"><use href="#i-sparkle"/></svg><h3>استایل‌های آماده</h3></div>
-        <p class="help">یک ترکیب کامل را با یک لمس امتحان کن؛ بعد هر محصول را جدا عوض کن.</p>
-        <div class="looks" id="looks"></div>
-        <p class="eyebrow mine-head" id="my-looks-head" hidden>استایل‌های من</p>
-        <div class="looks" id="my-looks"></div>
-      </section>
+        <label class="check"><input id="natural-blend" type="checkbox" checked>حفظ بافت و سایه‌روشن پوست زیر رنگ</label>
+        <p class="quiet" id="product-limitation"></p>
+        <p class="quiet">رنگ روی صفحه با نور محیط، دوربین و رنگ طبیعی پوست تفاوت می‌کند.</p>
+      </div>
 
+      <div class="pane" id="pane-look-body" role="tabpanel" aria-labelledby="pane-look" hidden>
       <section class="card">
         <div class="card-head"><svg class="ico"><use href="#i-layers"/></svg><h3>ترکیب فعلی روی صورت</h3></div>
         <div class="look" id="look-items"></div>
@@ -255,6 +269,17 @@
         </form>
       </section>
 
+      <section class="card">
+        <div class="card-head"><svg class="ico"><use href="#i-sparkle"/></svg><h3>استایل‌های آماده</h3></div>
+        <p class="help">یک ترکیب کامل را با یک لمس امتحان کن؛ بعد هر محصول را جدا عوض کن.</p>
+        <div class="looks" id="looks"></div>
+        <p class="eyebrow mine-head" id="my-looks-head" hidden>استایل‌های من</p>
+        <div class="looks" id="my-looks"></div>
+      </section>
+
+      </div>
+
+      <div class="pane" id="pane-brush-body" role="tabpanel" aria-labelledby="pane-brush" hidden>
       <section class="card" id="brush-card">
         <div class="card-head"><svg class="ico"><use href="#i-brush"/></svg><h3>براش پخش و محوکردن</h3></div>
         <p class="help">روی تصویر بکش تا آرایش را همان‌جا پخش، کم یا پاک کنی. اصلاح‌ها روی پوست می‌مانند و با حرکت سر جابه‌جا می‌شوند. برای دقت بیشتر، تصویر را ثابت کن.</p>
@@ -276,10 +301,7 @@
         </div>
         <p class="quiet" id="brush-count"></p>
       </section>
-
-      <label class="check"><input id="natural-blend" type="checkbox" checked>حفظ بافت و سایه‌روشن پوست زیر رنگ</label>
-      <p class="quiet" id="product-limitation"></p>
-      <p class="quiet">رنگ روی صفحه با نور محیط، دوربین و رنگ طبیعی پوست تفاوت می‌کند.</p>
+      </div>
     </section>
 
     <section id="panel-procedure" role="tabpanel" aria-labelledby="mode-procedure" hidden>
@@ -511,6 +533,6 @@
 })();
 </script>
 <script nomodule>document.getElementById('status').textContent='این مرورگر قدیمی است و این برنامه را اجرا نمی‌کند. آخرین نسخهٔ Safari یا Chrome را نصب کن.';</script>
-<script type="module" src="app.js?v=22"></script>
+<script type="module" src="app.js?v=23"></script>
 </body>
 </html>
