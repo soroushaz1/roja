@@ -1,0 +1,90 @@
+# Puts main on the server (pythonpath.ir) after every push to it, with tools/deploy.sh:
+# the site, the API, its systemd unit and the nginx site. Can also be run by hand from
+# the Actions tab ("Run workflow").
+#
+# Needs two repository secrets (Settings → Secrets and variables → Actions):
+#   ROJA_DEPLOY_KEY   a private SSH key made for this workflow only, whose public half
+#                     is in the server's /root/.ssh/authorized_keys
+#   ROJA_KNOWN_HOSTS  the server's host key, the output of: ssh-keyscan 204.48.27.227
+# and, only if the server moves, a repository variable ROJA_HOST (default
+# root@204.48.27.227).
+#
+# The host key is pinned rather than accepted on first sight, so the deploy key is
+# never offered to a server that only claims to be this one.
+name: Deploy the site
+
+on:
+  push:
+    branches: [main]
+    # The Android app is built and released by android.yml; nothing here changes the site.
+    paths-ignore:
+      - 'android/**'
+      - '.github/workflows/android.yml'
+      - '.github/device-report.sh'
+      - 'screenshots/**'
+      - '**.md'
+  workflow_dispatch:
+
+# One deploy at a time, in order: a newer push waits for the one before to finish
+# instead of cutting it off half-way through swapping folders on the server.
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy to pythonpath.ir
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: production
+      url: https://pythonpath.ir/
+    env:
+      HAS_KEY: ${{ secrets.ROJA_DEPLOY_KEY != '' && secrets.ROJA_KNOWN_HOSTS != '' }}
+    steps:
+      - name: The secrets are set
+        if: env.HAS_KEY != 'true'
+        run: |
+          echo "::error::Set the ROJA_DEPLOY_KEY and ROJA_KNOWN_HOSTS repository secrets (see the top of .github/workflows/deploy.yml)."
+          exit 1
+
+      - uses: actions/checkout@v4
+
+      # deploy.sh runs the skin checks and the page check with Node before sending anything.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: SSH key and the server's host key
+        env:
+          ROJA_DEPLOY_KEY: ${{ secrets.ROJA_DEPLOY_KEY }}
+          ROJA_KNOWN_HOSTS: ${{ secrets.ROJA_KNOWN_HOSTS }}
+        run: |
+          install -d -m 700 ~/.ssh
+          # Keys pasted from Windows can carry \r line ends, which ssh refuses.
+          printf '%s\n' "$ROJA_DEPLOY_KEY" | tr -d '\r' > ~/.ssh/roja_deploy
+          printf '%s\n' "$ROJA_KNOWN_HOSTS" | tr -d '\r' > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/roja_deploy ~/.ssh/known_hosts
+
+      - name: Deploy
+        env:
+          ROJA_HOST: ${{ vars.ROJA_HOST || 'root@204.48.27.227' }}
+        run: bash tools/deploy.sh
+
+      # The page the server now gives out is this commit's release.
+      - name: Check the live site
+        run: |
+          want=$(grep -o 'data-release="[0-9]*"' index.html)
+          for i in 1 2 3 4 5; do
+            got=$(curl -fsS --max-time 20 -H 'Cache-Control: no-cache' https://pythonpath.ir/ | grep -o 'data-release="[0-9]*"' || true)
+            [ "$got" = "$want" ] && { echo "live: $got"; exit 0; }
+            echo "live: ${got:-nothing} (want $want), trying again"; sleep 10
+          done
+          echo "::error::pythonpath.ir does not serve $want"; exit 1
+
+      - name: Forget the key
+        if: always()
+        run: rm -f ~/.ssh/roja_deploy
