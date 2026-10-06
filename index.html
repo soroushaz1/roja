@@ -202,6 +202,7 @@
         <button id="product-toggle" class="ghost"></button>
       </div>
       <button id="pin-shade" class="ghost wide" aria-pressed="false">مقایسهٔ این رنگ با رنگ دیگر</button>
+      <button id="multi-open" class="ghost wide" type="button">چند رنگ کنار هم</button>
 
       <section class="card" id="brush-card">
         <div class="card-head"><svg class="ico"><use href="#i-brush"/></svg><h3>براش پخش و محوکردن</h3></div>
@@ -229,6 +230,8 @@
         <div class="card-head"><svg class="ico"><use href="#i-sparkle"/></svg><h3>استایل‌های آماده</h3></div>
         <p class="help">یک ترکیب کامل را با یک لمس امتحان کن؛ بعد هر محصول را جدا عوض کن.</p>
         <div class="looks" id="looks"></div>
+        <p class="eyebrow mine-head" id="my-looks-head" hidden>استایل‌های من</p>
+        <div class="looks" id="my-looks"></div>
       </section>
 
       <div class="divider"></div>
@@ -238,6 +241,18 @@
         <button id="add-look" class="ghost">همه به سبد</button>
         <button id="clear-look" class="ghost">پاک‌کردن آرایش</button>
       </div>
+      <div class="row-actions">
+        <button id="save-look" class="ghost" type="button">ذخیرهٔ این ترکیب</button>
+        <button id="link-look" class="ghost" type="button">فرستادن لینک</button>
+      </div>
+      <form class="save-look" id="save-look-form" hidden>
+        <label for="look-name">اسم این ترکیب</label>
+        <div class="save-look-row">
+          <input id="look-name" type="text" maxlength="30" autocomplete="off" placeholder="مثلاً مهمانی شب" required>
+          <button class="primary" type="submit">ذخیره</button>
+          <button class="ghost" type="button" id="save-look-cancel">انصراف</button>
+        </div>
+      </form>
       <label class="check"><input id="natural-blend" type="checkbox" checked>حفظ بافت و سایه‌روشن پوست زیر رنگ</label>
       <p class="quiet" id="product-limitation"></p>
       <p class="quiet">رنگ روی صفحه با نور محیط، دوربین و رنگ طبیعی پوست تفاوت می‌کند.</p>
@@ -397,6 +412,37 @@
   <div class="compare-view" id="gallery-compare" hidden></div>
   <div class="shots" id="gallery-shots"></div>
 </dialog>
+
+<dialog id="multi" aria-labelledby="multi-title">
+  <div class="dialog-head">
+    <h2 id="multi-title">چند رنگ کنار هم</h2>
+    <button id="multi-close" class="ghost" type="button">بستن</button>
+  </div>
+  <p class="quiet" id="multi-help">تا چهار رنگ را انتخاب کن. از صورتت با هر رنگ یک عکس گرفته و کنار هم در یک تصویر چیده می‌شود که می‌توانی ذخیره یا ارسالش کنی. برای نتیجهٔ بهتر سرت را ثابت نگه دار یا تصویر را ثابت کن.</p>
+  <div id="multi-pick">
+    <div class="multi-shades" id="multi-shades" role="group" aria-label="رنگ‌ها"></div>
+    <div class="row-actions">
+      <button id="multi-run" class="primary" type="button">ساختن تصویر مقایسه</button>
+    </div>
+  </div>
+  <div id="multi-result" hidden>
+    <img id="multi-image" alt="">
+    <div class="row-actions">
+      <button id="multi-share" class="primary" type="button" hidden>ارسال</button>
+      <button id="multi-save" class="ghost" type="button">ذخیره</button>
+      <button id="multi-again" class="ghost" type="button">رنگ‌های دیگر</button>
+    </div>
+  </div>
+</dialog>
+
+<div class="tour" id="tour" role="dialog" aria-live="polite" aria-labelledby="tour-text" hidden>
+  <p id="tour-text"></p>
+  <div class="tour-bar">
+    <span class="quiet" id="tour-step"></span>
+    <button class="ghost" type="button" id="tour-skip">رد کردن</button>
+    <button class="primary" type="button" id="tour-next">بعدی</button>
+  </div>
+</div>
 
 <dialog id="app-dialog" aria-labelledby="app-title">
   <div class="dialog-head">

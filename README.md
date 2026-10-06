@@ -52,9 +52,14 @@ satin, cream, gloss, shimmer, metallic, dewy) and a sample price.
   suggests the nearest foundation, skin tint and concealer shades, with an undertone
   estimate. Looks that include a skin product use it automatically.
 - **Looks.** Six ready-made combinations (natural, office, evening, smoky, bridal, bold lip)
-  in one tap; each product can then be changed on its own.
+  in one tap; each product can then be changed on its own. The combination on the face
+  can be saved under a name of your own ("my looks", kept on this device), or sent as a
+  link: whoever opens it gets the same look on their own face. The look travels in the
+  part of the address after `#`, which the browser never sends to the server.
 - **Compare.** A seam across the face: with and without makeup, or — after pinning a
-  shade — two shades of the same product side by side.
+  shade — two shades of the same product side by side. "Several shades" takes the face
+  in up to four shades of the current product and lays them out in one picture, cut
+  around the face, to save or send.
 - **Lighting preview.** See the look under window daylight, golden-hour sun, office
   fluorescent light, a warm evening room or a camera flash.
 - **Photos.** Use a photo instead of the camera (pick a file or drop it on the mirror), and
@@ -65,6 +70,9 @@ satin, cream, gloss, shimmer, metallic, dewy) and a sample price.
   product on the face in the cart. No order is ever placed.
 - **Remembered** — the look on the face and the cart are kept in the browser's local
   storage, so a reload or the next visit starts where the last one stopped.
+- **First visit.** When the mirror first comes on, five short notes point at the shades,
+  the products, the brush, compare and the snapshot button. Skipped or finished, they do
+  not come back.
 
 **عمل‌های زیبایی — procedures.** Seventeen procedures in six regions, each a set of weights
 over a shared field of localised deformers: rhinoplasty (natural, semi-fantasy or fantasy),
@@ -166,8 +174,8 @@ page until you save it or close the page), while the shade finder runs a few sma
 patches that the face worker averages into one colour, and while the skin check measures,
 the face cut out of the frame, reduced on the page to a few numbers and let go.
 
-The look you put together and the sample cart are kept in the browser's own storage on
-this device and never sent anywhere.
+The look you put together, your saved looks and the sample cart are kept in the browser's
+own storage on this device and never sent anywhere.
 
 The one thing that can leave the device is a skin check result, and only when you tick the
 box and press save: its scores and your answers, no picture, no name or account. A random key

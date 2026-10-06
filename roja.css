@@ -525,7 +525,7 @@ dialog::backdrop{background:#0B0709CC;-webkit-backdrop-filter:blur(4px);backdrop
 .empty{color:var(--faint);font-size:13px;padding:24px;text-align:center;border:1px dashed var(--line);border-radius:12px;grid-column:1/-1}
 
 #toast{
-  position:fixed;inset-inline-start:50%;bottom:26px;translate:-50% 0;z-index:9;
+  position:fixed;left:50%;bottom:26px;translate:-50% 0;z-index:9;
   background:var(--raised);border:1px solid var(--line);padding:11px 18px;
   border-radius:12px;font-size:14px;opacity:0;pointer-events:none;box-shadow:var(--shadow);
   transition:opacity .18s ease,translate .18s ease;max-width:calc(100% - 32px);
@@ -603,3 +603,30 @@ footer{
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}
 }
+
+/* ---- my looks, a look's link, several shades, the first-visit tour ---- */
+.mine-head{margin-top:14px}
+.mine-card{position:relative;display:flex}
+.mine-card .look-card{flex:1;min-width:0;padding-inline-end:30px}
+.look-del{position:absolute;top:4px;inset-inline-end:4px;width:24px;height:24px;padding:0;display:inline-flex;align-items:center;justify-content:center;
+  border-radius:6px;color:var(--faint);font-size:15px;line-height:1}
+.look-del:hover{color:var(--text);background:#FFFFFF10}
+.save-look{margin-top:10px;font-size:13px;color:var(--muted)}
+.save-look-row{display:flex;gap:8px;margin-top:6px}
+.save-look input{flex:1;min-width:0;font:inherit;color:var(--text);background:var(--bg-deep);border:1px solid var(--line);border-radius:var(--radius-sm);padding:8px 10px}
+.save-look input:focus{outline:none;border-color:var(--rose)}
+.save-look .primary{padding:8px 16px}
+#multi-open{margin-top:8px}
+.multi-shades{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:8px;margin:12px 0 4px}
+.multi-shades button{display:flex;align-items:center;gap:8px;padding:7px 9px;border:1px solid var(--line);background:var(--surface-2);font-size:12.5px;text-align:start}
+.multi-shades button i{width:20px;height:20px;border-radius:50%;flex:none;border:1px solid #FFFFFF22}
+.multi-shades button[aria-pressed=true]{border-color:var(--rose);background:var(--rose-soft)}
+.tour{position:fixed;z-index:60;width:min(300px,calc(100vw - 32px));background:var(--raised);border:1px solid var(--rose);border-radius:var(--radius);
+  padding:12px 14px;box-shadow:var(--shadow);font-size:13.5px;line-height:1.8}
+.tour p{margin:0 0 10px}
+.tour-bar{display:flex;align-items:center;gap:8px}
+.tour-bar .quiet{flex:1}
+.tour-bar .ghost{padding:6px 12px}
+.tour-bar .primary{padding:6px 16px}
+.tour-target{outline:2px solid var(--rose);outline-offset:3px;border-radius:var(--radius-sm)}
+#multi-image{display:block;max-width:100%;max-height:60vh;margin:12px auto 0;border-radius:var(--radius);border:1px solid var(--line)}
