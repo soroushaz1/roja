@@ -1,17 +1,17 @@
-import {products,categories,finishes,looks,byProduct} from './catalog.js?v=19';
-import {layerSpecs,createMaskPainter,renderFallback,createSmoother,landmarksByType,frameLandmarks,hexToRgb} from './makeup.js?v=19';
-import {createStage,layerModes} from './stage.js?v=19';
-import {controls,regions,controlLandmarks,controlRange,deformers,textureLayers} from './deform.js?v=19';
-import {procedures,byId,amountsFor,resolve,kinds} from './procedures.js?v=19';
-import {renderDebug,nearest} from './debug.js?v=19';
-import {createBrush,brushModes} from './brush.js?v=19';
-import {metrics,measure,points as placed,symmetry,pose as poseOf} from './measure.js?v=19';
-import {CANON,CANON_ASPECT,TRIANGLES} from './facemesh.js?v=19';
-import {createSkinScanner} from './skin-scan.js?v=19';
-import {createSkinPanel} from './skin-panel.js?v=19';
-import {skincareById} from './skin.js?v=19';
-import {count} from './usage.js?v=19';
-import {shop} from './shop.js?v=19';
+import {products,categories,finishes,looks,byProduct} from './catalog.js?v=20';
+import {layerSpecs,createMaskPainter,renderFallback,createSmoother,landmarksByType,frameLandmarks,hexToRgb} from './makeup.js?v=20';
+import {createStage,layerModes} from './stage.js?v=20';
+import {controls,regions,controlLandmarks,controlRange,deformers,textureLayers} from './deform.js?v=20';
+import {procedures,byId,amountsFor,resolve,kinds} from './procedures.js?v=20';
+import {renderDebug,nearest} from './debug.js?v=20';
+import {createBrush,brushModes} from './brush.js?v=20';
+import {metrics,measure,points as placed,symmetry,pose as poseOf} from './measure.js?v=20';
+import {CANON,CANON_ASPECT,TRIANGLES} from './facemesh.js?v=20';
+import {createSkinScanner} from './skin-scan.js?v=20';
+import {createSkinPanel} from './skin-panel.js?v=20';
+import {skincareById} from './skin.js?v=20';
+import {count} from './usage.js?v=20';
+import {shop} from './shop.js?v=20';
 
 const $=id=>document.getElementById(id);
 // GitHub Pages ignores the ?v= query, and browsers and its CDN keep a page for up to ten
@@ -19,7 +19,7 @@ const $=id=>document.getElementById(id);
 // newer script, which would then look for elements that page does not have. Such a
 // page is loaded afresh, once; if it is still the old one, it says a new version is
 // on its way instead of failing.
-const RELEASE='19';
+const RELEASE='20';
 if(document.documentElement.dataset.release!==RELEASE){
   let tried=null;
   try{tried=sessionStorage.getItem('roja-reloaded');sessionStorage.setItem('roja-reloaded',RELEASE);}catch{}
@@ -1091,7 +1091,7 @@ function onTracker(d){
 function ensureTracker(){
   if(tracker||trackerStarting)return;
   let w=null;
-  try{w=new Worker(new URL(`face-worker.js?v=19${gpuQuery}`,import.meta.url));}catch(e){perf.lastError=`worker: ${e.message}`;}
+  try{w=new Worker(new URL(`face-worker.js?v=20${gpuQuery}`,import.meta.url));}catch(e){perf.lastError=`worker: ${e.message}`;}
   if(!w){useTracker('page','no worker');return;}
   ready=false;busy=false;
   tracker={kind:'worker',post:(m,transfer)=>w.postMessage(m,transfer),close:()=>w.terminate()};
@@ -1111,7 +1111,7 @@ async function useTracker(kind,reason){
   const token=++trackerGeneration;
   try{
     const Vision=await import('./vendor/vision_bundle.mjs');
-    await import('./face-core.js?v=19');
+    await import('./face-core.js?v=20');
     const core=self.rojaFaceCore(Vision,new URL('./',import.meta.url).href);
     const found=await core.init();
     if(token!==trackerGeneration){core.close();return;}
