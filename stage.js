@@ -10,9 +10,9 @@
 //
 // With no layers and an all-zero displacement field the output is a pixel-exact copy
 // of the camera frame.
-import {deformers,displace} from './deform.js?v=20';
-import {CANON,TRIANGLES} from './facemesh.js?v=20';
-import * as GLSL from './shaders.js?v=20';
+import {deformers,displace} from './deform.js?v=21';
+import {CANON,TRIANGLES} from './facemesh.js?v=21';
+import * as GLSL from './shaders.js?v=21';
 
 const COLS=64, ROWS=48;          // resolves the smallest anchor radius
 const GRID=(COLS+1)*(ROWS+1);

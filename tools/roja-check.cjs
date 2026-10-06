@@ -229,7 +229,7 @@ const LIPS=[61,0,291,17,40,270,91,321];
     // People shut one eye to draw liner. A shut lid folds the lash line onto the lower
     // one, and anything drawn between them smears across the eye.
     const blink=await page.evaluate(async()=>{
-      const m=await import('./makeup.js?v=20');
+      const m=await import('./makeup.js?v=21');
       const W=640,H=480,lm=window.testLandmarks;
       const eye=m.eyeContours[0],n=eye.upper.length;
       // Which half of the frame this eye sits on, measured against the nose.
@@ -519,6 +519,18 @@ const LIPS=[61,0,291,17,40,270,91,321];
     // frame, and measuring the seam against the element instead of the frame made the
     // two use different scales — they agreed only at dead centre, and were ~70px apart
     // near the edges. Checked by finding the cut in the pixels, not from a formula.
+    // One at a time is the default: a second procedure replaces the first.
+    await page.evaluate(()=>document.getElementById('procedure-reset').click());
+    const pressed=()=>page.evaluate(()=>[...document.querySelectorAll('[data-procedure][aria-pressed=true]')].map(b=>b.dataset.procedure));
+    await page.locator('[data-procedure="rhinoplasty"]').click();
+    await page.locator('[data-procedure="lip-filler"]').click();
+    assert.deepEqual(await pressed(),['lip-filler'],'a second procedure did not replace the first');
+    report.oneAtATime='replaces';
+    // This needs several on at once.
+    await page.locator('#combine-procedures').check();
+    await page.locator('[data-procedure="rhinoplasty"]').click();
+    assert.deepEqual((await pressed()).sort(),['lip-filler','rhinoplasty'],'combined, a second procedure did not add to the first');
+    await page.locator('#procedure-reset').click();
     for(const id of ['jaw-contour','cheek-filler','brow-lift','lip-filler']){
       await page.locator(`[data-procedure="${id}"]`).click();
       await setSlider(page,'#strength',100);
