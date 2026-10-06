@@ -632,3 +632,6 @@ footer{
 #multi-image{display:block;max-width:100%;max-height:60vh;margin:12px auto 0;border-radius:var(--radius);border:1px solid var(--line)}
 .order{margin-top:14px}
 .order .quiet{margin:0;line-height:1.8}
+.footer-links{display:flex;gap:6px 16px;flex-wrap:wrap}
+.footer-links a{color:var(--muted);text-underline-offset:3px}
+.footer-links a:hover{color:var(--text)}

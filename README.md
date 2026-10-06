@@ -169,6 +169,14 @@ scores) in the panel or on the mirror, and an export of all of it as JSON.
 
 No build step, no framework, no bundler. Plain ES modules served as files.
 
+**Reading pages** — `procedures/<id>/`, `makeup/<id>/`, an index of each, `faq/`, `privacy/`,
+`sitemap.xml` and `robots.txt` are plain HTML made by `tools/build-pages.mjs` from
+`procedures.js` and `catalog.js`, so search engines (and anyone without a camera) can find
+each procedure and product. They are committed like the rest of the site; run the tool
+again after changing either file (`tools/deploy.sh` refuses to deploy stale ones). Each
+page leads into the mirror with that item chosen, through the address: `#product=velvet`,
+`#procedure=rhinoplasty`, `#skin`, or `#look=…` for a shared look.
+
 ## Privacy
 
 The camera frame, or the photo you pick, is processed on the device and never sent or

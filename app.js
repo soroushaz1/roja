@@ -356,16 +356,31 @@ async function sendLookLink(){
   try{await navigator.clipboard.writeText(url);count('share','link',{each:true});toast('لینک این ترکیب کپی شد. هر کس بازش کند، همین آرایش روی صورت خودش می‌نشیند.');}
   catch{toast('کپی لینک روی این مرورگر ممکن نشد.');}
 }
-// #look=… in the address: put that look on the mirror, then take it out of the address
-// so a reload does not put it back over later changes.
+// A link into the mirror, from a shared look or one of the site's own pages:
+//   #look=…        that look on the face
+//   #product=velvet  that product, on the face
+//   #procedure=rhinoplasty  that procedure, at its usual strength
+//   #skin          the skin check
+// Taken out of the address once used, so a reload does not apply it again over later
+// changes. Returns whether there was one.
 function lookFromLink(){
-  const m=/^#look=(.*)$/.exec(location.hash);
+  const m=/^#(look|product|procedure|skin)(?:=(.*))?$/.exec(location.hash);
   if(!m)return false;
   history.replaceState(null,'',location.pathname+location.search);
+  const [,kind,value='']=m;
+  if(kind==='skin'){setMode('skin');return true;}
+  if(kind==='product'){
+    if(byProduct(value)){setMode('makeup');selectProduct(value);}
+    return true;
+  }
+  if(kind==='procedure'){
+    if(byId(value)){setMode('procedure');if(!active.has(value))setStrength(value,60);showProcedure(value);}
+    return true;
+  }
   let raw='';try{raw=decodeURIComponent(m[1]);}catch{}
   const items=cleanItems(raw.split('~').map(part=>part.split('.')));
   if(!items.length){toast('این لینک استایلی ندارد که روی آینه بنشیند.');return true;}
-  applyLook({name:'لینک',items});
+  setMode('makeup');applyLook({name:'لینک',items});
   return true;
 }
 
@@ -1867,7 +1882,7 @@ $('save-look-form').onsubmit=e=>{
   if(name&&saveMyLook(name))$('save-look-form').hidden=true;
 };
 $('link-look').onclick=sendLookLink;
-window.addEventListener('hashchange',()=>{if(lookFromLink())setMode('makeup');});
+window.addEventListener('hashchange',lookFromLink);
 $('tour-next').onclick=()=>{tourAt++;showTourStep();};
 $('tour-skip').onclick=endTour;
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&tourAt>=0)endTour();});
@@ -1885,6 +1900,8 @@ if(!native&&!iOS){
   $('welcome-app').hidden=!android;
   $('app-qr').hidden=android;                 // on the phone itself there is nothing to scan
 }
+// The reading pages are the website's, not the app's: in the app they open in the browser.
+if(native)document.querySelectorAll('.footer-links a').forEach(a=>{a.href='https://pythonpath.ir/'+a.getAttribute('href');});
 $('app-open').onclick=$('welcome-app-open').onclick=()=>$('app-dialog').showModal();
 $('app-close').onclick=()=>$('app-dialog').close();
 for(const dialog of [$('cart'),$('gallery'),$('app-dialog'),$('multi')])dialog.addEventListener('click',e=>{if(e.target===dialog)dialog.close();});
