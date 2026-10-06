@@ -40,23 +40,24 @@ export const questions=[
 ];
 export const requiredQuestions=questions.filter(q=>!q.multi).map(q=>q.id);
 
-// Roja's sample skincare range. Prices are sample prices for the demo cart; every
-// product is fragrance-free and has no drying alcohol.
-const product=(id,name,size,price,color,extra)=>({id,name,price,kind:'skincare',
+// The kinds of skincare product a routine is made of. Each is searched for by its name
+// on the partner store (partner.js); every one meant here is fragrance-free and has no
+// drying alcohol.
+const product=(id,name,size,color,extra)=>({id,name,kind:'skincare',
   shades:[{id:`${id}-1`,variantId:'1',name:size,color}],...extra});
 export const skincare=[
-  product('cleanser-gel','ژل شست‌وشوی ملایم','۲۰۰ میلی‌لیتر',420000,'#CFE6E8',{step:'cleanser',does:'بدون خشک‌کردن، چربی و آلودگی را می‌شوید.'}),
-  product('cleanser-cream','کرم شست‌وشوی بدون کف','۲۰۰ میلی‌لیتر',440000,'#F1E6D8',{step:'cleanser',does:'پوست را بدون کشیدگی تمیز می‌کند و سد پوستی را حفظ می‌کند.'}),
-  product('niacinamide','سرم نیاسینامید ۵٪','۳۰ میلی‌لیتر',560000,'#E9E2F5',{step:'treatment',does:'چربی و نمای منافذ را کم می‌کند، لک را کم‌رنگ‌تر و سد پوستی را قوی‌تر می‌کند.'}),
-  product('vitamin-c','سرم ویتامین C پایدار','۳۰ میلی‌لیتر',780000,'#F7D58B',{step:'treatment',does:'آنتی‌اکسیدان؛ کنار ضدآفتاب، پوست را روشن‌تر و یکدست‌تر می‌کند.'}),
-  product('bha','لوسیون سالیسیلیک اسید ۲٪','۱۰۰ میلی‌لیتر',520000,'#D6EBD2',{step:'treatment',does:'داخل منافذ را تمیز می‌کند و جوش و جوش سرسیاه را کم می‌کند.'}),
-  product('azelaic','کرم آزلائیک اسید ۱۰٪','۳۰ میلی‌لیتر',690000,'#F3E3E7',{step:'treatment',does:'لک بعد از جوش، قرمزی و جوش را کم می‌کند و برای پوست حساس هم مناسب است.'}),
-  product('retinal','سرم رتینال ۰٫۰۵٪','۳۰ میلی‌لیتر',890000,'#F4C9A0',{step:'treatment',does:'نوسازی پوست؛ خط‌های ظریف، ناصافی بافت و جوش را به‌مرور کم می‌کند.'}),
-  product('hyaluronic','سرم هیالورونیک اسید','۳۰ میلی‌لیتر',490000,'#D4E4F7',{step:'hydration',does:'آب‌رسانی بدون سنگینی.'}),
-  product('gel-cream','ژل‌کرم آبرسان سبک','۵۰ میلی‌لیتر',510000,'#DDF0EC',{step:'moisturizer',does:'رطوبت بدون براقی برای پوست چرب و مختلط.'}),
-  product('ceramide','کرم سرامید ترمیم‌کننده','۵۰ میلی‌لیتر',620000,'#F2EBDD',{step:'moisturizer',does:'سد پوستی را ترمیم می‌کند و جلوی خشکی و تحریک را می‌گیرد.'}),
-  product('spf-fluid','فلوئید ضدآفتاب SPF 50','۵۰ میلی‌لیتر',650000,'#FBEFD9',{step:'sunscreen',does:'محافظت گسترده از UVA و UVB، سبک و بی‌رنگ.'}),
-  product('spf-tinted','ضدآفتاب رنگی مینرال SPF 50','۵۰ میلی‌لیتر',720000,'#D9A982',{step:'sunscreen',does:'فیلتر مینرال ملایم؛ اکسید آهنِ رنگ آن، جلوی نور مرئی را هم که لک را تیره‌تر می‌کند می‌گیرد.'})
+  product('cleanser-gel','ژل شست‌وشوی ملایم','۲۰۰ میلی‌لیتر','#CFE6E8',{step:'cleanser',does:'بدون خشک‌کردن، چربی و آلودگی را می‌شوید.'}),
+  product('cleanser-cream','کرم شست‌وشوی بدون کف','۲۰۰ میلی‌لیتر','#F1E6D8',{step:'cleanser',does:'پوست را بدون کشیدگی تمیز می‌کند و سد پوستی را حفظ می‌کند.'}),
+  product('niacinamide','سرم نیاسینامید ۵٪','۳۰ میلی‌لیتر','#E9E2F5',{step:'treatment',does:'چربی و نمای منافذ را کم می‌کند، لک را کم‌رنگ‌تر و سد پوستی را قوی‌تر می‌کند.'}),
+  product('vitamin-c','سرم ویتامین C پایدار','۳۰ میلی‌لیتر','#F7D58B',{step:'treatment',does:'آنتی‌اکسیدان؛ کنار ضدآفتاب، پوست را روشن‌تر و یکدست‌تر می‌کند.'}),
+  product('bha','لوسیون سالیسیلیک اسید ۲٪','۱۰۰ میلی‌لیتر','#D6EBD2',{step:'treatment',does:'داخل منافذ را تمیز می‌کند و جوش و جوش سرسیاه را کم می‌کند.'}),
+  product('azelaic','کرم آزلائیک اسید ۱۰٪','۳۰ میلی‌لیتر','#F3E3E7',{step:'treatment',does:'لک بعد از جوش، قرمزی و جوش را کم می‌کند و برای پوست حساس هم مناسب است.'}),
+  product('retinal','سرم رتینال ۰٫۰۵٪','۳۰ میلی‌لیتر','#F4C9A0',{step:'treatment',does:'نوسازی پوست؛ خط‌های ظریف، ناصافی بافت و جوش را به‌مرور کم می‌کند.'}),
+  product('hyaluronic','سرم هیالورونیک اسید','۳۰ میلی‌لیتر','#D4E4F7',{step:'hydration',does:'آب‌رسانی بدون سنگینی.'}),
+  product('gel-cream','ژل‌کرم آبرسان سبک','۵۰ میلی‌لیتر','#DDF0EC',{step:'moisturizer',does:'رطوبت بدون براقی برای پوست چرب و مختلط.'}),
+  product('ceramide','کرم سرامید ترمیم‌کننده','۵۰ میلی‌لیتر','#F2EBDD',{step:'moisturizer',does:'سد پوستی را ترمیم می‌کند و جلوی خشکی و تحریک را می‌گیرد.'}),
+  product('spf-fluid','فلوئید ضدآفتاب SPF 50','۵۰ میلی‌لیتر','#FBEFD9',{step:'sunscreen',does:'محافظت گسترده از UVA و UVB، سبک و بی‌رنگ.'}),
+  product('spf-tinted','ضدآفتاب رنگی مینرال SPF 50','۵۰ میلی‌لیتر','#D9A982',{step:'sunscreen',does:'فیلتر مینرال ملایم؛ اکسید آهنِ رنگ آن، جلوی نور مرئی را هم که لک را تیره‌تر می‌کند می‌گیرد.'})
 ];
 export const skincareById=id=>skincare.find(p=>p.id===id);
 

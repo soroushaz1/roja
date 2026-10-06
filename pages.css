@@ -54,3 +54,19 @@ details p{margin:0 0 14px}
 footer{max-width:960px;margin:0 auto;padding:16px;border-top:1px solid var(--line-soft);font-size:13px}
 footer p{color:var(--faint);margin:0 0 6px}
 footer a{color:var(--muted)}
+h3{font-size:16px;margin:22px 0 6px}
+code{font-family:ui-monospace,Consolas,monospace;font-size:.88em;background:var(--surface-2);border:1px solid var(--line-soft);border-radius:6px;padding:1px 6px;color:var(--text)}
+pre{background:#0C070A;border:1px solid var(--line);border-radius:12px;padding:14px 16px;overflow-x:auto;margin:0 0 16px;text-align:left}
+pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.7;color:#F4E3B0}
+.benefits{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px}
+.benefits li{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.benefits strong{display:block;color:var(--text)}
+.benefits span{font-size:14px;color:var(--muted);line-height:1.85}
+.steps{padding-inline-start:22px;color:var(--muted)}
+.steps li{margin-bottom:8px}
+.note p:last-child{margin-bottom:0}
+#buy-demo{scroll-margin-top:20px}
+#buy-demo:target{border-color:var(--rose);background:#EC5A8414;border-radius:0 12px 12px 0;padding:12px}
+.contact{display:flex;gap:10px;flex-wrap:wrap}
+.button.ghost{background:var(--surface-2);color:var(--text);border:1px solid var(--line);box-shadow:none}
+.button.ghost:hover{color:#fff;border-color:var(--rose)}

@@ -5,7 +5,7 @@
 // The mirror (app.js) owns the camera and the landmarks. It calls tick() every frame
 // while this panel is showing; the panel asks it for a measurement through scan()
 // when it wants one, a few times a second at most.
-import {questions,requiredQuestions,assess,combineScans,record,axes,fitzNames,concernNames} from './skin.js?v=21';
+import {questions,requiredQuestions,assess,combineScans,record,axes,fitzNames,concernNames} from './skin.js?v=22';
 
 const QUALITY={
   size:'صورت به اندازهٔ کافی نزدیک است',
@@ -18,7 +18,7 @@ const QUALITY={
 const API='api/skin';
 const SCANS=6;
 
-export function createSkinPanel({el,fa,pct,toman,toast,addToCart,scan,mirror}){
+export function createSkinPanel({el,fa,pct,toast,buyLink,shop,icon,scan,mirror}){
   const $=id=>document.getElementById(id);
   const answers={using:[],irritants:[]};
   let step='capture';               // capture | questions | result
@@ -103,10 +103,10 @@ export function createSkinPanel({el,fa,pct,toman,toast,addToCart,scan,mirror}){
     return el('li',{class:'routine-step'},
       el('span',{class:'mini',style:{background:shade.color}}),
       el('div',{},
-        el('strong',{text:p.name}),el('small',{text:` · ${shade.name} · ${toman(p.price)}`}),
+        el('strong',{text:p.name}),el('small',{text:` · ${shade.name}`}),
         el('p',{class:'help',text:s.why}),
         s.note?el('p',{class:'quiet',text:s.note}):null),
-      el('button',{class:'ghost',type:'button','aria-label':`افزودن ${p.name} به سبد`,text:'سبد',onclick:()=>addToCart(p,shade)}));
+      shop?buyLink(el('a',{class:'ghost button',target:'_blank',rel:'noopener','aria-label':`${p.name} در ${shop.name}`},shop.name,icon('i-out')),p,shade):null);
   }
   function renderResult(){
     const r=result,box=$('skin-result-body');
@@ -125,7 +125,6 @@ export function createSkinPanel({el,fa,pct,toman,toast,addToCart,scan,mirror}){
       })));
     const concerns=Object.entries(r.concerns).sort((a,b)=>b[1]-a[1]).map(([k,v])=>
       el('li',{},el('span',{text:concernNames[k]}),bar(v,concernNames[k]),el('output',{text:fa.format(v)})));
-    const all=[...r.routine.morning,...r.routine.evening].map(s=>s.product).filter((p,i,list)=>list.indexOf(p)===i);
     box.replaceChildren(...[
       el('div',{class:'profile'},fitz,baumann),
       r.imageQuality===false?el('p',{class:'note',text:'کیفیت تصویر کامل نبود؛ عددهایی که از تصویر آمده‌اند تقریبی‌ترند.'}):null,
@@ -139,7 +138,7 @@ export function createSkinPanel({el,fa,pct,toman,toast,addToCart,scan,mirror}){
       el('ol',{class:'routine'},...r.routine.morning.map(productRow)),
       el('h3',{text:'روتین شب'}),
       el('ol',{class:'routine'},...r.routine.evening.map(productRow)),
-      el('button',{class:'ghost wide',type:'button',text:'همهٔ محصولات روتین به سبد',onclick:()=>{all.forEach(p=>addToCart(p,p.shades[0],true));toast(`${fa.format(all.length)} محصول به سبد نمونه اضافه شد.`);}}),
+      el('p',{class:'help',text:shop?`هر قدم نوع محصول را می‌گوید، نه برند آن را. دکمهٔ «${shop.name}» محصولات همان نوع را در ${shop.name} نشان می‌دهد؛ پیش از خرید، ترکیب و درصد مادهٔ مؤثر را با این روتین مقایسه کن.`:'هر قدم نوع محصول را می‌گوید، نه برند آن را؛ هنگام خرید، ترکیب و درصد مادهٔ مؤثر را با این روتین مقایسه کن.'}),
       ...r.routine.notes.map(t=>el('p',{class:'quiet',text:t}))].filter(Boolean));
     renderFollow();
   }

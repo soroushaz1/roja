@@ -1,7 +1,7 @@
 # رُژا · Roja
 
-A live mirror that runs entirely in the browser. Try makeup on your own face before you
-buy it — foundation matched to your skin, blush, contour, eyeshadow, liner, mascara,
+A live mirror that runs entirely in the browser, made for cosmetics shops to put on their
+own sites. Try makeup on your own face before you buy it — foundation matched to your skin, blush, contour, eyeshadow, liner, mascara,
 brows and lips — then blend, fade or erase it by hand with a brush, compare two shades
 side by side, or pick a cosmetic procedure and see an approximation of the shape change.
 Everything happens on the device: the camera frame becomes a GPU texture and is never
@@ -14,6 +14,11 @@ uploaded or stored, and no asset is fetched from anywhere but this repository.
 > زیبایی را ببین. تصویر دوربین روی همان دستگاه پردازش می‌شود و هیچ‌جا فرستاده یا ذخیره نمی‌شود.
 
 The interface is in Persian and laid out right-to-left.
+
+Roja sells nothing itself. A shop puts the mirror on its site (an `iframe` or a link with
+`?shop=<id>`), and every "buy" in it leads to that shop's product, or its search for the
+product's kind and the shade's colour — or straight into the shop's own cart. Without a
+shop, the site is the demo and offers the mirror to shops. See [For shops](#for-shops).
 
 | makeup | procedures | debug |
 |---|---|---|
@@ -35,13 +40,13 @@ and its scores describe one camera picture, not a clinical grading.
 
 ## What is in it
 
-**آرایش — makeup.** Sixteen products in Roja's own range (121 shades), grouped as face,
+**آرایش — makeup.** Sixteen kinds of product in sample shades (121 of them), grouped as face,
 eyes and lips: matte foundation and a light skin tint, concealer, contour, powder and cream
 blush, highlighter, single eyeshadows and four-pan palettes, liquid liner in four shapes
 (thin, classic, winged, smudged), mascara (lengthening or volumising), brow pencil, lip
 liner, velvet and liquid-matte lipsticks, and gloss that layers over a lipstick. Every
 product has intensity (or coverage) and edge-feather controls, a finish (matte, velvet,
-satin, cream, gloss, shimmer, metallic, dewy) and a sample price.
+satin, cream, gloss, shimmer, metallic, dewy) and a way to the shop the mirror is for.
 
 - **Brush — پخش‌کن، محوکن، پاک‌کن، بازگردانی.** Paint on the mirror to *blend* colour out
   softly, *fade* it a little at a time, *erase* it, or *restore* whatever you changed. Each
@@ -66,12 +71,10 @@ satin, cream, gloss, shimmer, metallic, dewy) and a sample price.
   take snapshots of the mirror to compare two of them later, save them, or send them
   through the phone's share sheet (Instagram, Telegram, WhatsApp…) where the browser
   allows it. Snapshots stay in the page's memory until you save or share them.
-- **Cart** with quantities, prices and a total; "add the whole look" puts every product
-  on the face in the cart. An order goes to the shop as a ready-written message in
-  WhatsApp or Telegram (the shop's number and username are set in `shop.js`; Telegram
-  cannot take the text in a link, so it is copied first). With neither set, the order
-  is offered as text to share or copy. Nothing is paid or stored on the site.
-- **Remembered** — the look on the face and the cart are kept in the browser's local
+- **Buy**, in a shop's mirror only: "see it in <shop>" under the product, and "buy" in the
+  header lists every product on the face, each a link into the shop. Nothing is paid or
+  stored on Roja's side.
+- **Remembered** — the look on the face is kept in the browser's local
   storage, so a reload or the next visit starts where the last one stopped.
 - **First visit.** When the mirror first comes on, five short notes point at the shades,
   the products, the brush, compare and the snapshot button. Skipped or finished, they do
@@ -97,8 +100,8 @@ pigmented/non-pigmented, wrinkled/tight — 16 types) with a confidence for each
 0–100 scores for oiliness, dryness, sensitivity, redness, spots, uneven tone, lines, texture
 and the eye area. Before measuring, the mirror checks the picture — distance, a straight head,
 enough and even light, a natural colour of light, focus — and a measure the picture cannot
-carry is left out rather than guessed. The profile becomes a morning and evening routine from
-Roja's sample skincare range, each step with the reason it is there: at most two night
+carry is left out rather than guessed. The profile becomes a morning and evening routine of
+kinds of skincare product (in a shop's mirror, each a link into the shop), each step with the reason it is there: at most two night
 actives (one for sensitive skin), salicylic acid and a retinoid never on the same night, no
 retinoid in pregnancy or when retinoids irritate. It can be done without a picture, from the
 answers alone. If you choose to, the result (numbers and answers, never the picture) is kept
@@ -112,6 +115,26 @@ the displacement field of the procedures and the brush strokes. Find a landmark 
 or point at the mirror to inspect the nearest one. Live stats (renderer, frame size, frame
 rate, tracking rate and latency, mask and draw cost, head pose, symmetry, expression
 scores) in the panel or on the mirror, and an export of all of it as JSON.
+
+## For shops
+
+`shops.js` lists the shops the mirror can sell for. Each has a name, its own origin, and its
+search address (`{q}` becomes the words searched for), and can give its own page per product
+or per shade (`links`) and a referral code to add to every link (`params`). Only a shop
+listed there can be named in an address, so a link cannot send people anywhere else.
+
+```html
+<iframe src="https://pythonpath.ir/?shop=YOUR-SHOP"
+        allow="camera; clipboard-write; web-share; fullscreen"
+        style="width:100%;height:760px;border:0"></iframe>
+```
+
+Inside a shop's page the mirror hides its footer and its own links, and on every "buy" it
+posts `{type:'roja:buy', shop, product, shade, query, url}` to the shop's origin only (never a
+picture). A shop with `cart: true` listens for it and adds the product to its own cart, and
+the mirror stays where it is. `?shop=demo` is a demo shop whose "buy" lands on `business/`,
+the page that explains all this to shops. A look sent from a shop's mirror opens in that
+shop's mirror.
 
 ## How it works
 
@@ -169,7 +192,7 @@ scores) in the panel or on the mirror, and an export of all of it as JSON.
 
 No build step, no framework, no bundler. Plain ES modules served as files.
 
-**Reading pages** — `procedures/<id>/`, `makeup/<id>/`, an index of each, `faq/`, `privacy/`,
+**Reading pages** — `procedures/<id>/`, `makeup/<id>/`, an index of each, `faq/`, `privacy/`, `business/`,
 `sitemap.xml` and `robots.txt` are plain HTML made by `tools/build-pages.mjs` from
 `procedures.js` and `catalog.js`, so search engines (and anyone without a camera) can find
 each procedure and product. They are committed like the rest of the site; run the tool
@@ -185,11 +208,11 @@ page until you save it or close the page), while the shade finder runs a few sma
 patches that the face worker averages into one colour, and while the skin check measures,
 the face cut out of the frame, reduced on the page to a few numbers and let go.
 
-The look you put together, your saved looks and the sample cart are kept in the browser's
+The look you put together and your saved looks are kept in the browser's
 own storage on this device and never sent anywhere.
 
 Anonymous usage counts leave the device in batches: which shades, looks and procedures
-were tried, what went in the cart, how often something was shared or ordered — pairs
+were tried, which product was opened in the shop, how often something was shared — pairs
 like `shade vlv-3`. The server (`server/stats.mjs`) checks each against the catalogue
 and keeps only a total per item per day: no key, cookie, address or time of day, and
 nginx keeps no access log for it. Nothing is counted from the Android app or a
