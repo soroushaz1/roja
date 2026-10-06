@@ -87,7 +87,7 @@ texture rather than shape. Each shows its kind, how long it typically lasts and 
 recovery. Several can be combined, the current makeup can stay on during the preview, and a
 measurements table shows what the preview changed — nose width, lip thickness and ratio,
 eye opening and canthal tilt, jaw and chin width, facial thirds — before and after. Drag the
-brass seam across your face to compare. Twenty-six region controls are available for fine
+brass seam across your face to compare. Procedures are shown one at a time; "combine" (ترکیب چند عمل با هم) adds each one picked to the others. Twenty-six region controls are available for fine
 tuning.
 
 **تحلیل پوست — skin check.** A picture of the bare face and eleven short questions give a

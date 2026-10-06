@@ -1,17 +1,17 @@
-import {products,categories,finishes,looks,byProduct} from './catalog.js?v=20';
-import {layerSpecs,createMaskPainter,renderFallback,createSmoother,landmarksByType,frameLandmarks,hexToRgb} from './makeup.js?v=20';
-import {createStage,layerModes} from './stage.js?v=20';
-import {controls,regions,controlLandmarks,controlRange,deformers,textureLayers} from './deform.js?v=20';
-import {procedures,byId,amountsFor,resolve,kinds} from './procedures.js?v=20';
-import {renderDebug,nearest} from './debug.js?v=20';
-import {createBrush,brushModes} from './brush.js?v=20';
-import {metrics,measure,points as placed,symmetry,pose as poseOf} from './measure.js?v=20';
-import {CANON,CANON_ASPECT,TRIANGLES} from './facemesh.js?v=20';
-import {createSkinScanner} from './skin-scan.js?v=20';
-import {createSkinPanel} from './skin-panel.js?v=20';
-import {skincareById} from './skin.js?v=20';
-import {count} from './usage.js?v=20';
-import {shop} from './shop.js?v=20';
+import {products,categories,finishes,looks,byProduct} from './catalog.js?v=21';
+import {layerSpecs,createMaskPainter,renderFallback,createSmoother,landmarksByType,frameLandmarks,hexToRgb} from './makeup.js?v=21';
+import {createStage,layerModes} from './stage.js?v=21';
+import {controls,regions,controlLandmarks,controlRange,deformers,textureLayers} from './deform.js?v=21';
+import {procedures,byId,amountsFor,resolve,kinds} from './procedures.js?v=21';
+import {renderDebug,nearest} from './debug.js?v=21';
+import {createBrush,brushModes} from './brush.js?v=21';
+import {metrics,measure,points as placed,symmetry,pose as poseOf} from './measure.js?v=21';
+import {CANON,CANON_ASPECT,TRIANGLES} from './facemesh.js?v=21';
+import {createSkinScanner} from './skin-scan.js?v=21';
+import {createSkinPanel} from './skin-panel.js?v=21';
+import {skincareById} from './skin.js?v=21';
+import {count} from './usage.js?v=21';
+import {shop} from './shop.js?v=21';
 
 const $=id=>document.getElementById(id);
 // GitHub Pages ignores the ?v= query, and browsers and its CDN keep a page for up to ten
@@ -19,7 +19,7 @@ const $=id=>document.getElementById(id);
 // newer script, which would then look for elements that page does not have. Such a
 // page is loaded afresh, once; if it is still the old one, it says a new version is
 // on its way instead of failing.
-const RELEASE='20';
+const RELEASE='21';
 if(document.documentElement.dataset.release!==RELEASE){
   let tried=null;
   try{tried=sessionStorage.getItem('roja-reloaded');sessionStorage.setItem('roja-reloaded',RELEASE);}catch{}
@@ -374,7 +374,7 @@ function lookFromLink(){
     return true;
   }
   if(kind==='procedure'){
-    if(byId(value)){setMode('procedure');if(!active.has(value))setStrength(value,60);showProcedure(value);}
+    if(byId(value)){setMode('procedure');activateProcedure(value);showProcedure(value);}
     return true;
   }
   let raw='';try{raw=decodeURIComponent(m[1]);}catch{}
@@ -554,7 +554,7 @@ function showProcedure(id){
   if(!procedure){
     $('procedure-kicker').textContent='عمل‌های زیبایی';
     $('procedure-title').textContent='یک عمل را انتخاب کن';
-    $('procedure-summary').textContent='از نوار زیر آینه عملی را بزن تا نتیجهٔ تقریبی آن روی صورتت ساخته شود. می‌توانی چند مورد را با هم ببینی.';
+    $('procedure-summary').textContent='از نوار زیر آینه عملی را بزن تا نتیجهٔ تقریبی آن روی صورتت ساخته شود. برای دیدن چند عمل با هم، «ترکیب چند عمل با هم» را روشن کن.';
     $('procedure-note').textContent='';
     renderActiveList();
     return;
@@ -581,6 +581,15 @@ function renderActiveList(){
     return el('button',{type:'button','aria-current':String(id===currentProcedure),onclick:()=>showProcedure(id),
       title:'انتخاب برای تنظیم'},procedure.name,' ',el('b',{text:pct(v)}));
   }));
+}
+// One procedure at a time unless "combine" is on: picking another replaces the one
+// shown, which is what most people expect. Combined, each one picked is added.
+const COMBINE='roja-combine';
+try{$('combine-procedures').checked=localStorage.getItem(COMBINE)==='1';}catch{}
+function activateProcedure(id){
+  if(active.has(id))return;
+  if(!$('combine-procedures').checked)active.clear();
+  setStrength(id,60);
 }
 function setStrength(id,value){
   if(value>0){active.set(id,value);count('procedure',id);}else active.delete(id);
@@ -667,10 +676,7 @@ function buildTray(){
         const strength=active.get(procedure.id)||0;
         const b=el('button',{class:'chip',type:'button',data:{procedure:procedure.id},'aria-pressed':String(strength>0)},procedure.name);
         if(strength>0)b.append(el('span',{class:'on',text:pct(strength)}));
-        b.onclick=()=>{
-          if(!active.has(procedure.id))setStrength(procedure.id,60);
-          showProcedure(procedure.id);
-        };
+        b.onclick=()=>{activateProcedure(procedure.id);showProcedure(procedure.id);};
         chips.append(b);
       }
     }
@@ -1091,7 +1097,7 @@ function onTracker(d){
 function ensureTracker(){
   if(tracker||trackerStarting)return;
   let w=null;
-  try{w=new Worker(new URL(`face-worker.js?v=20${gpuQuery}`,import.meta.url));}catch(e){perf.lastError=`worker: ${e.message}`;}
+  try{w=new Worker(new URL(`face-worker.js?v=21${gpuQuery}`,import.meta.url));}catch(e){perf.lastError=`worker: ${e.message}`;}
   if(!w){useTracker('page','no worker');return;}
   ready=false;busy=false;
   tracker={kind:'worker',post:(m,transfer)=>w.postMessage(m,transfer),close:()=>w.terminate()};
@@ -1111,7 +1117,7 @@ async function useTracker(kind,reason){
   const token=++trackerGeneration;
   try{
     const Vision=await import('./vendor/vision_bundle.mjs');
-    await import('./face-core.js?v=20');
+    await import('./face-core.js?v=21');
     const core=self.rojaFaceCore(Vision,new URL('./',import.meta.url).href);
     const found=await core.init();
     if(token!==trackerGeneration){core.close();return;}
@@ -1921,6 +1927,17 @@ $('procedure-reset').onclick=()=>{
   showProcedure(null);buildTray();updateSeam();invalidate({masks:true,measure:true});
 };
 $('with-makeup').onchange=()=>{updateSeam();invalidate({masks:true});};
+// Turned off with several on: keep the one being looked at.
+$('combine-procedures').onchange=()=>{
+  const on=$('combine-procedures').checked;
+  try{localStorage.setItem(COMBINE,on?'1':'0');}catch{}
+  if(!on&&active.size>1){
+    const keep=active.has(currentProcedure)?currentProcedure:[...active.keys()].pop();
+    const value=active.get(keep);
+    active.clear();setStrength(keep,value);showProcedure(keep);
+  }
+  toast(on?'عمل‌ها با هم ترکیب می‌شوند: هر عملی که بزنی به قبلی‌ها اضافه می‌شود.':'هر بار یک عمل: عمل تازه جای قبلی را می‌گیرد.');
+};
 for(const region of regions){
   const list=controls.filter(c=>c.region===region.id);
   $('fine-controls').append(el('p',{class:'fine-group',text:region.name}));

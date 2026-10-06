@@ -8,7 +8,7 @@
 // and lines.
 //
 // A handful of numbers leave this module; the pixels do not. Nothing is kept or sent.
-import {CANON,TRIANGLES} from './facemesh.js?v=20';
+import {CANON,TRIANGLES} from './facemesh.js?v=21';
 
 const FACE_PX=320;
 const SHARP=12;            // the 98th-percentile edge step a focused face reaches
