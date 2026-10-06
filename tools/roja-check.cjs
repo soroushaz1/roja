@@ -146,7 +146,18 @@ const LIPS=[61,0,291,17,40,270,91,321];
     const page=await browser.newPage({viewport:{width:1440,height:960},acceptDownloads:true});
     const errors=[];page.on('pageerror',e=>errors.push(e.message));
     await page.addInitScript(fakeCamera,{data:fixture});
-    await page.goto(origin,{waitUntil:'domcontentloaded',timeout:60000});
+    // Roja's own demo offers no buying: it shows the way to put the mirror on a shop.
+    {
+      const demo=await browser.newPage({viewport:{width:1440,height:960}});
+      await demo.goto(origin,{waitUntil:'domcontentloaded',timeout:60000});
+      await demo.waitForSelector('#look-items > *',{state:'attached'});
+      assert.equal(await demo.locator('#add').isVisible(),false,'the demo offers buying without a shop');
+      assert.equal(await demo.locator('#basket').isVisible(),false,'the demo shows a buy button without a shop');
+      assert.equal(await demo.locator('.biz-card').isVisible(),true,'the demo does not offer the mirror to shops');
+      await demo.close();
+    }
+    // The rest runs as a shop's mirror (shops.js: demo).
+    await page.goto(origin+'/?shop=demo',{waitUntil:'domcontentloaded',timeout:60000});
 
     await page.locator('#start').click();
     await page.waitForFunction(()=>window.testLandmarks,null,{timeout:90000});
@@ -396,7 +407,7 @@ const LIPS=[61,0,291,17,40,270,91,321];
       panel.scrollTop=0;
       return ok;
     });
-    assert(reachable,'the add-to-cart button cannot be scrolled into view');
+    assert(reachable,'the buy button cannot be scrolled into view');
 
     /* ---- the debug overlay's landmark maps must not fall behind the code ---- */
     {
@@ -599,12 +610,13 @@ const LIPS=[61,0,291,17,40,270,91,321];
     await page.waitForTimeout(150);await settle(page);
     assert((await page.evaluate(region,{ids:LIPS})).diff>4,'makeup stopped rendering after the procedure mode');
     await page.locator('#shades .shade').nth(1).click();
-    await page.locator('#add').click();
+    // "Buy" is a link to the shop's search for the product and the shade's colour.
+    const buy=new URL(await page.locator('#add').getAttribute('href'));
+    assert.equal(buy.origin+buy.pathname,'https://pythonpath.ir/business/','the buy link does not go to the shop');
+    assert.equal(buy.searchParams.get('q'),'رژ لب جامد مخملی نود گرم','the buy link does not search for the product and shade');
     await page.locator('#basket').click();
-    assert.equal(await page.locator('.cart-row').count(),1,'cart did not record the shade');
-    await page.locator('.cart-row .qty button').nth(1).click();
-    assert.equal(await page.locator('.cart-row .qty span').textContent(),'۲','the quantity did not go up');
-    assert.equal(await page.locator('#cart-total').isVisible(),true,'the cart shows no total');
+    assert.equal(await page.locator('.buy-row').count(),1,'the buy list does not show the product on the face');
+    assert.match(await page.locator('.buy-row a').getAttribute('href'),/^https:\/\/pythonpath\.ir\/business\/\?q=/,'the buy list does not link to the shop');
     await page.locator('#close').click();
 
     /* ---- the skin check: the bare face, the questions, a routine ---- */
@@ -626,11 +638,9 @@ const LIPS=[61,0,291,17,40,270,91,321];
     const code=await page.locator('.profile-card .big').nth(1).textContent();
     assert.match(code,/^[OD][SR][PN][WT]$/,`not a Baumann type: ${code}`);
     assert(await page.locator('.routine').nth(0).locator('.routine-step').count()>=3,'the morning routine is too short');
-    const inCart=Number((await page.locator('#count').textContent()).replace(/[۰-۹]/g,d=>'۰۱۲۳۴۵۶۷۸۹'.indexOf(d)));
-    await page.locator('text=همهٔ محصولات روتین به سبد').click();
-    const nowInCart=Number((await page.locator('#count').textContent()).replace(/[۰-۹]/g,d=>'۰۱۲۳۴۵۶۷۸۹'.indexOf(d)));
-    assert(nowInCart>inCart+2,'the routine did not go into the cart');
-    report.skin={baumann:code,fitz:await page.locator('.profile-card .big').nth(0).textContent(),cart:nowInCart-inCart};
+    const routineLinks=await page.locator('.routine-step a[href]').count();
+    assert(routineLinks>=3,'the routine steps do not link to the shop');
+    report.skin={baumann:code,fitz:await page.locator('.profile-card .big').nth(0).textContent(),links:routineLinks};
     await page.locator('#mode-makeup').click();await page.waitForTimeout(150);await settle(page);
     assert((await page.evaluate(region,{ids:LIPS})).diff>4,'makeup stopped rendering after the skin check');
 

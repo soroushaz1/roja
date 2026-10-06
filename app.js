@@ -1,17 +1,17 @@
-import {products,categories,finishes,looks,byProduct} from './catalog.js?v=21';
-import {layerSpecs,createMaskPainter,renderFallback,createSmoother,landmarksByType,frameLandmarks,hexToRgb} from './makeup.js?v=21';
-import {createStage,layerModes} from './stage.js?v=21';
-import {controls,regions,controlLandmarks,controlRange,deformers,textureLayers} from './deform.js?v=21';
-import {procedures,byId,amountsFor,resolve,kinds} from './procedures.js?v=21';
-import {renderDebug,nearest} from './debug.js?v=21';
-import {createBrush,brushModes} from './brush.js?v=21';
-import {metrics,measure,points as placed,symmetry,pose as poseOf} from './measure.js?v=21';
-import {CANON,CANON_ASPECT,TRIANGLES} from './facemesh.js?v=21';
-import {createSkinScanner} from './skin-scan.js?v=21';
-import {createSkinPanel} from './skin-panel.js?v=21';
-import {skincareById} from './skin.js?v=21';
-import {count} from './usage.js?v=21';
-import {shop} from './shop.js?v=21';
+import {products,categories,finishes,looks,byProduct} from './catalog.js?v=22';
+import {layerSpecs,createMaskPainter,renderFallback,createSmoother,landmarksByType,frameLandmarks,hexToRgb} from './makeup.js?v=22';
+import {createStage,layerModes} from './stage.js?v=22';
+import {controls,regions,controlLandmarks,controlRange,deformers,textureLayers} from './deform.js?v=22';
+import {procedures,byId,amountsFor,resolve,kinds} from './procedures.js?v=22';
+import {renderDebug,nearest} from './debug.js?v=22';
+import {createBrush,brushModes} from './brush.js?v=22';
+import {metrics,measure,points as placed,symmetry,pose as poseOf} from './measure.js?v=22';
+import {CANON,CANON_ASPECT,TRIANGLES} from './facemesh.js?v=22';
+import {createSkinScanner} from './skin-scan.js?v=22';
+import {createSkinPanel} from './skin-panel.js?v=22';
+import {skincareById} from './skin.js?v=22';
+import {count} from './usage.js?v=22';
+import {currentShop,shopUrl,searchWords} from './shops.js?v=22';
 
 const $=id=>document.getElementById(id);
 // GitHub Pages ignores the ?v= query, and browsers and its CDN keep a page for up to ten
@@ -19,7 +19,7 @@ const $=id=>document.getElementById(id);
 // newer script, which would then look for elements that page does not have. Such a
 // page is loaded afresh, once; if it is still the old one, it says a new version is
 // on its way instead of failing.
-const RELEASE='21';
+const RELEASE='22';
 if(document.documentElement.dataset.release!==RELEASE){
   let tried=null;
   try{tried=sessionStorage.getItem('roja-reloaded');sessionStorage.setItem('roja-reloaded',RELEASE);}catch{}
@@ -35,7 +35,6 @@ const fa=new Intl.NumberFormat('fa-IR');
 const fa1=new Intl.NumberFormat('fa-IR',{minimumFractionDigits:1,maximumFractionDigits:1});
 const fa2=new Intl.NumberFormat('fa-IR',{minimumFractionDigits:2,maximumFractionDigits:2});
 const pct=n=>fa.format(Math.round(n))+'٪';
-const toman=n=>fa.format(n)+' تومان';
 const el=(tag,props={},...children)=>{
   const node=document.createElement(tag);
   for(const [k,v] of Object.entries(props)){
@@ -74,6 +73,17 @@ function cameraHelp(){
 const code=e=>` (کد: ${e?.name&&e.name!=='Error'?e.name:e?.message||'نامشخص'})`;
 const debugCanvas=$('debug'), debugCtx=debugCanvas.getContext('2d');
 const viewport=$('viewport');
+// The shop this mirror sells for (shops.js), from the address; null on Roja's own demo,
+// which then offers no buying, only the way to put the mirror on a shop. Inside a
+// shop's page (an iframe) the page around it is that shop.
+const shop=currentShop();
+const embedded=(()=>{try{return window.parent!==window;}catch{return true;}})();
+document.documentElement.classList.toggle('has-shop',!!shop);
+document.documentElement.classList.toggle('embedded',embedded);
+// The app carries only the mirror: the shops' page is on the site.
+if(native)document.querySelectorAll('a[href="business/"]').forEach(a=>{a.href='https://pythonpath.ir/business/';});
+if(shop)document.querySelectorAll('.shop-name').forEach(n=>{n.textContent=shop.name;});
+if(shop)$('basket').setAttribute('aria-label',`خرید آرایش روی صورت از ${shop.name}`);
 
 /* ---------- state ------------------------------------------------------- */
 let mode='makeup';                       // makeup | procedure | skin
@@ -91,7 +101,6 @@ const makeupState=Object.fromEntries(products.map(p=>[p.id,{
   intensity:p.intensity,fade:p.fade??45,enabled:p.id==='velvet',style:p.styles?.[0]?.id}]));
 let product=byProduct('velvet');
 let category=product.category;
-const cart=new Map();
 const shots=[];
 
 const active=new Map();                  // procedure id -> strength 0..100
@@ -203,12 +212,14 @@ function updateLook(){
   $('product-toggle').setAttribute('aria-pressed',String(makeupState[product.id].enabled));
   const any=products.some(p=>makeupState[p.id].enabled);
   $('add-look').disabled=$('save-look').disabled=$('link-look').disabled=!any;
+  $('count').textContent=fa.format(products.filter(p=>makeupState[p.id].enabled).length);
   if(mode==='makeup')updateTrayState();
 }
 function updateSelection(){
   const shade=selected(), state=makeupState[product.id];
   $('shade-name').textContent=shade.name;
-  $('shade-code').textContent=`${product.code} / ${fa.format(Number(shade.variantId))}`;
+  $('shade-code').textContent=`${product.palettes?'پالت':'رنگ'} ${fa.format(Number(shade.variantId))} از ${fa.format(product.shades.length)}`;
+  if(shop)buyLink($('add'),product,shade);
   $('big-swatch').style.background=swatchStyle(shade);
   $('shades').querySelectorAll('.shade').forEach(b=>{
     const checked=b.dataset.id===shade.id;
@@ -233,11 +244,10 @@ function selectProduct(id,apply=true){
   if(!next)throw new Error('Unknown product');
   product=next;category=next.category;if(apply)enableProduct(next);
   const cat=categories.find(c=>c.id===next.category);
-  $('product-kicker').textContent=`روژا · ${cat?.name} · ${next.region}`;
+  $('product-kicker').textContent=`${cat?.name} · ${next.region}`;
   $('product-title').textContent=next.title;
   $('product-description').textContent=next.description;
   $('product-limitation').textContent=next.limitation;
-  $('product-price').textContent=toman(next.price);
   const skin=next.mode==='foundation';
   $('intensity-label').textContent=skin?'پوشش':'شدت رنگ';
   $('finder').hidden=!next.finder;
@@ -345,7 +355,8 @@ function saveMyLook(name){
 function lookLink(){
   // The app's own pages live inside it; a link has to point at the site.
   const base=!native&&/^https?:$/.test(location.protocol)?location.origin+location.pathname:'https://pythonpath.ir/';
-  return `${base}#look=${encodeURIComponent(currentItems().map(i=>i.join('.')).join('~'))}`;
+  // A look sent from a shop's mirror opens in that shop's mirror.
+  return `${base}${shop?`?shop=${encodeURIComponent(shop.id)}`:''}#look=${encodeURIComponent(currentItems().map(i=>i.join('.')).join('~'))}`;
 }
 async function sendLookLink(){
   if(!currentItems().length){toast('روی صورت آرایشی نیست که لینکش فرستاده شود.');return;}
@@ -377,7 +388,7 @@ function lookFromLink(){
     if(byId(value)){setMode('procedure');activateProcedure(value);showProcedure(value);}
     return true;
   }
-  let raw='';try{raw=decodeURIComponent(m[1]);}catch{}
+  let raw='';try{raw=decodeURIComponent(value);}catch{}
   const items=cleanItems(raw.split('~').map(part=>part.split('.')));
   if(!items.length){toast('این لینک استایلی ندارد که روی آینه بنشیند.');return true;}
   setMode('makeup');applyLook({name:'لینک',items});
@@ -385,7 +396,7 @@ function lookFromLink(){
 }
 
 /* ---- the first-visit tour ---------------------------------------------- */
-// Four short notes, each next to the control it is about, the first time the mirror
+// Short notes, each next to the control it is about, the first time the mirror
 // comes on. Skipped or finished, it does not come back.
 const TOUR='roja-tour';
 const tourSteps=[
@@ -393,7 +404,8 @@ const tourSteps=[
   ['tray','محصول را از اینجا عوض کن: رژ، سایه، خط چشم، کرم‌پودر و بقیه.'],
   ['brush-toggle','با «براش» رنگ را روی صورت پخش، محو یا پاک کن.'],
   ['compare','«مقایسه» خطی روی صورت می‌گذارد؛ بکشش تا با و بی آرایش را کنار هم ببینی.'],
-  ['snap','عکس بگیر تا ذخیره‌اش کنی یا برای دوستت بفرستی.']
+  ['snap','عکس بگیر تا ذخیره‌اش کنی یا برای دوستت بفرستی.'],
+  ['add',`هر رنگی را که پسندیدی، از اینجا در ${shop?.name||''} پیدا کن.`]
 ];
 let tourAt=-1;
 function tourSeen(){try{return localStorage.getItem(TOUR)==='done';}catch{return true;}}
@@ -520,7 +532,7 @@ function updatePinButton(){
   $('pin-shade').setAttribute('aria-pressed',String(on));
   $('pin-shade').textContent=on
     ?`پایان مقایسه با ${shadeOf(byProduct(pin.product),pin.shade).name}`
-    :'مقایسهٔ این رنگ با رنگ دیگر';
+    :'مقایسه با رنگ دیگر';
 }
 function togglePin(){
   if(pin){pin=null;}
@@ -715,6 +727,8 @@ function statusText(){
 }
 function setMode(next){
   mode=next;
+  // The tour is about the makeup controls; leaving them ends it.
+  if(tourAt>=0&&mode!=='makeup')endTour();
   $('mode-makeup').setAttribute('aria-selected',String(mode==='makeup'));
   $('mode-procedure').setAttribute('aria-selected',String(mode==='procedure'));
   $('mode-skin').setAttribute('aria-selected',String(mode==='skin'));
@@ -1097,7 +1111,7 @@ function onTracker(d){
 function ensureTracker(){
   if(tracker||trackerStarting)return;
   let w=null;
-  try{w=new Worker(new URL(`face-worker.js?v=21${gpuQuery}`,import.meta.url));}catch(e){perf.lastError=`worker: ${e.message}`;}
+  try{w=new Worker(new URL(`face-worker.js?v=22${gpuQuery}`,import.meta.url));}catch(e){perf.lastError=`worker: ${e.message}`;}
   if(!w){useTracker('page','no worker');return;}
   ready=false;busy=false;
   tracker={kind:'worker',post:(m,transfer)=>w.postMessage(m,transfer),close:()=>w.terminate()};
@@ -1117,7 +1131,7 @@ async function useTracker(kind,reason){
   const token=++trackerGeneration;
   try{
     const Vision=await import('./vendor/vision_bundle.mjs');
-    await import('./face-core.js?v=21');
+    await import('./face-core.js?v=22');
     const core=self.rojaFaceCore(Vision,new URL('./',import.meta.url).href);
     const found=await core.init();
     if(token!==trackerGeneration){core.close();return;}
@@ -1636,7 +1650,7 @@ async function runMulti(){
     x.fillStyle='#F6ECF1';x.font='600 16px Estedad, Tahoma, sans-serif';x.textAlign='right';x.textBaseline='middle';x.direction='rtl';
     x.fillText(t.shade.name,left+tw-44,top+th+bar/2);
     x.fillStyle='#9A8591';x.font='12px Estedad, Tahoma, sans-serif';x.textAlign='left';x.direction='ltr';
-    x.fillText(`${product.code} / ${t.shade.variantId}`,left+12,top+th+bar/2);
+    x.fillText(`${product.name}`,left+12,top+th+bar/2);
   });
   brandMark(x,c.width,1);
   const shot=await addShot(c,`${product.name}: ${tiles.map(t=>t.shade.name).join('، ')}`);
@@ -1711,93 +1725,47 @@ function renderLights(){
     el('i',{style:{background:l.swatch}}),l.name)));
 }
 
-/* ---------- cart -------------------------------------------------------- */
-function addToCart(item,shade,quiet=false){
-  const key=`${item.id}:${shade.variantId}`;
-  cart.set(key,(cart.get(key)||0)+1);renderCart();
-  count('cart',key,{each:true});
-  if(!quiet)toast(`${item.name} ${shade.name} به سبد نمونه اضافه شد.`);
+/* ---------- buying, in the shop the mirror is for ------------------------ */
+// Roja sells nothing. "Buy" leads to the shop's own page for the product, or its search
+// for the kind of product and the shade's colour (shops.js). Inside the shop's page the
+// shop is also told, by a message to its own origin only, so it can put the product in
+// its cart; a shop that does (`cart`) keeps the visitor in the mirror.
+function buyLink(link,item,shade){
+  if(!shop){link.removeAttribute('href');return link;}
+  link.href=shopUrl(shop,item,shade);
+  link.onclick=e=>{
+    count('buy',`${item.id}:${shade.variantId}`,{each:true});
+    if(embedded){
+      try{window.parent.postMessage({type:'roja:buy',shop:shop.id,
+        product:{id:item.id,name:item.name,type:item.type||item.kind},
+        shade:{id:shade.id,name:shade.name,color:shade.color},
+        query:searchWords(item,shade),url:link.href},shop.origin);}catch{}
+      if(shop.cart){e.preventDefault();toast(`${item.name} ${shade.name} به سبد ${shop.name} رفت.`);return;}
+    }
+    if(native){e.preventDefault();openOutside(link.href);}
+  };
+  return link;
 }
-function renderCart(){
-  saveSoon();renderOrder();
-  $('count').textContent=fa.format([...cart.values()].reduce((a,b)=>a+b,0));
-  $('cart-items').replaceChildren();
-  if(!cart.size){
-    $('cart-items').append(el('p',{class:'quiet',text:'هنوز محصولی اضافه نکرده‌ای.'}));$('cart-total').hidden=true;return;
-  }
-  let sum=0;
-  for(const [key,qty] of cart){
-    const [pid,sid]=key.split(':');
-    const item=byProduct(pid)||skincareById(pid), shade=item.shades.find(s=>s.variantId===sid);
-    sum+=item.price*qty;
-    const change=d=>{const next=(cart.get(key)||0)+d;if(next<=0)cart.delete(key);else cart.set(key,next);renderCart();};
-    $('cart-items').append(el('div',{class:'cart-row'},
+function renderBuy(){
+  const items=products.filter(p=>makeupState[p.id].enabled);
+  $('buy-items').replaceChildren(...items.map(item=>{
+    const shade=shadeOf(item,makeupState[item.id].shade);
+    return el('div',{class:'buy-row'},
       el('span',{class:'mini',style:{background:swatchStyle(shade)}}),
-      el('p',{},`${item.name}، ${shade.name}`,el('small',{text:`${item.palettes?'پالت':'کد'} ${fa.format(Number(sid))}، ${toman(item.price*qty)}`})),
-      el('div',{class:'qty'},
-        el('button',{type:'button','aria-label':`یکی کمتر از ${item.name}`,onclick:()=>change(-1),text:'−'}),
-        el('span',{text:fa.format(qty)}),
-        el('button',{type:'button','aria-label':`یکی بیشتر از ${item.name}`,onclick:()=>change(1),text:'+'})),
-      el('button',{class:'ghost',type:'button','aria-label':`حذف ${item.name} ${shade.name}`,text:'حذف',onclick:()=>{cart.delete(key);renderCart();}})));
-  }
-  $('cart-total').hidden=false;$('cart-sum').textContent=toman(sum);
+      el('p',{},item.name,el('small',{text:shade.name})),
+      buyLink(el('a',{class:'ghost button',target:'_blank',rel:'noopener','aria-label':`${item.name} ${shade.name} در ${shop.name}`},
+        `در ${shop.name}`,icon('i-out')),item,shade));
+  }));
+  if(!items.length)$('buy-items').append(el('p',{class:'quiet',text:'روی صورت آرایشی نیست. یک محصول یا یک استایل آماده را امتحان کن تا اینجا بیاید.'}));
 }
-function cartLines(){
-  return [...cart].map(([key,qty])=>{
-    const [pid,sid]=key.split(':');
-    const item=byProduct(pid)||skincareById(pid), shade=item.shades.find(s=>s.variantId===sid);
-    return {item,shade,qty,sid};
-  });
-}
-
-/* ---------- ordering ---------------------------------------------------- */
-// The cart goes to the shop as a message in WhatsApp or Telegram (shop.js says where),
-// written out in full so the shop can answer it as it is. Nothing is stored or paid here.
-function orderText(){
-  const lines=cartLines();
-  const sum=lines.reduce((a,l)=>a+l.item.price*l.qty,0);
-  return ['سلام، این سفارش از آینهٔ رُژا است:',
-    ...lines.map((l,i)=>`${fa.format(i+1)}. ${l.item.name}، ${l.shade.name}${l.item.code?` (${l.item.code} / ${fa.format(Number(l.sid))})`:''} × ${fa.format(l.qty)}: ${toman(l.item.price*l.qty)}`),
-    `جمع: ${toman(sum)}`,
-    'لطفاً موجودی و هزینهٔ ارسال را اعلام کنید.'].join('\n');
-}
-function renderOrder(){
-  const any=cart.size>0, wa=/^\d{8,15}$/.test(shop.whatsapp), tg=/^[A-Za-z]\w{3,31}$/.test(shop.telegram);
-  $('order').hidden=!any;
-  $('order-whatsapp').hidden=!wa;$('order-telegram').hidden=!tg;$('order-send').hidden=wa||tg;
-  $('order-note').textContent=wa||tg
-    ?'سفارش به‌صورت پیام آماده در واتس‌اپ یا تلگرام فروشگاه باز می‌شود؛ بفرستش تا موجودی و هزینهٔ ارسال را بگویند.'
-    :'لیست سفارش را برای فروشگاه یا هر کس دیگری بفرست.';
-}
-// A browser opens it in a new tab; the Android app hands any address that is not its
-// own to the phone, which opens WhatsApp or Telegram.
+function openBuy(){if(!shop)return;renderBuy();$('buy').showModal();}
 function openOutside(url){
   if(native){location.href=url;return;}
   if(!window.open(url,'_blank','noopener'))location.href=url;
 }
-async function copyText(text){try{await navigator.clipboard.writeText(text);return true;}catch{return false;}}
-$('order-whatsapp').onclick=()=>{
-  count('order','whatsapp',{each:true});
-  openOutside(`https://wa.me/${shop.whatsapp}?text=${encodeURIComponent(orderText())}`);
-};
-// A Telegram link cannot carry the text to a person, so it goes on the clipboard first.
-$('order-telegram').onclick=async()=>{
-  count('order','telegram',{each:true});
-  const copied=await copyText(orderText());
-  toast(copied?'متن سفارش کپی شد؛ در گفت‌وگوی تلگرام بچسبان و بفرست.':'تلگرام باز می‌شود؛ متن سفارش کپی نشد، لطفاً اقلام را بنویس.');
-  setTimeout(()=>openOutside(`https://t.me/${shop.telegram}`),copied?600:1500);
-};
-$('order-send').onclick=async()=>{
-  const text=orderText();
-  if(!native&&navigator.share){
-    try{await navigator.share({title:'سفارش رُژا',text});count('order','share',{each:true});return;}catch(e){if(e?.name==='AbortError')return;}
-  }
-  if(await copyText(text)){count('order','share',{each:true});toast('لیست سفارش کپی شد.');}
-  else toast('کپی روی این مرورگر ممکن نشد.');
-};
 
 /* ---------- remembered between visits ----------------------------------- */
-// The look on the face and the sample cart stay on this device, in its local storage,
+// The look on the face stays on this device, in its local storage,
 // so a reload or the next visit starts where the last one stopped. Nothing here leaves
 // the device. A saved product or shade the catalogue no longer has is skipped.
 const SAVED='roja-saved';
@@ -1805,7 +1773,7 @@ let saveTimer=0;
 function saveSoon(){clearTimeout(saveTimer);saveTimer=setTimeout(saveNow,400);}
 function saveNow(){
   clearTimeout(saveTimer);
-  try{localStorage.setItem(SAVED,JSON.stringify({v:1,product:product.id,makeup:makeupState,cart:[...cart]}));}catch{}
+  try{localStorage.setItem(SAVED,JSON.stringify({v:1,product:product.id,makeup:makeupState}));}catch{}
 }
 function restoreSaved(){
   let saved=null;
@@ -1820,20 +1788,15 @@ function restoreSaved(){
     if(item.styles?.some(x=>x.id===s.style))state.style=s.style;
   }
   if(byProduct(saved.product)){product=byProduct(saved.product);category=product.category;}
-  for(const [key,qty] of Array.isArray(saved.cart)?saved.cart:[]){
-    const [pid,sid]=String(key).split(':');
-    const item=byProduct(pid)||skincareById(pid);
-    if(item?.shades.some(s=>s.variantId===sid)&&Number.isInteger(qty)&&qty>0&&qty<100)cart.set(key,qty);
-  }
-  // Worth a word only when it differs from a first visit: more than the starting lipstick, or a cart.
-  return cart.size>0||products.some(p=>makeupState[p.id].enabled!==(p.id==='velvet'));
+  // Worth a word only when it differs from a first visit: more than the starting lipstick.
+  return products.some(p=>makeupState[p.id].enabled!==(p.id==='velvet'));
 }
 
 /* ---------- the skin check ---------------------------------------------- */
 // Measured from the picture the landmarks were found in: the camera video (paused
 // when frozen) or the chosen photo. The native mirror keeps its frames to itself.
 const skinScanner=createSkinScanner();
-const skinPanel=createSkinPanel({el,fa,pct,toman,toast,addToCart,
+const skinPanel=createSkinPanel({el,fa,pct,toast,buyLink,shop,icon,
   mirror:()=>({source:!!source,native:!!source?.native,face:!!landmarks}),
   scan:()=>source&&!source.native&&landmarks?skinScanner.scan(source.el,source.width,source.height,landmarks,poseAngles):null});
 
@@ -1863,12 +1826,7 @@ $('product-toggle').onclick=()=>{
   if(makeupState[product.id].enabled)makeupState[product.id].enabled=false;else enableProduct(product);
   afterMakeupChange();
 };
-$('add').onclick=()=>addToCart(product,selected());
-$('add-look').onclick=()=>{
-  const items=products.filter(p=>makeupState[p.id].enabled);
-  for(const item of items)addToCart(item,shadeOf(item,makeupState[item.id].shade),true);
-  toast(`${fa.format(items.length)} محصول ترکیب فعلی به سبد اضافه شد.`);
-};
+$('add-look').onclick=openBuy;
 $('clear-look').onclick=()=>{for(const item of products)makeupState[item.id].enabled=false;pin=null;updatePinButton();afterMakeupChange();};
 $('pin-shade').onclick=togglePin;
 $('multi-open').onclick=openMulti;
@@ -1894,8 +1852,8 @@ $('tour-skip').onclick=endTour;
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&tourAt>=0)endTour();});
 window.addEventListener('resize',placeTour);
 $('finder-run').onclick=runFinder;
-$('basket').onclick=()=>{renderCart();$('cart').showModal();};
-$('close').onclick=()=>$('cart').close();
+$('basket').onclick=openBuy;
+$('close').onclick=()=>$('buy').close();
 $('gallery-open').onclick=()=>{renderGallery();$('gallery').showModal();};
 $('gallery-close').onclick=()=>$('gallery').close();
 // The Android app: offered where it can be installed, or passed on to a phone with the
@@ -1910,7 +1868,7 @@ if(!native&&!iOS){
 if(native)document.querySelectorAll('.footer-links a').forEach(a=>{a.href='https://pythonpath.ir/'+a.getAttribute('href');});
 $('app-open').onclick=$('welcome-app-open').onclick=()=>$('app-dialog').showModal();
 $('app-close').onclick=()=>$('app-dialog').close();
-for(const dialog of [$('cart'),$('gallery'),$('app-dialog'),$('multi')])dialog.addEventListener('click',e=>{if(e.target===dialog)dialog.close();});
+for(const dialog of [$('buy'),$('gallery'),$('app-dialog'),$('multi')])dialog.addEventListener('click',e=>{if(e.target===dialog)dialog.close();});
 
 $('strength').oninput=()=>{
   const value=Number($('strength').value);
@@ -2123,10 +2081,10 @@ renderLooks();renderLights();
 const restored=restoreSaved();
 selectProduct(product.id,false);
 setMode('makeup');
-renderCart();updateBrushInfo();
+updateBrushInfo();
 placeSeam();
 document.querySelectorAll('input[type=range]').forEach(paintRange);
-if(!lookFromLink()&&restored)toast('آرایش و سبد دفعهٔ قبل برگشت. «پاک‌کردن آرایش» همه را از صورت برمی‌دارد.');
+if(!lookFromLink()&&restored)toast('آرایش دفعهٔ قبل برگشت. «پاک‌کردن آرایش» همه را از صورت برمی‌دارد.');
 
 // The Android back button: close whatever is open on top first. Returns whether it
 // did anything, so the app knows when to leave instead.
@@ -2167,7 +2125,7 @@ function applyLookTool(input){
 if(document.modelContext?.registerTool){
   const tools=[{
     name:'select_makeup_shade',
-    description:"Select one of Roja's own sample shades and show it on the visible makeup combination. Does not start the camera or place an order.",
+    description:"Select one of Roja's sample shades and show it on the visible makeup combination. Does not start the camera or open a shop.",
     inputSchema:{type:'object',properties:{
       product:{type:'string',enum:products.map(p=>p.id)},
       id:{type:'string',enum:[...new Set(products.flatMap(p=>p.shades.map(s=>s.id)))]}
@@ -2175,7 +2133,7 @@ if(document.modelContext?.registerTool){
     execute:selectMakeup
   },{
     name:'apply_makeup_look',
-    description:"Put one of Roja's ready-made looks (a full combination of its own sample products) on the mirror. Does not start the camera or place an order.",
+    description:"Put one of Roja's ready-made looks (a full combination of its sample products) on the mirror. Does not start the camera or open a shop.",
     inputSchema:{type:'object',properties:{look:{type:'string',enum:looks.map(l=>l.id)}},required:['look'],additionalProperties:false},
     execute:applyLookTool
   }];

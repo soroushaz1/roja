@@ -15,7 +15,7 @@ ssh_(){ ssh -i "$KEY" -o BatchMode=yes "$HOST" "$@"; }
 node tools/skin-check.mjs >/dev/null
 node tools/build-pages.mjs --check
 
-SITE=(index.html stats.html pages.css sitemap.xml robots.txt procedures makeup faq privacy roja.css sw.js manifest.webmanifest favicon.svg ./*.js icons fonts vendor)
+SITE=(index.html stats.html pages.css sitemap.xml robots.txt procedures makeup faq privacy business roja.css sw.js manifest.webmanifest favicon.svg ./*.js icons fonts vendor)
 echo "site → /var/www/pythonpath"
 tar -cz "${SITE[@]}" | ssh_ 'set -e
   rm -rf /var/www/pythonpath.new && mkdir -p /var/www/pythonpath.new

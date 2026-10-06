@@ -1,5 +1,5 @@
-// Anonymous usage counts: how many times each shade, look, procedure and cart item was
-// tried, per day. That is all a row is, (day, event, item, count): no key, no cookie, no
+// Anonymous usage counts: how many times each shade, look, procedure was tried and how often
+// a product was opened on the partner store, per day. That is all a row is, (day, event, item, count): no key, no cookie, no
 // address, no time of day, nothing that tells one visitor from another. nginx keeps no
 // access log for it either. Every item is checked against the catalogue, so the table
 // can only ever hold names the site itself has.
@@ -12,17 +12,17 @@ import {procedures} from '../procedures.js';
 import {skincare} from '../skin.js';
 
 const shadeIds=new Set(products.flatMap(p=>p.shades.map(s=>s.id)));
-const cartKeys=new Set([...products,...skincare].flatMap(p=>p.shades.map(s=>`${p.id}:${s.variantId}`)));
+const productKeys=new Set([...products,...skincare].flatMap(p=>p.shades.map(s=>`${p.id}:${s.variantId}`)));
 export const events={
   shade:item=>shadeIds.has(item),
   look:item=>looks.some(l=>l.id===item)||item==='mine'||item==='link',
   procedure:item=>procedures.some(p=>p.id===item),
-  cart:item=>cartKeys.has(item),
-  share:item=>['shot','multi','link'].includes(item),
-  order:item=>['whatsapp','telegram','share'].includes(item)
+  // A product (and shade) opened on the partner store (partner.js).
+  buy:item=>productKeys.has(item),
+  share:item=>['shot','multi','link'].includes(item)
 };
 const MAX_EVENTS=100, MAX_DAYS=366;
-// Tehran's calendar day, which is the shop's.
+// Tehran's calendar day.
 const dayOf=t=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Tehran'}).format(t);
 
 export function createStats(db,{send,readJson,Invalid}){

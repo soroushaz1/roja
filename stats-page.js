@@ -18,14 +18,16 @@ const names={
   shade:id=>{const x=shadeById.get(id);return x?{name:`${x.p.name}، ${x.s.name}`,color:x.s.color}:{name:id};},
   look:id=>({name:looks.find(l=>l.id===id)?.name||(id==='mine'?'استایل‌های ذخیره‌شده':id==='link'?'از لینک فرستاده‌شده':id)}),
   procedure:id=>({name:procedures.find(p=>p.id===id)?.name||id}),
-  cart:key=>{
+  buy:key=>{
     const [pid,sid]=key.split(':'), item=byProduct(pid)||skincareById(pid), shade=item?.shades.find(s=>s.variantId===sid);
     return item?{name:`${item.name}، ${shade?.name||sid}`,color:shade?.color}:{name:key};
   },
   share:id=>({name:{shot:'عکس',multi:'تصویر چند رنگ',link:'لینک استایل'}[id]||id}),
+  // From before Roja stopped selling: kept so older days still read.
   order:id=>({name:{whatsapp:'واتس‌اپ',telegram:'تلگرام',share:'فرستادن لیست'}[id]||id})
 };
-const titles={shade:'رنگ‌های پرامتحان',look:'استایل‌ها',procedure:'عمل‌های زیبایی',cart:'افزوده به سبد',share:'اشتراک‌گذاری',order:'سفارش'};
+names.cart=names.buy;
+const titles={shade:'رنگ‌های پرامتحان',look:'استایل‌ها',procedure:'عمل‌های زیبایی',buy:'باز‌شده در فروشگاه همکار',share:'اشتراک‌گذاری',cart:'افزوده به سبد (پیش از همکاری)',order:'سفارش (پیش از همکاری)'};
 
 try{$('key').value=localStorage.getItem('roja-stats-key')||'';}catch{}
 $('form').onsubmit=e=>{e.preventDefault();load();};
@@ -50,8 +52,6 @@ function render({from,to,rows}){
   const by={};
   for(const [day,event,item,n] of rows){((by[event]||={})[item]=(by[event][item]||0)+n);}
   const sum=event=>Object.values(by[event]||{}).reduce((a,b)=>a+b,0);
-  const cartValue=Object.entries(by.cart||{}).reduce((a,[key,n])=>{
-    const [pid]=key.split(':'), item=byProduct(pid)||skincareById(pid);return a+(item?.price||0)*n;},0);
   const kpi=(value,label)=>el('div',{class:'kpi'},el('b',{text:value}),el('span',{text:label}));
 
   // Activity per day: every count, so a quiet day shows as one.
@@ -75,10 +75,9 @@ function render({from,to,rows}){
     el('div',{class:'kpis'},
       kpi(fa.format(sum('shade')),'رنگ امتحان‌شده'),
       kpi(fa.format(sum('look')),'استایل امتحان‌شده'),
-      kpi(fa.format(sum('cart')),'افزوده به سبد'),
-      kpi(fa.format(cartValue),'ارزش افزوده به سبد (تومان)'),
-      kpi(fa.format(sum('order')),'سفارش فرستاده‌شده')),
+      kpi(fa.format(sum('buy')),'رفتن به فروشگاه همکار'),
+      kpi(fa.format(sum('share')),'اشتراک‌گذاری')),
     el('section',{style:{marginBottom:'12px'}},el('h2',{text:'فعالیت روزانه'}),
       el('div',{class:'days'},...[...perDay].map(([d,n])=>el('div',{title:`${day(d)}: ${fa.format(n)}`,style:{height:`${n/peak*100}%`}})))),
-    el('div',{class:'grid'},...['shade','look','cart','procedure','share','order'].map(list)));
+    el('div',{class:'grid'},...['shade','look','buy','procedure','share',...['cart','order'].filter(e=>by[e])].map(list)));
 }
