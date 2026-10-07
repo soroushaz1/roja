@@ -87,12 +87,9 @@ satin, cream, gloss, shimmer, metallic, dewy) and a way to the shop the mirror i
 **مو — hair.** A hair colour in sixteen shades, from black through copper to platinum, on
 the visitor's own hair: MediaPipe's hair segmenter finds the hair in each frame, on the
 device, and the stage gives it the shade as its new average while every strand keeps its
-own light and shade. Six hairstyles (bob, short, fringe, long, waves, curls) in the same
-sixteen colours, drawn over the mirror and carried by the face as it moves (`hair.js`);
-under a hairstyle the real hair takes its colour, so the two read as one head of hair.
-The hairstyles are drawn previews of a shape and a colour, not photographs of a haircut,
-and the real hair under them is not removed. **The comb** (شانه) pushes the drawn hair
-wherever a finger drags it, with undo and a fresh start.
+own light and shade. The face itself, inside its outline, and anything far from the head
+are kept out of the hair, so eyebrows, the shadows along the face and dark things behind
+the head stay their own colour.
 
 **عمل‌های زیبایی — procedures.** Seventeen procedures in six regions, each a set of weights
 over a shared field of localised deformers: rhinoplasty (natural, semi-fantasy or fantasy),
@@ -201,11 +198,10 @@ from opening the page to opening the shop.
 - **Before/after** — a second composite drawn through a `gl.scissor` on one side of the
   seam.
 - **Hair** — the worker runs MediaPipe's hair segmenter next to the face tracker, only
-  while a hair colour or a hairstyle is on (every other frame on the CPU), and sends back a
-  small mask, 192 px wide, of how sure it is that each pixel is hair. The stage stretches
-  it over the frame as one more layer's mask. A hairstyle is a picture drawn once per
-  style, colour and comb stroke in the canonical face's space, and placed on the face each
-  frame by a least-squares affine fit to landmarks that do not move with the jaw.
+  while a hair colour is on (every other frame on the CPU), and sends back a small mask,
+  192 px wide, of how sure it is that each pixel is hair, with the face oval cut out of it
+  (a fringe over the forehead stays only where the segmenter is very sure) and faded out
+  away from the head. The stage stretches it over the frame as one more layer's mask.
 - **Skin check** — `skin-scan.js` cuts the face out of the frame at a fixed 320 px ear to ear
   and picks forehead, cheeks, nose, chin, under-eye and eye-corner regions from the
   canonical mesh, drawn through the live landmarks. Each is measured in CIE Lab, in bands of
@@ -354,8 +350,7 @@ face without touching the eye openings or anything off the face; that a red read
 the finish and texture controls change the result; that the brush erases, fades, restores
 and blends — and that an erased area follows the face when it moves; both compare modes;
 every look, the shade finder, the lighting preview and snapshots; that the hair colour
-reaches the hair and not the face, that a hairstyle covers the top of the head and not the
-face, and that the comb moves it and undo puts it back; that every procedure moves
+reaches the hair and not the nose, the brows or the cheeks; that every procedure moves
 pixels in its own region and resets cleanly, variants differ and the measurements register
 the change; that the before/after seam sits on the cut it draws; that losing the face leaves
 nothing stale on screen; every debug layer, the landmark search, the stats and the export;
@@ -395,7 +390,7 @@ it on the GPU regardless, for comparing the two.
 
 About 15 MB, mostly the face model and its WebAssembly runtime, then cached. While they
 come down, the mirror shows how far along they are. The hair segmenter (0.8 MB) comes down
-only the first time a hair colour or a hairstyle is tried. That is the
+only the first time a hair colour is tried. That is the
 cost of doing the tracking on the device instead of sending the camera somewhere.
 
 ## Licence

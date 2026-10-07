@@ -20,12 +20,11 @@ export const categories=[
   {id:'face',name:'صورت',hint:'پوست، گونه، کانتور'},
   {id:'eyes',name:'چشم و ابرو',hint:'سایه، خط چشم، ریمل'},
   {id:'lips',name:'لب',hint:'رژ، مداد، برق لب'},
-  {id:'hair',name:'مو',hint:'رنگ مو، مدل مو'}
+  {id:'hair',name:'مو',hint:'رنگ مو'}
 ];
 
 // The hair is recoloured first: it is not on the face, and a fringe sits over nothing
-// the face layers paint. A hairstyle is not a layer at all but a picture drawn over the
-// mirror (hair.js), so it has no place here.
+// the face layers paint.
 export const layerOrder=['hair','foundation','concealer','contour','blush','highlighter','eyeshadow','eyeliner','mascara','brow','lipliner','lipstick','gloss'];
 
 export const finishes={
@@ -201,7 +200,7 @@ export const products=[
      ['تمشکی شفاف','#C4737E'], ['شرابی براق','#B2666A']])}
 ];
 
-// Hair colours, shared by the dye and the hairstyles. Each is the colour the hair's
+// Hair colours. Each is the colour the hair's
 // average becomes; the strands' own light and shade are kept around it.
 const HAIR=[
   ['مشکی','#1C1819'], ['قهوه‌ای تیره','#35251E'], ['شکلاتی','#4E3326'], ['بلوطی','#69412C'],
@@ -216,16 +215,7 @@ products.push(
    description:'۱۶ رنگ، از مشکی تا پلاتینی و مسی. موی خودت از تصویر جدا می‌شود و فقط رنگش عوض می‌شود؛ حالت و سایه‌روشن تارها می‌ماند.',
    limitation:'نتیجهٔ واقعی رنگ به رنگ فعلی مو، دکلره و زمان ماندن رنگ بستگی دارد؛ روشن‌کردن موی تیره بدون دکلره به این روشنی نمی‌رسد.',
    mirrorText:'رنگ را عوض کن و همان لحظه روی موی خودت ببین. شدت را کم کن برای سایه‌ای ملایم، زیاد کن برای رنگ کامل. «محوشدن لبه» مرز مو و پوست را نرم‌تر یا تیزتر می‌کند. دو رنگ را کنار هم مقایسه کن یا زیر نورهای مختلف ببین.',
-   shades:range('hcl',HAIR)},
-  {id:'hairstyle', type:'hairstyle', category:'hair', mode:'pigment', finish:'satin', sell:false,
-   name:'مدل مو', title:'مدل موی تازه روی سر خودت', region:'مو', search:'مدل مو',
-   intensity:100, fade:35,
-   styles:[{id:'bob',name:'باب'},{id:'pixie',name:'کوتاه'},{id:'bangs',name:'چتری'},
-     {id:'long',name:'بلند صاف'},{id:'waves',name:'موج‌دار'},{id:'curls',name:'فر'}],
-   description:'شش مدل، هر کدام در ۱۶ رنگ. مدل روی سرت می‌نشیند و با سرت حرکت می‌کند؛ با «شانه» می‌توانی مو را به هر طرف که خواستی حالت بدهی.',
-   limitation:'مدل مو تصویری است که روی سر می‌نشیند و موی واقعی زیر آن پاک نمی‌شود؛ موی جمع‌شده یا کوتاه نتیجهٔ بهتری می‌دهد. پیش‌نمایش است، نه نتیجهٔ دقیق آرایشگاه.',
-   mirrorText:'مدل و رنگ را عوض کن و همان لحظه روی سرت ببین. «شفافیت» مو را کم‌رنگ یا پررنگ می‌کند و «محوشدن لبه» لبهٔ آن را نرم‌تر. با «شانه» انگشتت را روی مو بکش تا به همان سمت حالت بگیرد.',
-   shades:range('hst',HAIR)}
+   shades:range('hcl',HAIR)}
 );
 
 export const byProduct=id=>products.find(p=>p.id===id);

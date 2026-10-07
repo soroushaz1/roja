@@ -12,7 +12,6 @@ import {createSkinPanel} from './skin-panel.js?v=25';
 import {skincareById} from './skin.js?v=25';
 import {count} from './usage.js?v=25';
 import {currentShop,shopUrl,searchWords} from './shops.js?v=25';
-import {createHair} from './hair.js?v=25';
 
 const $=id=>document.getElementById(id);
 // GitHub Pages ignores the ?v= query, and browsers and its CDN keep a page for up to ten
@@ -118,11 +117,8 @@ let brushPointer=null;
 
 const painter=createMaskPainter();
 // Hair: the segmenter's mask of the real hair (from the tracker, in step with the
-// landmarks) for the hair colour, and the drawn hairstyles with their comb.
-const hairstyle=createHair();
-const hairCanvas=$('hair'), hctx=hairCanvas.getContext('2d');
+// landmarks) for the hair colour.
 let hairMask=null, hairVersion=0, hairUploaded=-1, hairState='';
-let combOn=false, combPointer=null;
 const debug={on:false,points:true,mesh:false,contours:false,axes:false,masks:false,field:false,strokes:false,
   labelSize:10,highlight:true,onlyActive:false,find:null,hud:false,inspect:false};
 let topology=null, maskView=null;
@@ -261,17 +257,13 @@ function selectProduct(id,apply=true){
   $('product-description').textContent=next.description;
   $('product-limitation').textContent=next.limitation;
   const skin=next.mode==='foundation';
-  $('intensity-label').textContent=skin?'پوشش':next.type==='hairstyle'?'پررنگی':'شدت رنگ';
-  $('comb-field').hidden=next.type!=='hairstyle';
+  $('intensity-label').textContent=skin?'پوشش':'شدت رنگ';
   document.querySelector('.buy-card').hidden=next.sell===false;
-  $('pin-shade').hidden=next.type==='hairstyle';
-  if(next.type!=='hairstyle'&&combOn)setComb(false);
   $('finder').hidden=!next.finder;
   renderFinder();
   $('style-field').hidden=!next.styles;
   $('style-options').replaceChildren(...(next.styles||[]).map(s=>el('button',{type:'button',role:'radio',data:{style:s.id},text:s.name,
     onclick:()=>{
-      if(product.type==='hairstyle'&&makeupState[product.id].style!==s.id){hairstyle.comb.clear();updateCombInfo();}
       makeupState[product.id].style=s.id;enableProduct(product);updateSelection();}})));
   $('brush-target-product').textContent=`فقط ${next.name}`;
   if(brushState.target!=='all')brushState.target=next.type;
@@ -739,7 +731,6 @@ function statusText(){
     const m=brushModes.find(x=>x.id===brushState.mode);
     return `روی تصویر بکش: ${m.name}. ${frozen||source.kind==='photo'?'':'برای دقت بیشتر تصویر را ثابت کن.'}`;
   }
-  if(combActive())return 'انگشتت را روی مو بکش تا به همان سمت حالت بگیرد.';
   if(hairState==='loading'&&wantHair())return 'آماده‌سازی تشخیص مو…';
   if(pin)return 'مرز را بکش تا دو رنگ را کنار هم روی صورتت ببینی.';
   if(compare)return 'مرز را بکش تا با و بدون آرایش را مقایسه کنی.';
@@ -765,34 +756,18 @@ function setMode(next){
   $('badge').hidden=mode!=='procedure'||!source;
   $('badge-text').textContent='شبیه‌سازی تصویری، نه نتیجهٔ قطعی';
   if(mode!=='makeup'&&brushState.on)setBrush(false);
-  if(mode!=='makeup'&&combOn)setComb(false);
   buildTray();updateSeam();
   invalidate({masks:true,measure:true});
   status(statusText());
 }
 
 /* ---------- hair -------------------------------------------------------- */
-// The layers for a makeup state, with the real hair recoloured under a hairstyle to the
-// hairstyle's colour (in place of a hair colour, if one is on), so the two read as one
-// head of hair.
-function specsFor(states){
-  const specs=layerSpecs(states);
-  const style=states.hairstyle;
-  if(style?.enabled){
-    const item=byProduct('hairstyle'),shade=shadeOf(item,style.shade);
-    const dye=specs.find(s=>s.type==='hair');
-    const spec={product:'hairstyle',type:'hair',key:'hair',mode:'pigment',intensity:Math.max(65,dye?.intensity||0),
-      fade:dye?.fade??style.fade,finish:'satin',shade:shade.id,color:shade.color};
-    if(dye)specs[specs.indexOf(dye)]=spec;else specs.unshift(spec);
-  }
-  return specs;
-}
 // Whether the tracker should find the hair in each frame: only while something uses it,
 // and only where the stage can paint with it.
 function wantHair(){
   if(!source||source.native||stageBroken)return false;
   if(mode!=='makeup'&&!(mode==='procedure'&&$('with-makeup').checked))return false;
-  return !!(makeupState['hair-color'].enabled||makeupState.hairstyle.enabled);
+  return !!(makeupState['hair-color'].enabled);
 }
 // The hair mask for the stage: the latest one, or an empty one while there is none.
 const NO_HAIR={w:1,h:1,data:new Uint8Array(1),box:null};
@@ -800,38 +775,8 @@ function uploadHair(p){
   const spec=[...p.after,...(p.before||[])].find(s=>s.type==='hair');
   if(!spec||hairUploaded===hairVersion)return;
   const w=.05+.3*Math.max(0,Math.min(100,spec.fade??40))/100;
-  stage.setFrameMask('hair',hairMask||NO_HAIR,[.5-w,.5+w*.6]);
+  stage.setFrameMask('hair',hairMask||NO_HAIR,[.55-w*.6,.55+w*.6]);
   hairUploaded=hairVersion;
-}
-// The hairstyle over the mirror: on the "after" side of a comparison only.
-function drawHairstyle(){
-  const {w,h}=frameSize();
-  if(hairCanvas.width!==w||hairCanvas.height!==h){hairCanvas.width=w;hairCanvas.height=h;}
-  hctx.clearRect(0,0,w,h);
-  const state=makeupState.hairstyle;
-  const on=!!source&&!!landmarks&&state.enabled&&(mode==='makeup'||(mode==='procedure'&&$('with-makeup').checked));
-  hairCanvas.hidden=!on;
-  if(!on){hairstyle.set(null);return;}
-  const item=byProduct('hairstyle'),shade=shadeOf(item,state.shade);
-  hairstyle.set({style:state.style||item.styles[0].id,color:shade.color,fade:state.fade});
-  hctx.save();
-  if(seamOn&&(compare||pin)){hctx.beginPath();hctx.rect(0,0,(1-seam)*w,h);hctx.clip();}
-  hairstyle.draw(hctx,landmarks,w,h,Math.max(.05,state.intensity/100));
-  hctx.restore();
-}
-const combActive=()=>combOn&&mode==='makeup'&&!!source&&makeupState.hairstyle.enabled;
-function setComb(on){
-  combOn=on;
-  if(on&&brushState.on)setBrush(false);
-  if(on&&!makeupState.hairstyle.enabled){makeupState.hairstyle.enabled=true;afterMakeupChange();}
-  $('comb-toggle').setAttribute('aria-pressed',String(on));
-  $('comb-toggle').lastChild.textContent=on?'شانه روشن است':'شانه';
-  viewport.classList.toggle('painting',combActive()||brushActive());
-  if(!on){hairstyle.comb.end();combPointer=null;}
-  status(statusText());
-}
-function updateCombInfo(){
-  $('comb-undo').disabled=$('comb-clear').disabled=hairstyle.comb.empty;
 }
 
 /* ---------- drawing ----------------------------------------------------- */
@@ -878,13 +823,13 @@ function plan(){
   // The skin check looks at the bare face.
   if(mode==='skin')return {after:[],before:null,textures:[],amounts:null};
   if(mode==='makeup'){
-    const after=specsFor(makeupState);
+    const after=layerSpecs(makeupState);
     let before=null;
-    if(pin)before=specsFor(pinnedStates());
+    if(pin)before=layerSpecs(pinnedStates());
     else if(compare)before=[];
     return {after,before,textures:[],amounts:null};
   }
-  const makeup=$('with-makeup').checked?specsFor(makeupState):[];
+  const makeup=$('with-makeup').checked?layerSpecs(makeupState):[];
   const amounts=procedureAmounts();
   return {after:makeup,before:anyProcedure()?makeup:null,textures:textureLayers(amounts),amounts};
 }
@@ -955,7 +900,6 @@ function draw(now=performance.now()){
   const {w,h}=frameSize();
   if(overlay.width!==w||overlay.height!==h){overlay.width=w;overlay.height=h;}
   const p=plan();
-  drawHairstyle();
   if(source.native){drawNative({...p,after:p.after.filter(s=>s.type!=='hair'),before:p.before&&p.before.filter(s=>s.type!=='hair')});return;}
   const gl=ensureStage();
   const face=faceWidthPx();
@@ -987,7 +931,7 @@ function draw(now=performance.now()){
     photo.hidden=source.kind!=='photo';
     overlay.classList.toggle('natural',$('natural-blend').checked);
     if(masksDirty||dirty){
-      const specs=mode==='makeup'&&!compare?specsFor(makeupState).filter(s=>s.type!=='hair'):[];
+      const specs=mode==='makeup'&&!compare?layerSpecs(makeupState).filter(s=>s.type!=='hair'):[];
       renderFallback(octx,specs,landmarks,painter,landmarks?brush.maps(landmarks,w,h):null);
       masksDirty=false;
     }
@@ -1071,7 +1015,7 @@ const EXPRESSIONS={jawOpen:'باز بودن دهان',mouthSmileLeft:'لبخند
   eyeBlinkRight:'پلک (راست)',browInnerUp:'بالا رفتن ابرو',browDownLeft:'اخم (چپ)',browDownRight:'اخم (راست)',mouthPucker:'غنچه‌کردن لب'};
 function debugStats(){
   const {w,h}=frameSize();
-  const specs=mode==='makeup'?specsFor(makeupState):plan().after;
+  const specs=mode==='makeup'?layerSpecs(makeupState):plan().after;
   const amounts=mode==='procedure'?procedureAmounts():null;
   const defs=landmarks&&amounts?deformers(landmarks,w,h,amounts).length:0;
   const pts=landmarks?placed(landmarks,w,h):null;
@@ -1123,7 +1067,7 @@ function exportData(){
     pose:poseAngles,blendshapes:blendshapes?Object.fromEntries(blendshapes.map(([n,s])=>[n,+s.toFixed(4)])):null,
     measurements:landmarks?measure(placed(landmarks,w,h)):null,
     symmetry:landmarks?symmetry(placed(landmarks,w,h)):null,
-    makeup:specsFor(makeupState).map(s=>({product:s.product,zone:s.zone||null,color:s.color,intensity:s.intensity,fade:s.fade,finish:s.finish,style:s.style||null})),
+    makeup:layerSpecs(makeupState).map(s=>({product:s.product,zone:s.zone||null,color:s.color,intensity:s.intensity,fade:s.fade,finish:s.finish,style:s.style||null})),
     procedures:{active:Object.fromEntries(active),variants:Object.fromEntries(variants),amounts:Object.fromEntries(Object.entries(amounts).filter(([,v])=>v))},
     brushStrokes:brush.count
   };
@@ -1582,11 +1526,10 @@ function grabFrame(){
 const brushActive=()=>brushState.on&&mode==='makeup'&&!!source;
 function setBrush(on){
   brushState.on=on;
-  if(on&&combOn)setComb(false);
   if(on)showPane('brush');
   $('brush-on').checked=on;
   $('brush-toggle').setAttribute('aria-pressed',String(on));
-  viewport.classList.toggle('painting',brushActive()||combActive());
+  viewport.classList.toggle('painting',brushActive());
   if(!on){$('brush-cursor').hidden=true;brush.end();brushPointer=null;}
   if(on&&mode==='makeup'&&$('panel-makeup').hidden===false)$('brush-card').scrollIntoView({block:'nearest',behavior:'smooth'});
   updateSeam();status(statusText());
@@ -1653,7 +1596,6 @@ async function capture({marks=true}={}){
     if($('natural-blend').checked)x.globalCompositeOperation='multiply';
     x.drawImage(overlay,0,0,w,h);x.globalCompositeOperation='source-over';
   }
-  if(!hairCanvas.hidden)x.drawImage(hairCanvas,0,0,w,h);
   x.restore();
   if(seamOn&&marks){
     const sx=seam*w,s=Math.max(1,w/640);
@@ -2081,9 +2023,6 @@ $('brush-target').querySelectorAll('button').forEach(b=>b.onclick=()=>{
   brushState.target=b.dataset.target==='all'?'all':product.type;
   $('brush-target').querySelectorAll('button').forEach(x=>x.setAttribute('aria-checked',String(x===b)));
 });
-$('comb-toggle').onclick=()=>setComb(!combOn);
-$('comb-undo').onclick=()=>{hairstyle.comb.undo();updateCombInfo();invalidate();};
-$('comb-clear').onclick=()=>{hairstyle.comb.clear();updateCombInfo();invalidate();toast('حالت‌های شانه برداشته شد.');};
 $('brush-undo').onclick=()=>{brush.undo();updateBrushInfo();invalidate({masks:true});};
 $('brush-clear').onclick=()=>{brush.clear();updateBrushInfo();invalidate({masks:true});toast('همهٔ اصلاح‌های براش برداشته شد.');};
 
@@ -2091,17 +2030,6 @@ $('brush-clear').onclick=()=>{brush.clear();updateBrushInfo();invalidate({masks:
 viewport.addEventListener('pointerdown',e=>{
   if(!source||e.target.closest('.toolbar,#welcome,.seam-grip'))return;
   const q=framePoint(e);
-  if(combActive()){
-    if(!landmarks){toast('صورت روی آینه نیست؛ شانه روی موی مدل کار می‌کند.');return;}
-    if(!q.inside)return;
-    const {w,h}=frameSize();
-    const at=hairstyle.toHead(landmarks,w,h,q.x,q.y);
-    if(!at)return;
-    hairstyle.comb.begin(at);combPointer=e.pointerId;
-    try{viewport.setPointerCapture(e.pointerId);}catch{}
-    e.preventDefault();updateCombInfo();
-    return;
-  }
   if(brushActive()){
     if(!landmarks){toast('صورت روی آینه نیست؛ براش روی صورت کار می‌کند.');return;}
     if(!q.inside)return;
@@ -2122,11 +2050,7 @@ viewport.addEventListener('pointermove',e=>{
   if(!source)return;
   const q=framePoint(e);
   moveCursor(q);
-  if(combPointer===e.pointerId&&landmarks){
-    const {w,h}=frameSize();
-    const at=hairstyle.toHead(landmarks,w,h,q.x,q.y);
-    if(at&&hairstyle.comb.extend(at,.2,1))invalidate();
-  }else if(brushPointer===e.pointerId&&brush.painting){
+  if(brushPointer===e.pointerId&&brush.painting){
     const {w,h}=frameSize();
     if(brush.extend(landmarks,w,h,q.x,q.y))invalidate({masks:true});
   }else if(debug.on&&debug.inspect&&landmarks&&q.inside&&!brushActive()){
@@ -2139,7 +2063,6 @@ viewport.addEventListener('pointermove',e=>{
   }else $('inspect-tip').hidden=true;
 });
 const endStroke=e=>{
-  if(combPointer===e.pointerId){hairstyle.comb.end();combPointer=null;updateCombInfo();}
   if(brushPointer===e.pointerId){brush.end();brushPointer=null;updateBrushInfo();}
 };
 viewport.addEventListener('pointerup',endStroke);

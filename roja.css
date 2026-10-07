@@ -797,9 +797,3 @@ html.embedded .brand{pointer-events:none}
   .product-head .lede{display:none}
   .product-head h2{font-size:19px}
 }
-/* Hair: six styles wrap rather than squeeze, and the comb's three buttons share a row. */
-#style-options{flex-wrap:wrap}
-#style-options button{flex:1 0 28%}
-#comb-field{margin-bottom:12px}
-#comb-field .pair{grid-template-columns:1.4fr 1fr 1fr;margin-top:0}
-#comb-toggle[aria-pressed=true]{background:var(--rose-soft);border-color:var(--rose);color:var(--rose-2)}

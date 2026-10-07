@@ -7,7 +7,7 @@
 const CACHE='roja-v25';
 const SHELL=['./','index.html','roja.css?v=25','app.js?v=25','catalog.js?v=25','makeup.js?v=25','stage.js?v=25',
   'deform.js?v=25','procedures.js?v=25','debug.js?v=25','brush.js?v=25','measure.js?v=25','blur.js?v=25','facemesh.js?v=25','shaders.js?v=25',
-  'face-worker.js?v=25','face-core.js?v=25','skin.js?v=25','skin-scan.js?v=25','skin-panel.js?v=25','usage.js?v=25','shops.js?v=25','hair.js?v=25',
+  'face-worker.js?v=25','face-core.js?v=25','skin.js?v=25','skin-scan.js?v=25','skin-panel.js?v=25','usage.js?v=25','shops.js?v=25',
   'fonts/Estedad-var.woff2','favicon.svg','manifest.webmanifest','icons/icon-192.png','icons/app-qr.svg'];
 
 // From the server, not the browser's cache: that can still hold the previous release's

@@ -144,7 +144,7 @@ self.rojaFaceCore=function(Vision,base){
     return {rgb:[median(0),median(1),median(2)],patches:found.length};
   }
 
-  // Hair, for the hair colour and the hairstyles: MediaPipe's hair segmenter (~0.8 MB),
+  // Hair, for the hair colour: MediaPipe's hair segmenter (~0.8 MB),
   // fetched and started the first time a frame asks for it. Its answer is how sure it is
   // that each pixel is hair, shrunk to a small mask (HAIR_W wide, one byte a pixel) with
   // the box around it, as fractions of the frame. Like the landmarks, it is all that
@@ -166,7 +166,48 @@ self.rojaFaceCore=function(Vision,base){
       hair.state='ready';
     })().catch(e=>{hair.state='failed';hair.error=String(e&&e.message||e);});
   }
-  function hairMask(frame,timestamp){
+  // The segmenter alone takes eyebrows, the shadows at the edge of the face and dark
+  // things behind the head for hair. So the face itself (inside its oval, the forehead
+  // included unless the segmenter is very sure there is a fringe there) and anything far
+  // from the head are kept out of the mask.
+  const OVAL=[10,338,297,332,284,251,389,356,454,323,361,288,397,365,379,378,400,377,152,
+    148,176,149,150,136,172,58,132,93,234,127,162,21,54,103,67,109];
+  const BROWS=[105,66,107,336,296,334];
+  function inside(poly,x,y){
+    let hit=false;
+    for(let i=0,j=poly.length-1;i<poly.length;j=i++){
+      const a=poly[i],b=poly[j];
+      if((a[1]>y)!==(b[1]>y)&&x<(b[0]-a[0])*(y-a[1])/(b[1]-a[1])+a[0])hit=!hit;
+    }
+    return hit;
+  }
+  function headGuide(landmarks,w,h){
+    const pt=i=>[landmarks[i].x*w,landmarks[i].y*h];
+    const oval=OVAL.map(pt);
+    const cx=oval.reduce((s,q)=>s+q[0],0)/oval.length,cy=oval.reduce((s,q)=>s+q[1],0)/oval.length;
+    const scaled=k=>oval.map(([x,y])=>[cx+(x-cx)*k,cy+(y-cy)*k]);
+    const [lx,ly]=pt(234),[rx,ry]=pt(454),[tx,ty]=pt(10),[bx,by]=pt(152);
+    const fw=Math.hypot(rx-lx,ry-ly),fh=Math.hypot(bx-tx,by-ty);
+    const brow=Math.min(...BROWS.map(i=>pt(i)[1]));
+    return {inner:scaled(.9),outer:scaled(1.04),brow,cx,
+      x0:cx-1.5*fw,x1:cx+1.5*fw,y0:ty-.9*fh,y1:by+1.3*fh,feather:.25*fw};
+  }
+  function guided(g,x,y,v){
+    if(!g)return v;
+    // Far from the head: fades out over a quarter of a face width.
+    const out=Math.max(g.x0-x,x-g.x1,g.y0-y,y-g.y1,0);
+    if(out>0)v*=Math.max(0,1-out/g.feather);
+    if(v<=0)return 0;
+    if(inside(g.outer,x,y)){
+      const deep=inside(g.inner,x,y);
+      // A fringe can cover the forehead; nothing below the brows is hair.
+      if(y>g.brow)return deep?0:v*.3;
+      const sure=Math.max(0,(v-.8)/.2);
+      return deep?sure:Math.max(sure,v*.5);
+    }
+    return v;
+  }
+  function hairMask(frame,timestamp,landmarks){
     let out=null;
     hair.seg.segmentForVideo(frame,timestamp,result=>{
       const masks=result.confidenceMasks;
@@ -175,12 +216,13 @@ self.rojaFaceCore=function(Vision,base){
       const W=mask.width,H=mask.height,src=mask.getAsFloat32Array();
       const w=Math.min(HAIR_W,W),h=Math.max(1,Math.round(H*w/W)),data=new Uint8Array(w*h);
       let x0=w,y0=h,x1=-1,y1=-1;
+      const g=landmarks?headGuide(landmarks,w,h):null;
       for(let y=0;y<h;y++){
         const sy=Math.min(H-1,Math.floor((y+.5)*H/h)),sy2=Math.min(H-1,sy+1);
         for(let x=0;x<w;x++){
           const sx=Math.min(W-1,Math.floor((x+.5)*W/w)),sx2=Math.min(W-1,sx+1);
           const v=(src[sy*W+sx]+src[sy*W+sx2]+src[sy2*W+sx]+src[sy2*W+sx2])/4;
-          const b=Math.round(Math.max(0,Math.min(1,v))*255);
+          const b=Math.round(Math.max(0,Math.min(1,guided(g,x+.5,y+.5,v)))*255);
           data[y*w+x]=b;
           if(b>64){if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y;}
         }
@@ -209,7 +251,7 @@ self.rojaFaceCore=function(Vision,base){
         // holds well for one frame, while the landmarks keep their full rate.
         if(hair.state==='ready'&&(delegate==='GPU'||hair.frames++%2===0)){
           const t=performance.now();
-          try{message.hair=hairMask(frame,timestamp);}
+          try{message.hair=hairMask(frame,timestamp,landmarks);}
           catch(e){hair.state='failed';hair.error=String(e&&e.message||e);}
           message.hairMs=performance.now()-t;
         }
