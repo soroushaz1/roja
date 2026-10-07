@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="fa" dir="rtl" data-release="24">
+<html lang="fa" dir="rtl" data-release="25">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -30,7 +30,7 @@
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <meta name="mobile-web-app-capable" content="yes">
 <link rel="preload" href="fonts/Estedad-var.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="roja.css?v=24">
+<link rel="stylesheet" href="roja.css?v=25">
 </head>
 <body>
 
@@ -99,6 +99,7 @@
       <canvas id="photo" aria-label="عکس انتخاب‌شده" hidden></canvas>
       <canvas id="stage" aria-hidden="true" hidden></canvas>
       <canvas id="overlay" aria-hidden="true"></canvas>
+      <canvas id="hair" aria-hidden="true" hidden></canvas>
       <canvas id="debug" aria-hidden="true" hidden></canvas>
 
       <div class="guide" id="guide" aria-hidden="true" hidden><i></i></div>
@@ -145,7 +146,7 @@
         <h2>آرایش را روی صورت خودت امتحان کن</h2>
         <p>رنگ‌ها را زنده ببین، با براش پخش یا محوشان کن و پیش از خرید تصمیم بگیر. تصویر روی همین دستگاه پردازش می‌شود و جایی فرستاده یا ذخیره نمی‌شود.</p>
         <ul class="welcome-points" aria-label="در رُژا">
-          <li><svg class="ico"><use href="#i-face"/></svg>۱۶ محصول، ۱۲۱ رنگ</li>
+          <li><svg class="ico"><use href="#i-face"/></svg>۱۸ محصول، ۱۵۳ رنگ، رنگ و مدل مو</li>
           <li><svg class="ico"><use href="#i-drop"/></svg>تحلیل پوست و روتین</li>
           <li><svg class="ico"><use href="#i-wand"/></svg>پیش‌نمایش عمل زیبایی</li>
         </ul>
@@ -227,6 +228,16 @@
         <div id="style-field" hidden>
           <p class="field-label">فرم</p>
           <div class="segmented" id="style-options" role="radiogroup" aria-label="فرم"></div>
+        </div>
+
+        <div id="comb-field" hidden>
+          <p class="field-label">شانه</p>
+          <div class="pair">
+            <button id="comb-toggle" class="ghost" type="button" aria-pressed="false"><svg class="ico"><use href="#i-brush"/></svg><span>شانه</span></button>
+            <button id="comb-undo" class="ghost" type="button" disabled>برگرداندن</button>
+            <button id="comb-clear" class="ghost" type="button" disabled>از نو</button>
+          </div>
+          <p class="help">شانه را روشن کن و انگشتت را روی مو بکش؛ مو به همان سمت حالت می‌گیرد.</p>
         </div>
 
         <label class="field" for="intensity"><span id="intensity-label">شدت رنگ</span> <output id="amount">۵۵٪</output></label>
@@ -538,6 +549,6 @@
 })();
 </script>
 <script nomodule>document.getElementById('status').textContent='این مرورگر قدیمی است و این برنامه را اجرا نمی‌کند. آخرین نسخهٔ Safari یا Chrome را نصب کن.';</script>
-<script type="module" src="app.js?v=24"></script>
+<script type="module" src="app.js?v=25"></script>
 </body>
 </html>

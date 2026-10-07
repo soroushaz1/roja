@@ -192,9 +192,12 @@ const LIPS=[61,0,291,17,40,270,91,321];
     report.lips={nude:+lipsOn.diff.toFixed(2),deep:+lipsDeep.diff.toFixed(2)};
 
     // Every product renders, and none leaks into the eye opening or off the face.
-    const productIds=await page.evaluate(()=>[...document.querySelectorAll('[data-product]')].map(b=>b.dataset.product));
+    // Hair is off the face by nature; it has its own checks below.
+    const productIds=await page.evaluate(()=>[...document.querySelectorAll('[data-product]')].map(b=>b.dataset.product).filter(id=>!id.startsWith('hair')));
     assert(productIds.length>=14,`expected the full Roja range, got ${productIds.length}`);
     report.products={};
+    // The first-visit tour may sit over the tray; it is not what this checks.
+    if(await page.locator('#tour-skip').isVisible())await page.locator('#tour-skip').click();
     let totalShades=0;
     for(const id of productIds){
       await page.evaluate(()=>document.querySelector('#clear-look').click());
@@ -222,6 +225,59 @@ const LIPS=[61,0,291,17,40,270,91,321];
       totalShades+=shades;
     }
     report.shadeChoices=totalShades;
+
+    /* ---- hair: the colour on the real hair, a hairstyle over it, the comb ---- */
+    {
+      // Above the forehead (landmark 10, a fifth of the face higher) is the portrait's hair.
+      const hairPatch=()=>page.evaluate(()=>{
+        const s=document.querySelector('#stage'),v=document.querySelector('#video'),w=s.width,h=s.height,lm=window.testLandmarks;
+        const read=src=>{const c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d',{willReadFrequently:true});x.drawImage(src,0,0,w,h);return x;};
+        const a=read(s),b=read(v),face=Math.hypot((lm[454].x-lm[234].x)*w,(lm[454].y-lm[234].y)*h);
+        const at=(px,py,r)=>{const p=a.getImageData(px-r,py-r,2*r,2*r).data,q=b.getImageData(px-r,py-r,2*r,2*r).data;
+          let d=0;for(let i=0;i<p.length;i+=4)d+=Math.abs(p[i]-q[i])+Math.abs(p[i+1]-q[i+1])+Math.abs(p[i+2]-q[i+2]);return d/(p.length/4)/3;};
+        return {hair:at(Math.round(lm[10].x*w),Math.round(lm[10].y*h-face*.2),4),nose:at(Math.round(lm[4].x*w),Math.round(lm[4].y*h),4)};
+      });
+      await page.evaluate(()=>document.querySelector('#clear-look').click());
+      await page.locator('[data-product="hair-color"]').click();
+      await page.locator('#shades .shade').nth(10).click();         // platinum, far from the portrait's brown
+      await page.waitForFunction(()=>document.querySelector('#status').textContent.indexOf('مو')<0,null,{timeout:30000}).catch(()=>{});
+      let dyed=null;
+      for(let i=0;i<40&&!(dyed?.hair>12);i++){await page.waitForTimeout(250);dyed=await hairPatch();}
+      assert(dyed.hair>12,`the hair colour did not reach the hair (${dyed.hair.toFixed(2)})`);
+      assert(dyed.nose<1.5,`the hair colour touched the face (${dyed.nose.toFixed(2)})`);
+      // A hairstyle: drawn over the mirror, on the head, and the real hair takes its colour.
+      await page.evaluate(()=>document.querySelector('#clear-look').click());
+      await page.locator('[data-product="hairstyle"]').click();
+      await page.locator('#style-options [data-style="long"]').click();
+      await page.locator('#shades .shade').nth(1).click();
+      await page.waitForTimeout(400);
+      // Still, so the landmarks (and with them the drawing) stay put between readings.
+      await page.locator('#freeze').click();
+      await page.waitForTimeout(300);await settle(page);
+      const wig=()=>page.evaluate(()=>{
+        const c=document.querySelector('#hair');if(c.hidden)return null;
+        const d=c.getContext('2d').getImageData(0,0,c.width,c.height).data,lm=window.testLandmarks;
+        let n=0,sum=0;for(let i=3;i<d.length;i+=4)if(d[i]>128){n++;sum+=i;}
+        const top=Math.floor(lm[10].y*c.height*.6),x=Math.round(lm[10].x*c.width);
+        return {share:n/(d.length/4),crown:d[(top*c.width+x)*4+3],face:d[(Math.round(lm[4].y*c.height)*c.width+Math.round(lm[4].x*c.width))*4+3],sum};
+      });
+      const drawn=await wig();
+      assert(drawn&&drawn.share>.03,`no hairstyle was drawn (${JSON.stringify(drawn)})`);
+      assert(drawn.crown>128,'the hairstyle does not cover the top of the head');
+      assert(drawn.face<10,'the hairstyle covers the face');
+      // The comb: a stroke across the hair on one side changes the drawing.
+      await page.locator('#comb-toggle').click();
+      await stroke(page,[127,234,93]);
+      await page.waitForTimeout(300);await settle(page);
+      const combed=await wig();
+      assert(combed.sum!==drawn.sum,'the comb did not move the hair');
+      assert.equal(await page.locator('#comb-undo').isDisabled(),false,'the comb stroke cannot be undone');
+      await page.locator('#comb-undo').click();await page.waitForTimeout(300);await settle(page);
+      assert.equal((await wig()).sum,drawn.sum,'undoing the comb did not restore the hair');
+      await page.locator('#comb-toggle').click();
+      await page.locator('#freeze').click();
+      report.hair={dyed:+dyed.hair.toFixed(1),style:+drawn.share.toFixed(3),combed:true};
+    }
 
     // With nothing on, the stage is the camera frame.
     await page.evaluate(()=>document.querySelector('#clear-look').click());await settle(page);await page.waitForTimeout(150);

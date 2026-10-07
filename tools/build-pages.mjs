@@ -150,7 +150,7 @@ for(const item of products){
 <ul class="shades">${item.shades.map(s=>`<li><i style="background:${esc(s.colors?`linear-gradient(90deg,${s.colors.join(',')})`:s.color)}"></i>${esc(s.name)}</li>`).join('')}</ul>
 ${item.styles?.length?`<p>مدل‌ها: ${item.styles.map(s=>esc(s.name)).join('، ')}.</p>`:''}
 <h2>در آینه چه می‌توانی بکنی</h2>
-<p>${shadeWord} را عوض کن و همان لحظه روی صورتت ببین. شدت رنگ و محوشدن لبه را تنظیم کن، با براش پخش یا محوش کن، دو ${shadeWord} را کنار هم مقایسه کن یا تا چهار ${shadeWord} را در یک تصویر کنار هم بچین. با پیش‌نمایش نور می‌بینی زیر نور روز، مهتابی یا نور گرم مهمانی چطور دیده می‌شود.${item.finder?' «پیداکردن رنگ» از روی پوست گونه، پیشانی و چانه، نزدیک‌ترین رنگ را پیشنهاد می‌دهد.':''}</p>
+<p>${item.mirrorText?esc(item.mirrorText):`${shadeWord} را عوض کن و همان لحظه روی صورتت ببین. شدت رنگ و محوشدن لبه را تنظیم کن، با براش پخش یا محوش کن، دو ${shadeWord} را کنار هم مقایسه کن یا تا چهار ${shadeWord} را در یک تصویر کنار هم بچین. با پیش‌نمایش نور می‌بینی زیر نور روز، مهتابی یا نور گرم مهمانی چطور دیده می‌شود.${item.finder?' «پیداکردن رنگ» از روی پوست گونه، پیشانی و چانه، نزدیک‌ترین رنگ را پیشنهاد می‌دهد.':''}`}</p>
 ${cta(`${r}#product=${item.id}`,`امتحان ${item.name} روی صورت خودم`)}
 <p class="disclaimer">${esc(item.limitation)} ${COLOUR_NOTE}</p>
 ${related.length?`<h2>محصولات دیگر ${esc(cat?.name||'')}</h2><ul class="links">${related.map(x=>`<li><a href="../${x.id}/">${esc(x.name)}</a></li>`).join('')}</ul>`:''}`}));

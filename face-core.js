@@ -6,7 +6,7 @@
 // Frames are measured and let go. Nothing is kept, sent anywhere or stored.
 self.rojaFaceCore=function(Vision,base){
   'use strict';
-  const {FaceLandmarker,FilesetResolver}=Vision;
+  const {FaceLandmarker,FilesetResolver,ImageSegmenter}=Vision;
   const here=p=>new URL(p,base).href;
   const pairs=list=>(list||[]).map(c=>[c.start,c.end]);
   let detector=null,files=null,model=null,wasmUrl='',delegate='CPU',gpuError='';
@@ -144,8 +144,55 @@ self.rojaFaceCore=function(Vision,base){
     return {rgb:[median(0),median(1),median(2)],patches:found.length};
   }
 
+  // Hair, for the hair colour and the hairstyles: MediaPipe's hair segmenter (~0.8 MB),
+  // fetched and started the first time a frame asks for it. Its answer is how sure it is
+  // that each pixel is hair, shrunk to a small mask (HAIR_W wide, one byte a pixel) with
+  // the box around it, as fractions of the frame. Like the landmarks, it is all that
+  // leaves here: the frame does not.
+  const HAIR_W=192;
+  const hair={state:'off',seg:null,error:'',frames:0};
+  function startHair(){
+    if(hair.state!=='off')return;
+    hair.state='loading';
+    (async()=>{
+      const response=await fetch(here('vendor/hair_segmenter.tflite'));
+      if(!response.ok)throw new Error(`hair_segmenter.tflite: ${response.status}`);
+      const bytes=new Uint8Array(await response.arrayBuffer());
+      const make=kind=>ImageSegmenter.createFromOptions(files,{baseOptions:{modelAssetBuffer:bytes.slice(),delegate:kind},
+        runningMode:'VIDEO',outputConfidenceMasks:true,outputCategoryMask:false});
+      let seg=null;
+      if(delegate==='GPU'){try{seg=await make('GPU');}catch{}}
+      hair.seg=seg||await make('CPU');
+      hair.state='ready';
+    })().catch(e=>{hair.state='failed';hair.error=String(e&&e.message||e);});
+  }
+  function hairMask(frame,timestamp){
+    let out=null;
+    hair.seg.segmentForVideo(frame,timestamp,result=>{
+      const masks=result.confidenceMasks;
+      const mask=masks?.[masks.length-1];          // [background, hair]
+      if(!mask)return;
+      const W=mask.width,H=mask.height,src=mask.getAsFloat32Array();
+      const w=Math.min(HAIR_W,W),h=Math.max(1,Math.round(H*w/W)),data=new Uint8Array(w*h);
+      let x0=w,y0=h,x1=-1,y1=-1;
+      for(let y=0;y<h;y++){
+        const sy=Math.min(H-1,Math.floor((y+.5)*H/h)),sy2=Math.min(H-1,sy+1);
+        for(let x=0;x<w;x++){
+          const sx=Math.min(W-1,Math.floor((x+.5)*W/w)),sx2=Math.min(W-1,sx+1);
+          const v=(src[sy*W+sx]+src[sy*W+sx2]+src[sy2*W+sx]+src[sy2*W+sx2])/4;
+          const b=Math.round(Math.max(0,Math.min(1,v))*255);
+          data[y*w+x]=b;
+          if(b>64){if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y;}
+        }
+      }
+      out={w,h,data,box:x1<0?null:{x:x0/w,y:y0/h,w:(x1-x0+1)/w,h:(y1-y0+1)/h}};
+      for(const m of masks)m.close?.();
+    });
+    return out;
+  }
+
   // One frame (a VideoFrame, an ImageBitmap or ImageData) in, one result message out.
-  function handle({frame,timestamp,extras,sample}){
+  function handle({frame,timestamp,extras,sample,hair:wantHair}){
     const start=performance.now();
     const result=detector.detectForVideo(frame,timestamp);
     const landmarks=result.faceLandmarks[0]||null;
@@ -156,9 +203,21 @@ self.rojaFaceCore=function(Vision,base){
       if(extras)message.blendshapes=(result.faceBlendshapes?.[0]?.categories||[])
         .map(c=>[c.categoryName,c.score]);
       if(sample)message.skin=sampleSkin(frame,landmarks);
+      if(wantHair){
+        startHair();
+        // On the CPU every other frame: hair moves with the head, and the last mask
+        // holds well for one frame, while the landmarks keep their full rate.
+        if(hair.state==='ready'&&(delegate==='GPU'||hair.frames++%2===0)){
+          const t=performance.now();
+          try{message.hair=hairMask(frame,timestamp);}
+          catch(e){hair.state='failed';hair.error=String(e&&e.message||e);}
+          message.hairMs=performance.now()-t;
+        }
+        if(hair.state!=='ready')message.hairState=hair.state==='failed'?`failed: ${hair.error}`:hair.state;
+      }
     }
     return message;
   }
 
-  return {init,handle,get delegate(){return delegate;},close(){try{detector?.close();}catch{}if(wasmUrl)URL.revokeObjectURL(wasmUrl);}};
+  return {init,handle,get delegate(){return delegate;},close(){try{detector?.close();hair.seg?.close();}catch{}if(wasmUrl)URL.revokeObjectURL(wasmUrl);}};
 };

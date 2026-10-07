@@ -34,6 +34,11 @@ void main(){
   gl_FragColor=vec4(0.,0.,0.,a);
 }`;
 
+// A mask already in frame space (the hair, from the segmenter): how sure the model is
+// that a pixel is hair, turned into coverage between two levels of that certainty.
+export const FRAME_MASK_FRAG=`uniform sampler2D u_mask;uniform vec2 u_edge;varying vec2 v_uv;
+void main(){gl_FragColor=vec4(0.,0.,0.,smoothstep(u_edge.x,u_edge.y,texture2D(u_mask,v_uv).a));}`;
+
 // Full-frame passes map texture space onto itself, so every intermediate texture has
 // the camera texture's orientation and all of them are sampled at the same v_uv.
 export const QUAD_VERT=`attribute vec2 a_pos;varying vec2 v_uv;
