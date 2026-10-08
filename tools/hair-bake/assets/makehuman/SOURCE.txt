@@ -1,0 +1,13 @@
+upper_body.npz: head, neck, torso and upper arms of the MakeHuman 1.x base mesh (hm08,
+body vertices < 13380 only; no helper geometry, no hair, eyes or clothes), with the
+MediaPipe face landmark -> base-mesh correspondences used to fit it to the canonical face.
+
+Source: npm package makehuman-data-v1@0.0.2 (MakeHuman 1.x system assets,
+models/human_full_size.json).  MakeHuman's bundled graphical assets, including the base
+mesh, are released under CC0 1.0 (public domain dedication); credit: "MakeHuman team"
+(www.makehumancommunity.org).  The landmark correspondences (mediapipe_to_makehuman.json)
+were made for Roja from a front render of the base mesh.
+
+Rebuild: python3 extract.py <dir with human_full_size.json and mediapipe_to_makehuman.json>
+It is used only as an invisible proxy body (collision, occlusion, masks) when baking hair;
+it is never shown.
