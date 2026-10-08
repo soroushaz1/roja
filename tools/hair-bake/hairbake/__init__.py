@@ -7,8 +7,8 @@ Layout (tools/hair-bake/):
                         transformation matrix (pose, perspective projection), detect.cjs results.
   hairbake/head.py      the CC0 MakeHuman head / neck / torso / upper arms fitted and warped onto
                         the canonical face (skull top eased to real-head height), its collision
-                        SDF (collide / project / normal), the per-view occluder and part masks,
-                        and the sprite Frame.
+                        SDF without the arms (collide / project / normal), the per-view occluder
+                        and part masks, and the sprite Frame.
   hairbake/native.py    ctypes bindings to raster.c (strand rasterizer with occlusion, z-buffered
                         triangles, density splats), compiled on first use into build/.
   hairbake/scalp.py     where hair grows: Hairline (women / men tables, jitter, recession, widow's
@@ -31,6 +31,20 @@ Layout (tools/hair-bake/):
   hairbake/groom.py     all of the above in one namespace: `from hairbake import groom as g`.
   hairbake/volume.py    deep-opacity helpers for the shader (proto-a): hair optical depth toward a
                         light, soft body visibility through the SDF, Fibonacci directions.
+  hairbake/shade.py     per-vertex shading in neutral channels (proto-a): deep-opacity key-light
+                        self-shadow, hair + body ambient occlusion, Marschner-style R (S1) and TRT
+                        (S2) lobes with per-strand jitter, M (depth into the hair); Shader(S, attrs)
+                        does the view-independent work once, .view(yaw) per baked view.
+  hairbake/render.py    one view: the groom turned by the view's yaw, rasterised against the turned
+                        body (hard head/torso, arms only for hair behind the shoulders, soft neck
+                        edge), clump-gap AO; body layers (cast shadow, scalp, head / face / body
+                        masks); finish_view -> the shipped float channels; sprite_frame (POT sides).
+  hairbake/pack.py      the shipped files: lossless RGB WebP per view (hair / aux / mask / depth)
+                        + style.json; read_style / upsample read them back (LAYOUT, BITS).
+  hairbake/colour.py    sRGB <-> linear, the catalog.js HAIR palette, the reference recolour.
+  hairbake/bake.py      the command line: groom -> shade -> 3 views -> pack -> preview:
+                            python3 -m hairbake.bake <style-id | path | demo:name> [--q 1] [--views -30,0,30]
+                        -> <repo>/hairstyles/<id>/ and build/bake/<id>/preview.png
   hairbake/preview.py   quick shape previews of a style from any yaw / pitch:
                             python3 -m hairbake.preview <style-id | path | demo:name> [--q .25]
   hairbake/demos.py     demo grooms, one per primitive family (templates for style authors).
@@ -43,7 +57,8 @@ Layout (tools/hair-bake/):
                         -> build/selftest/{views,sdf,raster,portraits}.png
   detect.cjs            landmarks + matrix + hair mask of still images with the site's own MediaPipe.
   assets/makehuman/     the MakeHuman base-mesh extract (CC0) and the script that rebuilds it.
-  build/                git-ignored: compiled library, SDF cache, portraits, test renders.
+  build/                git-ignored: compiled library, SDF / body-AO caches, portraits, test renders,
+                        bake caches (build/bake/<id>/: groom and per-view layers, preview.png).
 
 Every module works in head units; see canon.py for the exact definition.
 """

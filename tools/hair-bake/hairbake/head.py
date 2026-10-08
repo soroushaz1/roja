@@ -2,15 +2,17 @@
 
 One body, used four ways:
   * collision: a signed distance field (SDF) of the MakeHuman CC0 base mesh (head, neck,
-    torso, upper arms) whose face is replaced by MediaPipe's canonical face mesh, so hair
-    lies on the same forehead and cheeks the landmarks describe, and long hair drapes over
-    a real neck, shoulders and back (body_sdf, collide, project, normal);
+    torso; HAIR_PARTS: no arms, the arm holes capped) whose face is replaced by MediaPipe's
+    canonical face mesh, so hair lies on the same forehead and cheeks the landmarks
+    describe, and long hair drapes over a real neck, shoulders and back, falling straight
+    past the shoulder tips as it does with the arms down (body_sdf, collide, project, normal);
   * scalp: roots are planted on that surface (head_vertices, skull/azimuth, view_surface
     give points, normals and a parametrisation; the groom library chooses where hair grows);
   * occluder: per view the body is z-buffered and hair behind it is hidden, so back hair
     never shows through the neck or the face (occluder; slits closed, a skirt behind the
     face outline); the neck and torso can be fattened (NECK_PAD) so a real neck a little
-    wider than the proxy does not get hair painted over its edges;
+    wider than the proxy does not get hair painted over its edges; an occluder without the
+    arms also leaves out the torso's lip around the arm holes (ARM_LIP);
   * masks: per view, the part id under each pixel (head / neck / torso / arm / face), from
     which the bake derives the head silhouette and the scalp under the hair (masks).
 
@@ -39,6 +41,12 @@ FACE_ID = 9                    # part id of the canonical face mesh in occluder 
 NECK_PAD = 0.01               # occluder neck/torso fattening (head units): the MakeHuman neck is
                               # already a little wider than the women's necks in the test portraits
 ALL_PARTS = ('head', 'neck', 'torso', 'arm')
+# What hair lies on and collides with (body_sdf): no arms.  The MakeHuman arms are in an A
+# pose, sloping out from the shoulders; long hair falling over a shoulder would slide out
+# along them into a thin fan that never happens on a real person with the arms down.  The
+# arm holes of the torso are capped, so the hair falls straight past the shoulder tips.  The
+# arms stay in the occluder (render.py: they hide hair behind the shoulders only).
+HAIR_PARTS = ('head', 'neck', 'torso')
 
 
 def smoothstep(a, b, x):
@@ -249,7 +257,7 @@ class SDF:
 GRID_LO = np.array([-1.05, -0.95, -1.75])
 GRID_HI = np.array([2.05, 3.05, 0.85])
 GRID_VOX = 0.02
-SDF_VERSION = 3       # bump when the SDF construction changes (the cache key also hashes the inputs)
+SDF_VERSION = 4       # bump when the SDF construction changes (the cache key also hashes the inputs)
 
 
 def _build_sdf(parts, key, band=0.12):
@@ -315,6 +323,52 @@ def _body_part(regions):
     return m['V'], m['T'][keep], m['N']
 
 
+def _boundary_loops(T):
+    """closed loops of directed boundary edges (each a list of vertex ids) of a mesh with
+    consistently wound triangles."""
+    E = np.concatenate([T[:, [0, 1]], T[:, [1, 2]], T[:, [2, 0]]])
+    nv = int(T.max()) + 1
+    key = E[:, 0] * nv + E[:, 1]
+    bd = E[~np.isin(key, E[:, 1] * nv + E[:, 0])]
+    nxt = {}
+    for a, b in bd:
+        nxt.setdefault(int(a), []).append(int(b))
+    seen, loops = set(), []
+    for a0 in sorted(nxt):
+        if a0 in seen:
+            continue
+        loop, a = [a0], a0
+        seen.add(a0)
+        while True:
+            b = next((b for b in nxt.get(a, []) if b not in seen), None)
+            if b is None:
+                break
+            loop.append(b); seen.add(b); a = b
+        loops.append(loop)
+    return loops
+
+
+def _capped_torso_part(regions=HAIR_PARTS):
+    """the body without the arms, the arm holes of the torso closed with a fan around each
+    hole's centroid (wound like the mesh, so the cap's normals point out of the body)."""
+    V, T, N = _body_part(regions)
+    region = body_mesh()['region']
+    V = [V]; N = [N]; T = [T]; nv = len(V[0])
+    for loop in _boundary_loops(T[0]):
+        P = V[0][loop]
+        c = P.mean(0)
+        if not ((region[loop] != REGION['head']).all() and 1.2 < c[1] < GRID_HI[1] and abs(c[0] - 0.5) > 0.4):
+            continue                                   # only the two arm holes
+        a = np.array(loop); b = np.roll(a, -1)
+        cap = np.stack([b, a, np.full(len(a), nv)], 1)       # edge a->b of the mesh is b->a here
+        fn = np.cross(V[0][cap[:, 1]] - V[0][cap[:, 0]], c - V[0][cap[:, 0]]).sum(0)
+        T.append(cap); V.append(c[None]); N.append((fn / (np.linalg.norm(fn) + 1e-12))[None])
+        V[0] = np.concatenate([V[0], c[None]]); nv += 1
+    Vc = V[0]
+    Nc = np.concatenate([N[0]] + N[1:]) if len(N) > 1 else N[0]
+    return Vc, np.concatenate(T), Nc
+
+
 def _key(*xs):
     """cache key: the exact body and face geometry plus the grid, so any change to the fit,
     the warp, the cut or the asset rebuilds the SDF."""
@@ -331,9 +385,10 @@ def _key(*xs):
 
 @functools.lru_cache(None)
 def body_sdf():
-    """head + neck + torso + upper arms, with the canonical face: what hair lies and drapes
-    on.  Built once (~1 min) and cached in build/sdf-<key>.npy (16 MB)."""
-    return _build_sdf([_body_part(ALL_PARTS), _face_part()], _key('body'))
+    """head + neck + torso (arm holes capped, no arms: HAIR_PARTS), with the canonical face:
+    what hair lies and drapes on.  Built once (~15 s) and cached in build/sdf-<key>.npy
+    (16 MB)."""
+    return _build_sdf([_capped_torso_part(HAIR_PARTS), _face_part()], _key('body', HAIR_PARTS, 'capped'))
 
 
 def collide(p, h, sdf=None, iters=2):
@@ -419,6 +474,8 @@ def _view_tris(yaw, neck_pad, parts):
     pad = neck_pad * smoothstep(0.80, 1.10, V[:, 1]) * (reg != REGION['head'])
     Vp = V + N * pad[:, None]
     keep = np.isin(reg[T], [REGION[r] for r in parts]).all(1)
+    if 'arm' not in parts and 'torso' in parts:
+        keep &= ~_near_arm_holes(T)
     Tk = T[keep]
     tri_reg = reg[Tk].max(1)
     H, TF = canon.face_mesh()
@@ -430,6 +487,32 @@ def _view_tris(yaw, neck_pad, parts):
     P = rotate_yaw(P.reshape(-1, 3), yaw).reshape(-1, 3, 3)
     Nt = (Nt.reshape(-1, 3) @ yaw_matrix(yaw).T).reshape(-1, 3, 3)
     return P, Nt, pid
+
+
+ARM_LIP = 0.08     # occluders without the arms also drop the torso this close to the arm holes
+
+
+@functools.lru_cache(None)
+def _arm_hole_rims():
+    """vertices of the two arm-hole loops of the torso (where the arms attach)."""
+    V, T, _ = _body_part(HAIR_PARTS)
+    region = body_mesh()['region']
+    rims = []
+    for loop in _boundary_loops(T):
+        c = V[loop].mean(0)
+        if (region[loop] != REGION['head']).all() and 1.2 < c[1] < GRID_HI[1] and abs(c[0] - 0.5) > 0.4:
+            rims.append(V[loop])
+    return np.concatenate(rims)
+
+
+def _near_arm_holes(T, r=ARM_LIP):
+    """(len(T),) bool: triangles with a vertex within r of an arm-hole rim.  An occluder that
+    leaves the arms out (render.py: what may hide the hair hanging in front of the shoulders)
+    also leaves out this lip of the torso: hair falling past a shoulder tip hangs where a real
+    arm would be, and the jagged rim of the hole must not cut holes into it."""
+    V = body_mesh()['V']
+    d, _ = cKDTree(_arm_hole_rims()).query(V, distance_upper_bound=r)
+    return np.isfinite(d)[T].any(1)
 
 
 def view_mesh(yaw, neck_pad=NECK_PAD, parts=ALL_PARTS):

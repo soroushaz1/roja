@@ -350,7 +350,8 @@ def checks(det_dir=None):
     # occlusion: hair rooted on the back of the head must never show over the face or the
     # neck (silhouettes eroded 4 px = .01: hair resting on the back of the neck may
     # overlap its edge by its own thickness), in any of the three views (on the scalp it may: the
-    # back of the skull is in sight at +-30 degrees)
+    # back of the skull is in sight at +-30 degrees; so may hair lying on the shoulder top in
+    # front of the neck's base, below y 1.25 where the neck flares into the trapezius)
     Sh = synthetic_hair(1500)
     back = np.abs(head.azimuth(Sh[:, 0])) > 2.2
     fr = head.Frame(-0.4, -0.6, 720, 880, 400)
@@ -360,6 +361,7 @@ def checks(det_dir=None):
         o = render_strands(Sh[back], fr, yaw, np.ones((back.sum(), 1), np.float32), zocc=zocc)
         from scipy import ndimage
         inner = ndimage.binary_erosion((part == 1) | (part == head.FACE_ID), iterations=4)
+        inner &= fr.grid()[1] < 1.25
         leaks.append(float(o[..., 0][inner].max()) if inner.any() else 0.0)
     ok(max(leaks) < 0.08, f'no back hair over the face or the neck (max alpha {max(leaks):.3f})')
     # photos

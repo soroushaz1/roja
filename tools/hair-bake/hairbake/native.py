@@ -27,6 +27,12 @@ def _lib():
         os.close(fd)
         subprocess.check_call(['gcc', *CFLAGS, SRC, '-o', tmp, '-lm'])
         os.replace(tmp, so)
+        for old in os.listdir(BUILD):            # older builds (a loaded .so may be unlinked safely)
+            if old.startswith('libraster-') and old.endswith('.so') and old != os.path.basename(so):
+                try:
+                    os.remove(os.path.join(BUILD, old))
+                except OSError:
+                    pass
     return ctypes.CDLL(so)
 
 
@@ -34,6 +40,7 @@ _L = _lib()
 _fp = ctypes.POINTER(ctypes.c_float)
 _L.raster.argtypes = [ctypes.c_int, _fp, ctypes.c_int, ctypes.c_int, ctypes.c_int, _fp, _fp, ctypes.c_float, ctypes.c_float]
 _L.set_soft.argtypes = [_fp, _fp]
+_L.set_alt.argtypes = [_fp, ctypes.c_int]
 _L.tri_zbuf.argtypes = [ctypes.c_int, _fp, _fp, ctypes.c_int, ctypes.c_int, ctypes.c_int, _fp, _fp]
 _L.splat3d.argtypes = [ctypes.c_int, _fp, _fp, ctypes.c_int, ctypes.c_int, ctypes.c_int, _fp]
 _L.zmax.argtypes = [ctypes.c_int, _fp, _fp, _fp, ctypes.c_int, ctypes.c_int, _fp]
@@ -43,7 +50,7 @@ def _p(a):
     return a.ctypes.data_as(_fp) if a is not None else None
 
 
-def raster(seg, W, H, zocc=None, zbias=0.01, step=0.35, zsoft=None, asoft=None, out=None):
+def raster(seg, W, H, zocc=None, zbias=0.01, step=0.35, zsoft=None, asoft=None, out=None, zalt=None, alt_ch=-1):
     """Strand segments -> premultiplied image.
 
     seg: (n, 2, 5+C) float32, per segment end: x px, y px, z (head units, larger = nearer),
@@ -52,6 +59,9 @@ def raster(seg, W, H, zocc=None, zbias=0.01, step=0.35, zsoft=None, asoft=None, 
     zsoft, asoft: optional soft occluder: behind zsoft a deposit is scaled by (1 - asoft).
     out: an existing (H, W, 1+C) float32 accumulator to composite OVER (to rasterise a long
          back-to-front list in several chunks, each chunk sorted and behind the next).
+    zalt, alt_ch: optional alternative occluder: a deposit hidden by zocc but not by zalt
+         shows with its coverage scaled by its shading channel alt_ch (0..1; 0-based index
+         into the C channels).
     Returns (H, W, 1+C): alpha, then the channels premultiplied by alpha."""
     seg = np.ascontiguousarray(seg, np.float32)
     C = seg.shape[2] - 5
@@ -69,10 +79,16 @@ def raster(seg, W, H, zocc=None, zbias=0.01, step=0.35, zsoft=None, asoft=None, 
     if zocc is not None:
         zocc = np.ascontiguousarray(zocc, np.float32)
         assert zocc.shape == (H, W)
+    if zalt is not None:
+        assert 0 <= alt_ch < C, 'alt_ch must name one of the C channels'
+        zalt = np.ascontiguousarray(zalt, np.float32)
+        assert zalt.shape == (H, W)
+        _L.set_alt(_p(zalt), int(alt_ch))
     try:
         _L.raster(seg.shape[0], _p(seg), C, W, H, _p(out), _p(zocc), zbias, step)
     finally:
         _L.set_soft(None, None)
+        _L.set_alt(None, -1)
     return out
 
 

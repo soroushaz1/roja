@@ -10,7 +10,9 @@ Steps (each logged with its time):
      Cached in build/bake/<id>/groom-<key>.npz (key: the style source, the groom library
      sources, q, seed), so re-baking after a shading change skips the groom.
   2. the sprite frame: the hair's bounds over all views + the cranium + margin, at
-     RENDER['res'] px per head unit, power-of-two texture sides (render.sprite_frame).
+     RENDER['res'] px per head unit (lowered for big styles so the visible hair of a view
+     covers at most RENDER['max_hair_px'] texels: the file-size budget), power-of-two
+     texture sides (render.sprite_frame).
   3. shading (shade.Shader): view-independent parts once (hair + body ambient occlusion per
      direction), then per view the key-light deep shadow and the highlight lobes.
   4. per view: the strands turned by the view's yaw, rasterised against the turned body
@@ -19,7 +21,10 @@ Steps (each logged with its time):
      in build/bake/<id>/ so a bake killed half way resumes where it stopped.
   5. exposure: one gain for all views, from the front view (median diffuse of the visible
      hair = 0.6), so the views match when the runtime cross-fades them.
-  6. pack (pack.write_style): lossless WebP per view + style.json into <out>/<id>/.
+  6. pack (pack.write_style): per view four lossless RGB WebP textures (hair: S1 D A at full
+     resolution; aux: M T S2, mask: shadow scalp head, depth: Z face body at half) and
+     style.json into <out>/<id>/.  Aim: 300-700 KB per style for the three views (logged;
+     a warning above 700 KB).
   7. preview: build/bake/<id>/preview.png - the packed files read back, every view in a
      dark and a light shade and neutral grey, over the shaded MakeHuman body.
 
@@ -28,6 +33,7 @@ fine_ao_*, soft_r, spec, ...) and LIGHT = dict(...) to override shade.LIGHT.
 """
 import argparse, hashlib, json, os, pickle, sys, time
 import numpy as np
+from scipy import ndimage
 from . import canon, head, render, shade, pack
 from .hair import load_style, PER_STRAND, PER_VERTEX, ROOT as BAKE_ROOT
 from .native import BUILD
@@ -35,6 +41,7 @@ from .native import BUILD
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT_DEFAULT = os.path.join(canon.REPO, 'hairstyles')
 VIEWS = (-30.0, 0.0, 30.0)
+BUDGET_KB = 700
 GROOM_SOURCES = ('canon.py', 'head.py', 'scalp.py', 'grow.py', 'strands.py', 'features.py', 'hair.py', 'groom.py', 'demos.py')
 RENDER_SOURCES = ('shade.py', 'render.py', 'volume.py', 'raster.c', 'native.py')
 PACK_ONLY = ('bits', 'spec')          # RENDER keys that do not change the rendered layers
@@ -100,19 +107,26 @@ def groom(mod, name, q, seed, work, cache=True, log=print):
 
 def strand_bounds(S, yaws, step=3, res=48.0, tol=0.03):
     """front-view x0, y0, x1, y1 covering the VISIBLE strands in all these views (hair hidden
-    behind the head, neck or body in every view does not widen the frame)."""
+    behind the head, neck or body in every view does not widen the frame), and the largest
+    visible hair area of a view (head units squared, from a coarse occupancy grid)."""
     P = np.concatenate([S[:, ::step].reshape(-1, 3), S[:, -1]]).astype(np.float64)
     fr = head.Frame(-1.6, -1.4, int(4.2 * res), int(5.0 * res), res)
     lo = np.array([np.inf, np.inf]); hi = -lo
+    area = 0.0
+    front = render.smoothstep(render.FRONT_Z[0], render.FRONT_Z[1], P[:, 2]) > 0.5
     for y in yaws:
         Q = canon.rotate_yaw(P, y)
-        z, part = head.occluder(fr, y)
+        zhard, zalt, _, _ = render.occluders(fr, y)       # the same visibility rules as the raster
         px, py = fr.to_px(Q[:, 0], Q[:, 1])
         ix = np.clip(px.astype(int), 0, fr.W - 1); iy = np.clip(py.astype(int), 0, fr.H - 1)
-        vis = Q[:, 2] >= z[iy, ix] - tol
+        vis = Q[:, 2] >= np.where(front, zalt[iy, ix], zhard[iy, ix]) - tol
         V = Q[vis, :2] if vis.sum() > 100 else Q[:, :2]
         lo = np.minimum(lo, np.percentile(V, 0.01, axis=0)); hi = np.maximum(hi, np.percentile(V, 99.99, axis=0))
-    return float(lo[0]), float(lo[1]), float(hi[0]), float(hi[1])
+        occ = np.zeros((fr.H, fr.W), np.uint8)
+        np.add.at(occ, (iy[vis], ix[vis]), 1)
+        occ = ndimage.binary_closing(occ > 0, iterations=1)
+        area = max(area, float(occ.sum()) / res ** 2)
+    return (float(lo[0]), float(lo[1]), float(hi[0]), float(hi[1])), area
 
 
 def exposure_gain(views, target=0.6):
@@ -135,9 +149,13 @@ def bake(name, q=1.0, seed=1, yaws=VIEWS, res=None, out_root=OUT_DEFAULT, cache=
     kw = render.render_kw(getattr(mod, 'RENDER', None), res=res)
     light = dict(shade.LIGHT, **getattr(mod, 'LIGHT', {}))
     S, attrs, scalp, ginfo = groom(mod, name, q, seed, work, cache, log)
-    bounds = strand_bounds(S, yaws)
-    fr = render.sprite_frame(bounds, kw['res'], kw['margin'], kw['max_side'])
-    log(f'frame: {fr} (hair bounds {np.round(bounds, 3).tolist()})')
+    bounds, area = strand_bounds(S, yaws)
+    res_px = float(kw['res'])
+    if kw.get('max_hair_px') and area * res_px ** 2 > kw['max_hair_px']:
+        res_px = float(np.sqrt(kw['max_hair_px'] / area))     # big styles: fewer px per unit (file size)
+    fr = render.sprite_frame(bounds, res_px, kw['margin'], kw['max_side'])
+    log(f'frame: {fr} (hair bounds {np.round(bounds, 3).tolist()}, visible hair {area:.2f} units^2 '
+        f'= {area * fr.res ** 2 / 1000:.0f}k px)')
     rkw = {kk: vv for kk, vv in kw.items() if kk not in PACK_ONLY}
     rkey = _hash(groom_key(name, q, seed), fr.as_list(), sorted(rkw.items()), sorted(light.items()),
                  *[open(os.path.join(HERE, f), 'rb').read() for f in RENDER_SOURCES])
@@ -172,7 +190,7 @@ def bake(name, q=1.0, seed=1, yaws=VIEWS, res=None, out_root=OUT_DEFAULT, cache=
                 os.remove(os.path.join(work, old))
     k = exposure_gain(views)
     for _, v in views:
-        for c in ('Dp', 'S1p', 'S2p'):
+        for c in ('Dp', 'S1p', 'S2'):
             v[c] = v[c] * k
     log(f'exposure gain {k:.3f}')
     out_dir = os.path.join(out_root, style['id'])
@@ -187,11 +205,36 @@ def bake(name, q=1.0, seed=1, yaws=VIEWS, res=None, out_root=OUT_DEFAULT, cache=
                   date=time.strftime('%Y-%m-%d'), seconds=round(time.time() - t_all, 1)),
     )
     meta = pack.write_style(out_dir, style, fr, views, extra, bits=kw.get('bits'), log=log)
+    log('round trip (files read back vs the float layers, mean / p99 abs error over the hair): ' +
+        ', '.join(f'{k} {a:.4f}/{b:.4f}' for k, (a, b) in round_trip(out_dir, views).items()))
     if preview:
         p = os.path.join(work, 'preview.png')
         preview_sheet(out_dir, p, log=log)
     log(f'bake {style["id"]}: {meta["bytes"] / 1024:.0f} KB in {time.time() - t_all:.1f}s -> {out_dir}')
+    if meta['bytes'] > BUDGET_KB * 1024:
+        log(f'WARNING: {meta["bytes"] / 1024:.0f} KB is over the {BUDGET_KB} KB budget: lower RENDER res / '
+            f'max_hair_px or BITS in the style module')
     return out_dir
+
+
+def round_trip(out_dir, views):
+    """decode the written files and compare with the float layers they came from:
+    {channel: (mean, p99)} absolute error over the texels with coverage > 0.05 (D, S1 and S2
+    relative to their encoding scale)."""
+    import cv2
+    st = pack.read_style(out_dir)
+    sc = st['meta']['scale']
+    err = {}
+    for (yaw, v), r in zip(views, st['views']):
+        m = v['A'] > 0.05
+        mh = cv2.resize(v['A'], (v['M'].shape[1], v['M'].shape[0]), interpolation=cv2.INTER_AREA) > 0.05
+        for k, ref, got, mask, s in (('A', v['A'], r['A'], m, 1), ('D', v['Dp'], r['Dp'], m, sc['D']),
+                                     ('S1', v['S1p'], r['S1p'], m, sc['S1']), ('S2', v['S2'], r['S2'], mh, sc['S2']),
+                                     ('M', v['M'], r['M'], mh, 1), ('T', v['T'], r['T'], mh, 1),
+                                     ('Z', v['Z'], r['Z'], mh, 1)):
+            e = np.abs(np.clip(ref, None, s) - got)[mask] / s
+            err.setdefault(k, []).append(e)
+    return {k: (float(np.mean(np.concatenate(e))), float(np.percentile(np.concatenate(e), 99))) for k, e in err.items()}
 
 
 # ------------------------------------------------------------------------------- preview
@@ -209,10 +252,10 @@ def composite_view(v, fr, dye, base_lin, spec=1.0, shadow_k=0.32, skin=None):
         skin = np.array([0.45, 0.30, 0.24])
     sa = np.clip(v['scalp'], 0, 1)[..., None]
     sh = np.clip(v['shadow'], 0, 1)[..., None]
-    base = base * (1 - sa) + (skin * (0.80 + 0.20 * (1 - sh))) * sa
+    base = base * (1 - sa) + (skin * (0.95 - 0.6 * sh)) * sa
     shb = cv2.GaussianBlur(v['shadow'], (0, 0), 0.02 * fr.res)[..., None]
     base = base * (1 - shadow_k * shb)
-    hair = recolour(v['Dp'], v['S1p'], v['S2p'], v['M'], v['T'], dye, spec=spec)
+    hair = recolour(v['Dp'], v['S1p'], v['S2'] * v['A'], v['M'], v['T'], dye, spec=spec)
     return hair + base * (1 - A)
 
 

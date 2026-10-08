@@ -18,6 +18,14 @@ static const float* g_asoft = 0;
 // over a few pixels instead of being cut with a hard line.
 void set_soft(const float* zs, const float* as) { g_zsoft = zs; g_asoft = as; }
 
+static const float* g_zalt = 0;
+static int g_alt_ch = -1;
+// Optional alternative occluder: a deposit hidden by zocc but NOT by g_zalt (e.g. the body
+// without the arms) still shows, with its coverage scaled by its channel g_alt_ch (0..1).
+// The bake uses it so hair hanging in FRONT of the shoulders is never cut by the proxy's
+// arms (real arms hang at the sides), while hair behind the body stays hidden.
+void set_alt(const float* za, int ch) { g_zalt = za; g_alt_ch = ch; }
+
 static inline void splat(float* out, int W, int H, int C, const float* zocc, float zbias,
                          float x, float y, float z, float cov, const float* ch) {
   int ix = (int)floorf(x - .5f), iy = (int)floorf(y - .5f);
@@ -28,8 +36,11 @@ static inline void splat(float* out, int W, int H, int C, const float* zocc, flo
     int X = px[k], Y = py[k];
     if (X < 0 || Y < 0 || X >= W || Y >= H) continue;
     long i = (long)Y * W + X;
-    if (zocc && z < zocc[i] - zbias) continue;
     float a = cov * wts[k];
+    if (zocc && z < zocc[i] - zbias) {
+      if (!g_zalt || g_alt_ch < 0 || z < g_zalt[i] - zbias) continue;
+      a *= ch[g_alt_ch];
+    }
     if (g_zsoft && z < g_zsoft[i]) a *= 1.f - g_asoft[i];
     if (a > 1.f) a = 1.f;
     if (a <= 0.f) continue;
