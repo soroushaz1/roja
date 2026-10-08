@@ -41,7 +41,18 @@ Layout (tools/hair-bake/):
                         masks); finish_view -> the shipped float channels; sprite_frame (POT sides).
   hairbake/pack.py      the shipped files: lossless RGB WebP per view (hair / aux / mask / depth)
                         + style.json; read_style / upsample read them back (LAYOUT, BITS).
-  hairbake/colour.py    sRGB <-> linear, the catalog.js HAIR palette, the reference recolour.
+  hairbake/colour.py    sRGB <-> linear, the catalog.js HAIR palette, the calibrated reference
+                        recolour (dye_terms, recolour, shoulder).
+  hairbake/runtime.py   the REFERENCE RUNTIME: a packed style placed on a photo as the site will do
+                        it (yaw from the matrix or landmarks, view weights, anchor fit at the current
+                        yaw, parallax grid mesh, the face mesh as occluder, mip-filtered sampling
+                        of the encoded textures, recolour, union cross-fade, scene light,
+                        skin-field scalp, cast shadow,
+                        grain), proto-a's own-hair hiding with safeguards, and the existing
+                        hair-colour product (for calibration).
+  qa.py                 composites styles on the test portraits (public / internal, mirrored and
+                        rotated variants, 1x and 2x), contact sheets, turntable, palette checks:
+                            python3 qa.py <style-id> [--set public|internal|all] [--palette] [--turntable]
   hairbake/bake.py      the command line: groom -> shade -> 3 views -> pack -> preview:
                             python3 -m hairbake.bake <style-id | path | demo:name> [--q 1] [--views -30,0,30]
                         -> <repo>/hairstyles/<id>/ and build/bake/<id>/preview.png

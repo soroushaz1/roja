@@ -115,7 +115,9 @@ def long_hair(scalp, rng, q=1.0, n=100000, n_guides=3200, nv=110, length=3.0, nv
     gravity (g0, g1)   per step, ramping from g0 to g0 + g1 over arclength .05 .. .6.
     stiff (s0, s1)     direction keeping above / below arclength 1.0.
     face_frame, ears, shoulders, drape   the L5 fields (cheeks, ears, front/back at the
-                       shoulders with front_frac of the side hair in front, straight drape).
+                       shoulders with front_frac of the side hair in front, straight drape);
+                       face_frame may be a dict of grow.face_frame_field arguments (gap,
+                       hug, spread, depth, y_range, k); face_gap = its gap.
     waves              None or dict(amp=.026, wavelength=(.42, .56), start=.7, ramp=1.0,
                        lateral=.5, amp_jitter=(.6, 1.4), scale=.30, lock_jitter=.6):
                        phase, wavelength and amplitude come from smooth random fields over
@@ -153,7 +155,10 @@ def long_hair(scalp, rng, q=1.0, n=100000, n_guides=3200, nv=110, length=3.0, nv
     goes_front = decide_front(g, rng, front_frac, face_frame=frontish)
     fields = []
     if face_frame:
-        fields.append(face_frame_field(frontish, side, layer, gap=face_gap))
+        ffk = dict(gap=face_gap)
+        if isinstance(face_frame, dict):
+            ffk.update(face_frame)
+        fields.append(face_frame_field(frontish, side, layer, **ffk))
     if ears:
         fields.append(ear_clear_field(1 - frontish, side))
     if shoulders:

@@ -255,7 +255,9 @@ def composite_view(v, fr, dye, base_lin, spec=1.0, shadow_k=0.32, skin=None):
     base = base * (1 - sa) + (skin * (0.95 - 0.6 * sh)) * sa
     shb = cv2.GaussianBlur(v['shadow'], (0, 0), 0.02 * fr.res)[..., None]
     base = base * (1 - shadow_k * shb)
-    hair = recolour(v['Dp'], v['S1p'], v['S2'] * v['A'], v['M'], v['T'], dye, spec=spec)
+    from .colour import shoulder
+    hair = recolour(v['Dp'], v['S1p'], v['S2'] * v['A'], v['M'], v['T'], dye, spec=spec, A=v['A'])
+    hair = shoulder(hair / np.maximum(A, 1e-4)) * A        # runtime.render_layers does the same
     return hair + base * (1 - A)
 
 

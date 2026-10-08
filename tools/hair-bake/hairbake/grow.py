@@ -366,16 +366,29 @@ def drape_field(y_start=1.2, y_full=1.5, k=1.2):
     return f
 
 
-def face_frame_field(weight, side, layer=None, gap=-0.025, depth=(0.01, 0.025, 0.05), y_range=(0.15, 0.45, 1.15, 1.45), k=(0.55, 0.45)):
+def _face_envelope(y):
+    """the face outline's half-width as hair falling past it sees it: the outline above
+    the cheekbones, then the widest half-width (hair hangs straight down from the
+    cheekbones; it does not follow the jaw inward)."""
+    ys = np.linspace(0.0, 1.3, 131)
+    env = np.maximum.accumulate(face_halfwidth(ys))
+    return np.interp(y, ys, env)
+
+
+def face_frame_field(weight, side, layer=None, gap=-0.025, depth=(0.01, 0.025, 0.05), y_range=(0.15, 0.45, 1.15, 1.45),
+                     k=(0.55, 0.45), hug=0.0, spread=0.09):
     """face-framing sections (weight (n,) 0..1 per strand) fall close along the cheeks
-    in front of the ears: x is pulled toward the face outline (face_halfwidth(y) + gap +
-    .09 * layer) on the strand's side (side (n,) -1/+1), z toward the face surface + depth.
-    (proto-a L5.)"""
+    in front of the ears: x is pulled toward the face outline (+ gap + spread * layer) on
+    the strand's side (side (n,) -1/+1), z toward the face surface + depth.  (proto-a L5.)
+    hug 0..1: 0 = below the cheekbones the hair hangs straight down from the widest part of
+    the face (natural; the jaw and cheeks stay visible), 1 = it follows the outline in
+    along the jaw (hair pulled forward around the face: covers the cheeks)."""
     def f(p, d, st):
         w8 = np.asarray(weight)[st.idx]; sd = np.asarray(side)[st.idx]
         ly = np.asarray(layer)[st.idx] if layer is not None else 0.5
         y = p[:, 1]
-        wt = face_halfwidth(y) + 0.04 * smoothstep(0.6, 0.35, y) + gap + 0.09 * ly
+        hw = face_halfwidth(y) * hug + _face_envelope(y) * (1 - hug)
+        wt = hw + 0.04 * smoothstep(0.6, 0.35, y) + gap + spread * ly
         tx = 0.5 + sd * wt
         on = smoothstep(y_range[0], y_range[1], y) * smoothstep(y_range[3], y_range[2], y) * w8
         out = np.zeros_like(p)
