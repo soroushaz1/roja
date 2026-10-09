@@ -2,7 +2,7 @@
 
     cd tools/hair-bake
     python3 -m hairbake.bake <style>            # id (styles/<id>.py), a path, or demo:<name>
-            [--q 1.0] [--seed 1] [--views -30,0,30] [--res 256] [--out ../../hairstyles]
+            [--q 1.0] [--seed 1] [--views=-30,0,30] [--res 256] [--out ../../hairstyles]
             [--no-cache] [--no-preview]
 
 Steps (each logged with its time):

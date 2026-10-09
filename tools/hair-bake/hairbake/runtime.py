@@ -39,7 +39,10 @@ transformation matrix, optionally the hair segmenter's confidence mask):
              scalp, head; face, body.
  6. colour   colour.recolour() of each view (linear light, premultiplied, with A for the
              straight-brightness terms), times the scene light (scene_light(): the
-             hair-colour product's face-probe light factor, linearised: light^2.2).
+             hair-colour product's face-probe light factor applied to linear light as
+             light^SCENE_GAMMA, SCENE_GAMMA = 1: the face probe mixes skin tone with
+             exposure, so its full sRGB strength (light^2.2) pushed light shades to white
+             on fair skin and dark ones to black on dark skin).
              Cross-fade (render_layers): coverage-like layers (A, scalp, head, face, body) as
              a weighted UNION 1 - prod (1 - X_i)^min(1, 2 w_i); the hair colour as the
              coverage-weighted mean sum w_i P_i / sum w_i A_i; shadow and Z as weighted sums.
@@ -228,12 +231,19 @@ def face_light(img_srgb, L):
     return float(np.clip(1 + (face / 0.58 - 1) * 0.5, 0.72, 1.12)), face
 
 
+SCENE_GAMMA = 1.0     # linear multiplier = light factor ** SCENE_GAMMA (2.2 would be the full sRGB factor)
+
+
 def scene_light(img_srgb, L, mode='face'):
-    """linear multiplier for the new hair: the product's sRGB light factor, linearised."""
+    """linear multiplier for the new hair: the product's face-probe light factor (.72 ..
+    1.12) to the power SCENE_GAMMA.  The probe reads skin brightness, which is exposure AND
+    skin tone; applied at full strength (light^2.2 in linear light) it made light shades
+    near-white on fair skin in bright photos (x1.28) and dark shades near-black on dark skin
+    (x.49), so it is applied at about half strength in log terms."""
     if mode == 'none':
         return 1.0
     lf, _ = face_light(img_srgb, L)
-    return lf ** 2.2
+    return lf ** SCENE_GAMMA
 
 
 def skin_reference(img_lin, L):

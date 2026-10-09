@@ -19,7 +19,7 @@ What is where (each module's docstring has the details):
                Hairline, Parting, Scalp, Roots, ear_mask
   grow.py      grow, grow_two_phase, surface_walk, curve_from_root, gather_walk, bezier,
                catmull, on_surface; fields: combine, shoulder_field, decide_front,
-               drape_field, face_frame_field, ear_clear_field, toward_field
+               drape_field, face_frame_field, face_clear_field, ear_clear_field, toward_field
   strands.py   arclen, lengths, sample_at, resample, cut_at_y, cut, tangents, frames,
                interpolate, children, clump, smooth_noise, frizz, radial_dir, wave, helix,
                bend_ends, ragged_lengths, flyaways, strays, collide_strands
@@ -33,7 +33,7 @@ What is where (each module's docstring has the details):
 from .scalp import (CM, MM, unit, tangent, rotate_about, azimuth, elevation, crown, surface_z, surface_point,
                     face_halfwidth, Hairline, Parting, Scalp, Roots, ear_mask, hash01, sample_surface, HAIRLINES)
 from .grow import (grow, grow_two_phase, surface_walk, curve_from_root, gather_walk, bezier, catmull, on_surface,
-                   combine, shoulder_field, decide_front, drape_field, face_frame_field, ear_clear_field,
+                   combine, shoulder_field, decide_front, drape_field, face_frame_field, face_clear_field, ear_clear_field,
                    toward_field, Step, DOWN)
 from .strands import (arclen, lengths, sample_at, resample, resample_attr, cut_at_y, cut, tangents, frames,
                       interpolate, children, clump, smooth_noise, smooth_field, frizz, radial_dir, wave, helix, bend_ends,

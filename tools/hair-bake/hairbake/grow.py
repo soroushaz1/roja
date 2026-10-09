@@ -26,7 +26,8 @@ k (step index), s (arclength), s_fall (arclength since release, = s in grow), an
 
   gravity_field, shoulder_field (front/back decision at the shoulders), drape_field (no
   sideways fanning over the shoulders), face_frame_field (face-framing sections fall
-  close along the cheeks), ear_clear_field (side hair clears the ears), toward_field,
+  close along the cheeks), face_clear_field (no hair falls in front of the face),
+  ear_clear_field (side hair clears the ears), toward_field,
   and combine(*fields).
 
 Units: head units (1 cm = .061).  Lengths: shoulder-length hair ~ 1.4-1.6 from the crown,
@@ -396,6 +397,29 @@ def face_frame_field(weight, side, layer=None, gap=-0.025, depth=(0.01, 0.025, 0
         tz = surface_z(tx, y, depth[0] + (depth[1] + depth[2] * ly) * smoothstep(0.35, 0.6, y))
         tz = np.where(np.isfinite(tz), tz, p[:, 2])
         out[:, 2] = k[1] * (tz - p[:, 2]) * on * smoothstep(0.2, 0.5, y)
+        return out
+    return f
+
+
+def face_clear_field(side, y_from=0.12, y_to=1.25, margin=0.015, k=1.6, behind=0.06, weight=None):
+    """keeps hair off the face: a vertex in front of the face (z above the face surface -
+    behind) and inside its outline (+ margin) between y_from (upper forehead) and y_to
+    (below the chin) is pushed sideways out of the outline on its strand's side (side (n,)
+    -1 / +1, e.g. the root's side of the part), hardest deep inside.  Fringes and curtain
+    bangs are separate Bezier strands and do not use it; long_hair applies it by default
+    (face_clear=None turns it off for styles that are meant to cover part of the face).
+    weight (n,) 0..1 per strand (default 1)."""
+    def f(p, d, st):
+        sd = np.asarray(side)[st.idx]
+        w8 = 1.0 if weight is None else np.asarray(weight)[st.idx]
+        y = p[:, 1]
+        hw = _face_envelope(np.clip(y, 0, None)) * smoothstep(1.25, 1.05, y) + face_halfwidth(y) * smoothstep(1.05, 1.25, y)
+        inside = hw + margin - np.abs(p[:, 0] - 0.5)
+        zf = surface_z(np.clip(p[:, 0], 0.0, 1.0), y)
+        front = np.where(np.isfinite(zf), smoothstep(zf - behind - 0.04, zf - behind, p[:, 2]), 0.0)
+        on = smoothstep(y_from - 0.08, y_from, y) * smoothstep(y_to, y_to - 0.15, y) * front * w8
+        out = np.zeros_like(p)
+        out[:, 0] = sd * k * np.clip(inside / 0.04, 0, 1) * on
         return out
     return f
 

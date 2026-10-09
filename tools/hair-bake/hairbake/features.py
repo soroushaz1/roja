@@ -34,7 +34,7 @@ from . import head
 from .head import smoothstep
 from .scalp import unit, tangent, rotate_about, crown, surface_z, CM, hash01
 from .grow import (grow, grow_two_phase, surface_walk, gather_walk, catmull, bezier, on_surface, combine,
-                   shoulder_field, drape_field, face_frame_field, ear_clear_field, decide_front)
+                   shoulder_field, drape_field, face_frame_field, face_clear_field, ear_clear_field, decide_front)
 from . import strands as st
 from .hair import Strands
 
@@ -91,7 +91,7 @@ def layered_cut(roots, rng, lock_noise, length_y=2.12, back_extra=0.10, centre_s
 def long_hair(scalp, rng, q=1.0, n=100000, n_guides=3200, nv=110, length=3.0, nv_out=90, accept=None,
               method='gravity', cut=None, volume=(0.055, 0.07), crown_lift=0.02, asym=0.12, flat_front=0.75,
               root_h=(0.004, 0.012), gravity=(0.16, 0.45), stiff=(0.86, 0.6), stick=0.8,
-              face_frame=True, face_gap=-0.025, ears=True, front_frac=0.45, shoulders=True, drape=True,
+              face_frame=True, face_gap=-0.025, face_clear={}, ears=True, front_frac=0.45, shoulders=True, drape=True,
               extra_field=None, comb=None, two_phase=None,
               waves=None, ends=dict(amount=0.05, under=0.6, start=0.78), clumps=((700, 0.15, 0.55, 1.0), (4000, 0.30, 0.55, 0.8)),
               frizz=(0.0015, 0.0025), stray=(0.05, 0.003, 0.014), groups='part', collide=0.004,
@@ -118,6 +118,9 @@ def long_hair(scalp, rng, q=1.0, n=100000, n_guides=3200, nv=110, length=3.0, nv
                        shoulders with front_frac of the side hair in front, straight drape);
                        face_frame may be a dict of grow.face_frame_field arguments (gap,
                        hug, spread, depth, y_range, k); face_gap = its gap.
+    face_clear         dict of grow.face_clear_field arguments (default {}: on): no strand
+                       of this hair falls in front of the face below the upper forehead;
+                       None turns it off (hair meant to cover an eye or a cheek).
     waves              None or dict(amp=.026, wavelength=(.42, .56), start=.7, ramp=1.0,
                        lateral=.5, amp_jitter=(.6, 1.4), scale=.30, lock_jitter=.6):
                        phase, wavelength and amplitude come from smooth random fields over
@@ -159,6 +162,8 @@ def long_hair(scalp, rng, q=1.0, n=100000, n_guides=3200, nv=110, length=3.0, nv
         if isinstance(face_frame, dict):
             ffk.update(face_frame)
         fields.append(face_frame_field(frontish, side, layer, **ffk))
+    if face_clear is not None:
+        fields.append(face_clear_field(side, **face_clear))
     if ears:
         fields.append(ear_clear_field(1 - frontish, side))
     if shoulders:
@@ -330,7 +335,7 @@ def short_hair(roots, rng, length, direction, H, nv=40, h_end=None, pieces=900, 
 
 
 # ------------------------------------------------------------------------------- bangs
-CURTAIN_INNER = [(0.045, 0.0), (0.09, 0.08), (0.15, 0.16), (0.22, 0.245), (0.29, 0.325), (0.345, 0.41)]
+CURTAIN_INNER = [(0.045, 0.0), (0.09, 0.08), (0.155, 0.16), (0.23, 0.24), (0.305, 0.315), (0.37, 0.40)]
 CURTAIN_OUTER = [(0.24, -0.03), (0.31, 0.03), (0.37, 0.12), (0.42, 0.23), (0.445, 0.35), (0.455, 0.47)]
 
 
@@ -352,16 +357,21 @@ def scalp_phi(P):
 
 
 def curtain_bangs(scalp, rng, n, width=0.20, depth=0.13, inner=CURTAIN_INNER, outer=CURTAIN_OUTER,
-                  h=(0.050, 0.065, 0.075, 0.085, 0.095, 0.105), length=(0.70, 0.30), clumps=260, nv=90,
-                  jitter=0.007, x0=0.5, log=print):
+                  h=(0.040, 0.046, 0.046, 0.042, 0.036, 0.030), h_back=0.35, length=(0.70, 0.30), clumps=(70, 260),
+                  nv=90, jitter=0.007, x0=0.5, ends=None, tip_clump=0.62, frizz=(0.0010, 0.0035), log=print):
     """Curtain bangs parted in the middle (L5): each strand follows a front-view path
     between the inner edge (at the part) and the outer edge (to the cheekbone) of its
     curtain, chosen by how far from the part its root is (a); the path is lifted onto the
     forehead at heights h (head units above the skin, one per control point; the bangs
-    stand off the forehead a little at the root and lie down toward the ends).  Inner
-    strands are cut shorter (around the brow), outer ones reach the cheekbone; the ends are
-    ragged.  inner / outer: control points (dx from x0, y) for the image-right curtain,
-    mirrored for the left.  Returns (Strands kind 'fringe', Roots)."""
+    spring up from the part and lie down toward the ends), + h_back x h for roots further
+    behind the hairline (they lie on top).  Inner strands are cut shorter (around the brow),
+    outer ones reach the cheekbone (length = (base, + a) fraction of the path).
+    clumps (pieces, locks): strands gather into pieces (and smaller locks inside them)
+    that converge toward their tips (tip_clump), and every piece is cut to its own length
+    (ends: dict of strands.ragged_lengths arguments: piece .10, strand .035, point .35,
+    point_depth .22) so the ends are broken and pointed - never a ruler-straight edge or a
+    translucent veil.  inner / outer: control points (dx from x0, y) for the image-right
+    curtain, mirrored for the left.  Returns (Strands kind 'fringe', Roots)."""
     r = scalp.roots(n, rng, accept=bang_section(scalp, width, depth, x0=x0))
     nb = len(r)
     bs = np.where(r.x >= x0, 1.0, -1.0)
@@ -378,14 +388,23 @@ def curtain_bangs(scalp, rng, n, width=0.20, depth=0.13, inner=CURTAIN_INNER, ou
     k = WP.shape[1]
     W = np.zeros((nb, k + 1, 3))
     W[:, 0] = r.p
-    hb = np.asarray(h, np.float64)[None, :k] * (1 + 0.4 * w_[:, None]) + 0.012 * rng.random((nb, 1))
+    hb = np.asarray(h, np.float64)[None, :k] * (1 + h_back * w_[:, None]) + 0.008 * rng.random((nb, 1))
     W[:, 1:] = on_surface(x0 + bs[:, None] * WP[:, :, 0], WP[:, :, 1], hb)
     B = catmull(W, nv)
-    frac = np.clip(length[0] + length[1] * a + 0.09 * rng.normal(size=nb), 0.5, 1.0)
-    B = st.resample(B, nv, st.lengths(B) * frac)
     B = st.collide_strands(B, 0.012)
-    B, cid = st.clump(B, r.p, (bs > 0).astype(int), clumps, lambda tt: 0.15 + 0.55 * smoothstep(0.1, 1.0, tt), rng)
-    B = st.frizz(B, rng, 0.0012, 0.0042, freq=4)
+    # pieces and locks on the full-length paths, then each piece cut to its own length
+    cl = clumps if isinstance(clumps, (tuple, list)) else (max(1, clumps // 4), clumps)
+    grp = (bs > 0).astype(int)
+    B, piece = st.clump(B, r.p, grp, cl[0], lambda tt: 0.10 + 0.35 * smoothstep(0.15, 1.0, tt), rng)
+    B, cid = st.clump(B, r.p, grp, cl[1], lambda tt: 0.10 + tip_clump * smoothstep(0.2, 1.0, tt) ** 1.3, rng)
+    e = dict(piece=0.10, strand=0.035, point=0.35, point_depth=0.22, floor=0.45)
+    e.update(ends or {})
+    frac = np.clip(length[0] + length[1] * a + 0.04 * rng.normal(size=nb), 0.45, 1.0)
+    L = st.ragged_lengths(st.lengths(B) * frac, rng, lock=piece, **e)
+    L = np.minimum(L, st.lengths(B))
+    B = st.resample(B, nv, L)
+    if frizz:
+        B = st.frizz(B, rng, frizz[0], frizz[1], freq=4)
     return Strands(B, 'fringe', clump=cid), r
 
 

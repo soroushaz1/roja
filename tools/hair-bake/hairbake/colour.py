@@ -73,19 +73,21 @@ RECOLOUR = dict(
     tone=1.6,         # tonal contrast of T (roots, lowlights, lighter ends): exp(tone' (T - T0))
     tone_light=1.2,   # ... tone' = tone (1 + tone_light l): more for light shades (l = luma^(1/2.2))
     sat=1.08,         # body saturation x the dye's own chroma ...
-    sat_light=0.30,   # ... x (1 - sat_light l): light shades less saturated (no lemon / straw)
+    sat_light=0.22,   # ... x (1 - sat_light l): light shades less saturated (no lemon / straw;
+                      #     .30 made light blonde read cream-white on the QA portraits)
     sat_m=0.6,        # + deeper hair more saturated
     sat_t=0.8,        # + darker tone (roots, lowlights) more saturated
     sat_max=1.35,
     D0=0.6,           # the diffuse level of the average lit hair (bake exposure target)
     contrast_light=0.35,  # diffuse contrast gamma' = 1 - contrast_light l (light shades softer)
-    desat_hi=0.35,    # brighter-than-average hair a little less saturated (no yellow glow)
+    desat_hi=0.15,    # brighter-than-average hair a little less saturated (no yellow glow; .35
+                      #     washed the lit tops of blondes to white)
     warm=0.6,         # shadows and depth of light shades shift warm (golden / beige-brown, never
     warm_rgb=(1.25, 1.0, 0.72),  # olive or khaki): chroma x mix(1, warm_rgb / luma, warm l dark)
-    k1=0.085,         # primary highlight (R lobe) strength ...
+    k1=0.075,         # primary highlight (R lobe) strength ...
     k1_dark=0.55,     # ... x mix(k1_dark, 1, l): darker shades a softer sheen (it greyed them)
     tint1=0.55,       # its tint toward the dye's chroma for the darkest shades ...
-    tint1_light=0.06,  # ... falling to this for the lightest (cream-white, not yellow, sheen)
+    tint1_light=0.18,  # ... falling to this for the lightest (a cream sheen, not yellow, not white)
     k2=0.45,          # secondary highlight (TRT, through the fibre): k2 Y^e2 x chroma(sat2)
     e2=0.75, sat2=1.15,
 )

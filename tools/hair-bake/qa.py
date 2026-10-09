@@ -15,6 +15,8 @@ light, scalp, cast shadow, photo grain; optionally proto-a's own-hair hiding).
         [--turntable]                       also the synthetic turntable sheet (yaw -40..40)
         [--palette]                         also the 16-shade sheet against the hair-colour product
         [--out build/qa] [--images DIR]     (extra portrait directory, searched first)
+        [--styles-dir DIR]                  where the packed styles are (default <repo>/hairstyles;
+                                            e.g. a draft baked with bake.py --out build/drafts)
     python3 qa.py --list                    portraits, variants and shade names
     python3 qa.py <style-id> --selfcheck    numeric checks of the reference runtime (exit 1 on a fail)
 
@@ -490,7 +492,11 @@ def main():
     ap.add_argument('--out', default=os.path.join(BUILD, 'qa'))
     ap.add_argument('--images', default=None)
     ap.add_argument('--list', action='store_true')
+    ap.add_argument('--styles-dir', default=None, help='packed styles root (default <repo>/hairstyles)')
     a = ap.parse_args()
+    if a.styles_dir:
+        global STYLES
+        STYLES = os.path.abspath(a.styles_dir)
     if a.images:
         IMAGE_DIRS.insert(0, a.images)
     if a.list:

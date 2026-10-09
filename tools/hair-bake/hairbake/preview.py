@@ -6,10 +6,10 @@ bake shading (deep-opacity shadows, two specular lobes, recolour) is the rendere
     cd tools/hair-bake
     python3 -m hairbake.preview <style>          # a style id (styles/<id>.py), a path to a
                                                  # style module, or demo:<name> (hairbake/demos.py)
-            [--q .25] [--views -30,0,30,90,180,top] [--res 150] [--shade brown|blonde|kind]
+            [--q .25] [--views=-30,0,30,90,180,top] [--res 150] [--shade brown|blonde|kind]
             [--scalp] [--out build/preview/<name>.png] [--seed 1]
 
-Views: a number is a yaw in degrees (+ turns the face toward image right, as the bake's
+Views (write --views=..., with '=', when the list starts with a minus sign): a number is a yaw in degrees (+ turns the face toward image right, as the bake's
 views); 'top' looks down from above (pitch 70), 'back' is yaw 180; 'yaw/pitch' gives both.
 --scalp draws the scalp density (hairline falloff) in red and the part line in cyan and
 leaves the hair out (to check hairlines and partings).

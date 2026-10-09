@@ -48,6 +48,12 @@ LIGHT = dict(
     alpha_r=-5.0, beta_r=9.0,             # R lobe shift / width (degrees)
     beta_trt=15.0,                        # TRT lobe width (degrees)
     ambient_floor=0.12,                   # ambient left in the deepest occlusion
+    env_base=0.22,                        # room light from behind / below (env_weight)
+    bounce=0.0,                           # light reflected onto the hair by the neck and shoulders
+    bounce_m=0.0,                         # ... and how much it lowers M there (body_proximity):
+                                          #     long hair falling around the neck stays readable
+                                          #     (dark, not black) when its inside shows at 3/4
+    bounce_reach=0.08,                    # ... falloff distance from the skin / clothes (head units)
     ao_dirs=16,                           # hair ambient-occlusion directions
     body_ao_dirs=16,                      # body ambient-occlusion directions
 )
@@ -57,13 +63,13 @@ LIGHT = dict(
 VOLUME_AXIS = (0.5, 0.32, -0.26)
 
 
-def env_weight(dirs_view):
+def env_weight(dirs_view, base=0.22):
     """studio environment brightness from view-space directions (n, 3): mostly from the
-    front and above, some from the walls behind and a little bounce from below."""
+    front and above, `base` from the walls behind and below (LIGHT['env_base'])."""
     d = np.asarray(dirs_view)
     front = np.clip(d[:, 2], 0, 1)
     up = np.clip(-d[:, 1], 0, 1)
-    return 0.22 + 0.85 * front + 0.35 * up
+    return base + 0.85 * front + 0.35 * up
 
 
 def volume_normal(P):
@@ -74,6 +80,27 @@ def volume_normal(P):
     c[..., 1] = np.clip(P[..., 1], ay, 3.0)
     n = P - c
     return n / (np.linalg.norm(n, axis=-1, keepdims=True) + 1e-9)
+
+
+def body_proximity(Q, parts=('neck', 'torso'), reach=0.08, chunk=500000):
+    """0..1 per point (k, 3): how close it is to the given body parts (the neck and the
+    shoulders by default, not the scalp): 1 on their surface, exp(-distance / reach) away
+    from it.  The part label is blended over the 8 nearest body-mesh vertices, so there is
+    no step where the neck meets the head."""
+    from scipy.spatial import cKDTree
+    m = head.body_mesh()
+    lab = np.isin(m['region'], [head.REGION[p] for p in parts]).astype(np.float32)
+    tree = cKDTree(m['V'])
+    sdf = head.body_sdf()
+    out = np.empty(len(Q), np.float32)
+    for a in range(0, len(Q), chunk):
+        q = np.asarray(Q[a:a + chunk], np.float64)
+        d, i = tree.query(q, k=8)
+        w = 1.0 / (d + 1e-3)
+        lb = (lab[i] * w).sum(1) / w.sum(1)
+        dist = np.asarray(sdf(q), np.float64)
+        out[a:a + chunk] = lb * np.exp(-np.clip(dist - 0.005, 0, None) / reach)
+    return out
 
 
 def body_vis(Q, d, k=6.0, steps=14, tmin=0.008, tmax=2.0, chunk=400000, sdf=None):
@@ -210,16 +237,20 @@ class Shader:
             alb = alb * np.broadcast_to(attrs['albedo_t'], (n, m))[:, idx]
         self.alb = np.broadcast_to(alb, (n, ns)).astype(np.float32)
         self.root = (0.25 + 0.75 * np.clip(idx / max(m - 1, 1) / 0.12, 0, 1)).astype(np.float32)[None, :]
+        self.prox = None
+        if L.get('bounce') or L.get('bounce_m'):
+            self.prox = body_proximity(self.Q, reach=L.get('bounce_reach', 0.08)).reshape(n, ns)
+            log(f'  shade: body proximity (bounce) mean {self.prox.mean():.3f}')
         log(f'  shade: setup {time.time() - t0:.1f}s ({n} strands x {ns} samples)')
 
     def _ambient(self, R):
         """hair and body ambient visibility at every sample for the view rotation R."""
-        w = env_weight(self.ao_dirs @ R.T)
+        w = env_weight(self.ao_dirs @ R.T, self.light['env_base'])
         aoh = np.zeros(self.ao_hair.shape[1:], np.float32)
         for wi, a in zip(w, self.ao_hair):
             aoh += wi * a
         aoh /= w.sum()
-        wb = env_weight(self.body_dirs @ R.T)
+        wb = env_weight(self.body_dirs @ R.T, self.light['env_base'])
         aob = np.zeros(self.ao_body.shape[1:], np.float32)
         for wi, a in zip(wb, self.ao_body):
             aob += wi * a
@@ -259,9 +290,13 @@ class Shader:
         diff = sinTL * (0.45 + 0.55 * wrapd)
         amb = L['ambient_floor'] + (1 - L['ambient_floor']) * ao
         D = self.alb * (L['kd'] * diff * K + L['ka'] * amb)
+        if self.prox is not None and L.get('bounce'):
+            D = D + self.alb * (L['bounce'] * self.prox)
         S1 = self.attrs['spec1_j'][:, None] * MR * NR * norm * K * facing * self.root
         S2 = self.attrs['spec2_j'][:, None] * MT * NT * norm * K * facing * (0.4 + 0.6 * aoh) * self.root
         Mt = np.clip(1 - (0.6 * np.exp(-L['kappa_m'] * od_key) + 0.4 * aoh), 0, 1)
+        if self.prox is not None and L.get('bounce_m'):
+            Mt = Mt * (1 - L['bounce_m'] * self.prox)
         out = [_interp_back(X.astype(np.float32), self.idx, self.m) for X in (D, S1, S2, Mt)]
         self.log(f'  shade view {yaw:+g}: {time.time() - t0:.1f}s (key transmittance mean {K.mean():.2f}, AO {ao.mean():.2f})')
         return out
@@ -276,7 +311,7 @@ class Shader:
         Lc = R.T @ Lv
         tk = np.exp(-L['kappa'] * hair_od(self.P2, self.m2, Qc, Lc, vox=self.vox, bias=0.5))
         dirs = self.ao_dirs
-        w = env_weight(dirs @ R.T) * ((dirs @ R.T)[:, 2] > -0.1)
+        w = env_weight(dirs @ R.T, L['env_base']) * ((dirs @ R.T)[:, 2] > -0.1)
         ao = np.zeros(len(Qc))
         for d, wi in zip(dirs, w):
             if wi > 0:

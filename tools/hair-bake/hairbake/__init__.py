@@ -54,7 +54,7 @@ Layout (tools/hair-bake/):
                         rotated variants, 1x and 2x), contact sheets, turntable, palette checks:
                             python3 qa.py <style-id> [--set public|internal|all] [--palette] [--turntable]
   hairbake/bake.py      the command line: groom -> shade -> 3 views -> pack -> preview:
-                            python3 -m hairbake.bake <style-id | path | demo:name> [--q 1] [--views -30,0,30]
+                            python3 -m hairbake.bake <style-id | path | demo:name> [--q 1] [--views=-30,0,30]
                         -> <repo>/hairstyles/<id>/ and build/bake/<id>/preview.png
   hairbake/preview.py   quick shape previews of a style from any yaw / pitch:
                             python3 -m hairbake.preview <style-id | path | demo:name> [--q .25]
