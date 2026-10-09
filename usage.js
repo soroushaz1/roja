@@ -5,7 +5,7 @@
 // or answer is ever part of it.
 //
 // Not from the Android app (its pages are not on the site) or a development server.
-import {currentShop} from './shops.js?v=24';
+import {currentShop} from './shops.js?v=25';
 
 const API='api/stats';
 // The shop whose mirror this is, so each shop's counts can be read on their own.

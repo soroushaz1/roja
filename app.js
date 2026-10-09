@@ -1,17 +1,17 @@
-import {products,categories,finishes,looks,byProduct} from './catalog.js?v=24';
-import {layerSpecs,createMaskPainter,renderFallback,createSmoother,landmarksByType,frameLandmarks,hexToRgb} from './makeup.js?v=24';
-import {createStage,layerModes} from './stage.js?v=24';
-import {controls,regions,controlLandmarks,controlRange,deformers,textureLayers} from './deform.js?v=24';
-import {procedures,byId,amountsFor,resolve,kinds} from './procedures.js?v=24';
-import {renderDebug,nearest} from './debug.js?v=24';
-import {createBrush,brushModes} from './brush.js?v=24';
-import {metrics,measure,points as placed,symmetry,pose as poseOf} from './measure.js?v=24';
-import {CANON,CANON_ASPECT,TRIANGLES} from './facemesh.js?v=24';
-import {createSkinScanner} from './skin-scan.js?v=24';
-import {createSkinPanel} from './skin-panel.js?v=24';
-import {skincareById} from './skin.js?v=24';
-import {count} from './usage.js?v=24';
-import {currentShop,shopUrl,searchWords} from './shops.js?v=24';
+import {products,categories,finishes,looks,byProduct} from './catalog.js?v=25';
+import {layerSpecs,createMaskPainter,renderFallback,createSmoother,landmarksByType,frameLandmarks,hexToRgb} from './makeup.js?v=25';
+import {createStage,layerModes} from './stage.js?v=25';
+import {controls,regions,controlLandmarks,controlRange,deformers,textureLayers} from './deform.js?v=25';
+import {procedures,byId,amountsFor,resolve,kinds} from './procedures.js?v=25';
+import {renderDebug,nearest} from './debug.js?v=25';
+import {createBrush,brushModes} from './brush.js?v=25';
+import {metrics,measure,points as placed,symmetry,pose as poseOf} from './measure.js?v=25';
+import {CANON,CANON_ASPECT,TRIANGLES} from './facemesh.js?v=25';
+import {createSkinScanner} from './skin-scan.js?v=25';
+import {createSkinPanel} from './skin-panel.js?v=25';
+import {skincareById} from './skin.js?v=25';
+import {count} from './usage.js?v=25';
+import {currentShop,shopUrl,searchWords} from './shops.js?v=25';
 
 const $=id=>document.getElementById(id);
 // GitHub Pages ignores the ?v= query, and browsers and its CDN keep a page for up to ten
@@ -19,7 +19,7 @@ const $=id=>document.getElementById(id);
 // newer script, which would then look for elements that page does not have. Such a
 // page is loaded afresh, once; if it is still the old one, it says a new version is
 // on its way instead of failing.
-const RELEASE='24';
+const RELEASE='25';
 if(document.documentElement.dataset.release!==RELEASE){
   let tried=null;
   try{tried=sessionStorage.getItem('roja-reloaded');sessionStorage.setItem('roja-reloaded',RELEASE);}catch{}
@@ -116,11 +116,14 @@ for(const m of brushModes)brushState.strength[m.id]=m.strength;
 let brushPointer=null;
 
 const painter=createMaskPainter();
+// Hair: the segmenter's mask of the real hair (from the tracker, in step with the
+// landmarks) for the hair colour.
+let hairMask=null, hairVersion=0, hairUploaded=-1, hairState='';
 const debug={on:false,points:true,mesh:false,contours:false,axes:false,masks:false,field:false,strokes:false,
   labelSize:10,highlight:true,onlyActive:false,find:null,hud:false,inspect:false};
 let topology=null, maskView=null;
 const maskTint=document.createElement('canvas');
-const perf={frames:0,fps:0,since:0,draws:0,drawn:0,detections:0,hz:0,latency:0,inferMs:0,lastHud:0,maskMs:0,drawMs:0,lastError:'',trackerNote:''};
+const perf={hairMs:0,frames:0,fps:0,since:0,draws:0,drawn:0,detections:0,hz:0,latency:0,inferMs:0,lastHud:0,maskMs:0,drawMs:0,lastError:'',trackerNote:''};
 const ema=(old,v)=>old?old*.85+v*.15:v;
 let finder={state:'idle',samples:[],tries:0,result:null};
 let wantSkin=false;
@@ -255,11 +258,13 @@ function selectProduct(id,apply=true){
   $('product-limitation').textContent=next.limitation;
   const skin=next.mode==='foundation';
   $('intensity-label').textContent=skin?'پوشش':'شدت رنگ';
+  document.querySelector('.buy-card').hidden=next.sell===false;
   $('finder').hidden=!next.finder;
   renderFinder();
   $('style-field').hidden=!next.styles;
   $('style-options').replaceChildren(...(next.styles||[]).map(s=>el('button',{type:'button',role:'radio',data:{style:s.id},text:s.name,
-    onclick:()=>{makeupState[product.id].style=s.id;enableProduct(product);updateSelection();}})));
+    onclick:()=>{
+      makeupState[product.id].style=s.id;enableProduct(product);updateSelection();}})));
   $('brush-target-product').textContent=`فقط ${next.name}`;
   if(brushState.target!=='all')brushState.target=next.type;
   renderShades();updateSelection();
@@ -672,7 +677,8 @@ function buildTray(){
       groups.append(el('button',{type:'button','aria-pressed':String(cat.id===category),data:{group:cat.id},text:cat.name,
         title:cat.hint,onclick:()=>{category=cat.id;updateTrayState();chips.querySelector(`[data-sep="${cat.id}"]`)?.scrollIntoView({inline:'start',block:'nearest'});}}));
       chips.append(el('span',{class:'tray-sep',data:{sep:cat.id},text:cat.name}));
-      for(const item of products.filter(p=>p.category===cat.id)){
+      // The Android app's own renderer has no hair segmenter, so no hair colour there.
+      for(const item of products.filter(p=>p.category===cat.id&&!(p.type==='hair'&&nativeMirror))){
         const dot=el('i',{class:'dot'});
         chips.append(el('button',{class:'chip',type:'button',data:{product:item.id},'aria-pressed':String(item.id===product.id),
           onclick:()=>{selectProduct(item.id);showPane('color');}},dot,item.name));
@@ -725,6 +731,7 @@ function statusText(){
     const m=brushModes.find(x=>x.id===brushState.mode);
     return `روی تصویر بکش: ${m.name}. ${frozen||source.kind==='photo'?'':'برای دقت بیشتر تصویر را ثابت کن.'}`;
   }
+  if(hairState==='loading'&&wantHair())return 'آماده‌سازی تشخیص مو…';
   if(pin)return 'مرز را بکش تا دو رنگ را کنار هم روی صورتت ببینی.';
   if(compare)return 'مرز را بکش تا با و بدون آرایش را مقایسه کنی.';
   if(frozen)return 'تصویر ثابت است. برای ادامه، دوباره «ثابت» را بزن.';
@@ -754,6 +761,24 @@ function setMode(next){
   status(statusText());
 }
 
+/* ---------- hair -------------------------------------------------------- */
+// Whether the tracker should find the hair in each frame: only while something uses it,
+// and only where the stage can paint with it.
+function wantHair(){
+  if(!source||source.native||stageBroken)return false;
+  if(mode!=='makeup'&&!(mode==='procedure'&&$('with-makeup').checked))return false;
+  return !!(makeupState['hair-color'].enabled);
+}
+// The hair mask for the stage: the latest one, or an empty one while there is none.
+const NO_HAIR={w:1,h:1,data:new Uint8Array(1),box:null};
+function uploadHair(p){
+  const spec=[...p.after,...(p.before||[])].find(s=>s.type==='hair');
+  if(!spec||hairUploaded===hairVersion)return;
+  const w=.05+.3*Math.max(0,Math.min(100,spec.fade??40))/100;
+  stage.setFrameMask('hair',hairMask||NO_HAIR,[.55-w*.6,.55+w*.6]);
+  hairUploaded=hairVersion;
+}
+
 /* ---------- drawing ----------------------------------------------------- */
 function ensureStage(){
   if(!stage&&!stageBroken){
@@ -764,6 +789,13 @@ function ensureStage(){
   return stage;
 }
 function stageLayer(spec,face){
+  // Hair takes the colour as its new average and keeps every strand's own light and
+  // shade around it, with a little shine.
+  if(spec.type==='hair'){
+    const amount=Math.max(0,Math.min(1,spec.intensity/100));
+    return {key:'hair',color:hexToRgb(spec.color),amount,sheer:.12,lift:0,mode:layerModes.pigment,detail:1,
+      gloss:.22*amount,matte:0,shimmer:0,smooth:0,radius:2,radiusK:0};
+  }
   const f=FINISH[spec.finish]||FINISH.matte;
   const intensity=Math.max(0,Math.min(1,spec.intensity/100));
   const detail=(DETAIL[spec.type]??.8)*($('natural-blend').checked?1:.3);
@@ -811,7 +843,7 @@ const canonLandmarks=Array.from({length:CANON.length/2},(_,i)=>({x:CANON[i*2],y:
 const maskCrop=document.createElement('canvas');
 function maskSpecs(p){
   const specs=new Map();
-  for(const s of [...p.after,...(p.before||[])])specs.set(s.key,s);
+  for(const s of [...p.after,...(p.before||[])])if(s.type!=='hair')specs.set(s.key,s);
   for(const t of p.textures)specs.set(t.key,{key:t.key,type:'texture',zone:t.zone,fade:60});
   return specs;
 }
@@ -832,7 +864,7 @@ function rebuildMasks(p){
     else stage.setMask(spec.key,maskCrop,uv);
   }
   if(source?.native)native.mirrorKeep(JSON.stringify([...specs.keys()]));
-  else stage.dropMasks(new Set(specs.keys()));
+  else{stage.dropMasks(new Set([...specs.keys(),'hair']));}
   masksDirty=false;
 }
 // A mask for the native renderer: one byte a pixel (its coverage), base64.
@@ -868,12 +900,13 @@ function draw(now=performance.now()){
   const {w,h}=frameSize();
   if(overlay.width!==w||overlay.height!==h){overlay.width=w;overlay.height=h;}
   const p=plan();
-  if(source.native){drawNative(p);return;}
+  if(source.native){drawNative({...p,after:p.after.filter(s=>s.type!=='hair'),before:p.before&&p.before.filter(s=>s.type!=='hair')});return;}
   const gl=ensureStage();
   const face=faceWidthPx();
   if(gl){
     if(debug.on&&debug.masks&&landmarks&&(dirty||masksDirty))paintMaskView(p);
     if(masksDirty){const t=performance.now();rebuildMasks(p);perf.maskMs=ema(perf.maskMs,performance.now()-t);}
+    uploadHair(p);
     const t=performance.now();
     const sync=source.kind==='camera'&&syncing();
     const ok=gl.draw({
@@ -898,7 +931,7 @@ function draw(now=performance.now()){
     photo.hidden=source.kind!=='photo';
     overlay.classList.toggle('natural',$('natural-blend').checked);
     if(masksDirty||dirty){
-      const specs=mode==='makeup'&&!compare?layerSpecs(makeupState):[];
+      const specs=mode==='makeup'&&!compare?layerSpecs(makeupState).filter(s=>s.type!=='hair'):[];
       renderFallback(octx,specs,landmarks,painter,landmarks?brush.maps(landmarks,w,h):null);
       masksDirty=false;
     }
@@ -994,7 +1027,7 @@ function debugStats(){
     ['نمایش',source?.native?`${nativeInfo.fps||0} fps (native)`:`${perf.drawn} fps (حلقه ${perf.fps})`],
     ['ردیابی',source?.native?`${nativeInfo.hz||0} Hz · native · ${nativeInfo.delegate||'—'}`
       :`${perf.hz} Hz · ${Math.round(perf.latency)} ms · ${tracker?(tracker.kind==='worker'?'worker':'main thread'):trackerStarting?'starting':'—'}${delegate?' · '+delegate:''}`],
-    ['مدل',`${perf.inferMs.toFixed(1)} ms هر فریم${source?.native?(nativeInfo.note?' · '+nativeInfo.note.slice(0,60):''):gpuError?' · GPU: '+gpuError.slice(0,60):''}`],
+    ['مدل',`${perf.inferMs.toFixed(1)} ms هر فریم${perf.hairMs&&wantHair()?` · مو ${perf.hairMs.toFixed(1)} ms`:''}${source?.native?(nativeInfo.note?' · '+nativeInfo.note.slice(0,60):''):gpuError?' · GPU: '+gpuError.slice(0,60):''}`],
     ['هماهنگی',source?.kind==='camera'?(source.native||syncing()?'فریم و نقاط هم‌زمان':'تصویر زنده'):'—'],
     ['هزینهٔ هر فریم',`masks ${perf.maskMs.toFixed(1)} ms · draw ${(source?.native?nativeInfo.draw||0:perf.drawMs).toFixed(1)} ms`],
     ['نقاط',landmarks?String(landmarks.length):'0'],
@@ -1102,6 +1135,12 @@ function onTracker(d){
     if(source.kind==='photo')photoPasses++;
     poseAngles=d.landmarks?poseOf(d.matrix):null;
     if(d.blendshapes)blendshapes=d.blendshapes;
+    if('hair' in d||!d.landmarks||!wantHair()){hairMask=d.hair||null;hairVersion++;}
+    if(d.hairMs)perf.hairMs=ema(perf.hairMs,d.hairMs);
+    if(d.hairState!==undefined&&d.hairState!==hairState){
+      hairState=d.hairState;
+      if(hairState.startsWith('failed'))perf.lastError=`hair: ${hairState}`;
+    }else if('hair' in d)hairState='ready';
     if('skin' in d)onSkin(d.skin);
     else if(wantSkin&&!d.landmarks)onSkin(null);
     $('guide').hidden=!!landmarks;
@@ -1118,7 +1157,7 @@ function onTracker(d){
 function ensureTracker(){
   if(tracker||trackerStarting)return;
   let w=null;
-  try{w=new Worker(new URL(`face-worker.js?v=24${gpuQuery}`,import.meta.url));}catch(e){perf.lastError=`worker: ${e.message}`;}
+  try{w=new Worker(new URL(`face-worker.js?v=25${gpuQuery}`,import.meta.url));}catch(e){perf.lastError=`worker: ${e.message}`;}
   if(!w){useTracker('page','no worker');return;}
   ready=false;busy=false;
   tracker={kind:'worker',post:(m,transfer)=>w.postMessage(m,transfer),close:()=>w.terminate()};
@@ -1138,7 +1177,7 @@ async function useTracker(kind,reason){
   const token=++trackerGeneration;
   try{
     const Vision=await import('./vendor/vision_bundle.mjs');
-    await import('./face-core.js?v=24');
+    await import('./face-core.js?v=25');
     const core=self.rojaFaceCore(Vision,new URL('./',import.meta.url).href);
     const found=await core.init('CPU',(loaded,total)=>{if(token===trackerGeneration)onTracker({type:'progress',loaded,total});});
     if(token!==trackerGeneration){core.close();return;}
@@ -1437,7 +1476,7 @@ function detect(now){
   if(source.kind==='camera'){
     if(video.readyState<2)return;
     if(frozen){
-      if(landmarks&&!wantSkin)return;
+      if(landmarks&&!wantSkin&&!(wantHair()&&!hairMask))return;
       if(now-lastSent<100)return;
     }else{
       // Each camera frame once, as soon as the last one is measured. Without
@@ -1448,7 +1487,8 @@ function detect(now){
       if(tracker.kind==='page'&&now-lastSent<80)return;
     }
   }else{
-    if(photoPasses>=PHOTO_PASSES&&!wantSkin)return;
+    // A still picture is measured a few times, and again while the hair is still wanted.
+    if(photoPasses>=PHOTO_PASSES&&!wantSkin&&!(wantHair()&&!hairMask))return;
     if(now-lastSent<30)return;
   }
   busy=true;freshFrame=false;lastSent=now;sentAt=performance.now();sentGen=generation;
@@ -1456,7 +1496,7 @@ function detect(now){
   grabFrame().then(({frame,transfer,keep})=>{
     if(token!==generation||!tracker){frame.close?.();keep?.close();busy=false;return;}
     inFlight?.close();inFlight=keep||null;
-    tracker.post({type:'frame',frame,timestamp:sentAt,extras:debug.on||$('debug-panel').open,sample:wantSkin},transfer);
+    tracker.post({type:'frame',frame,timestamp:sentAt,extras:debug.on||$('debug-panel').open,sample:wantSkin,hair:wantHair()},transfer);
   }).catch(e=>{busy=false;perf.lastError=`frame: ${e?.message||e}`;
     if(token===generation)stop('پردازش تصویر روی این مرورگر انجام نشد. مرورگر دیگری را امتحان کن.'+code(e));});
 }
@@ -1770,7 +1810,7 @@ function buyLink(link,item,shade){
   return link;
 }
 function renderBuy(){
-  const items=products.filter(p=>makeupState[p.id].enabled);
+  const items=products.filter(p=>makeupState[p.id].enabled&&p.sell!==false);
   $('buy-items').replaceChildren(...items.map(item=>{
     const shade=shadeOf(item,makeupState[item.id].shade);
     return el('div',{class:'buy-row'},
@@ -2022,7 +2062,9 @@ viewport.addEventListener('pointermove',e=>{
     tip.textContent=`#${hit.index}  x ${(l.x*w).toFixed(1)}  y ${(l.y*h).toFixed(1)}  z ${(l.z||0).toFixed(3)}`;
   }else $('inspect-tip').hidden=true;
 });
-const endStroke=e=>{if(brushPointer===e.pointerId){brush.end();brushPointer=null;updateBrushInfo();}};
+const endStroke=e=>{
+  if(brushPointer===e.pointerId){brush.end();brushPointer=null;updateBrushInfo();}
+};
 viewport.addEventListener('pointerup',endStroke);
 viewport.addEventListener('pointercancel',endStroke);
 viewport.addEventListener('pointerleave',()=>{$('brush-cursor').hidden=true;$('inspect-tip').hidden=true;});

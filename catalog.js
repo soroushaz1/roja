@@ -19,10 +19,13 @@ const range=(prefix,entries)=>entries.map(([name,color,extra],i)=>({
 export const categories=[
   {id:'face',name:'صورت',hint:'پوست، گونه، کانتور'},
   {id:'eyes',name:'چشم و ابرو',hint:'سایه، خط چشم، ریمل'},
-  {id:'lips',name:'لب',hint:'رژ، مداد، برق لب'}
+  {id:'lips',name:'لب',hint:'رژ، مداد، برق لب'},
+  {id:'hair',name:'مو',hint:'رنگ مو'}
 ];
 
-export const layerOrder=['foundation','concealer','contour','blush','highlighter','eyeshadow','eyeliner','mascara','brow','lipliner','lipstick','gloss'];
+// The hair is recoloured first: it is not on the face, and a fringe sits over nothing
+// the face layers paint.
+export const layerOrder=['hair','foundation','concealer','contour','blush','highlighter','eyeshadow','eyeliner','mascara','brow','lipliner','lipstick','gloss'];
 
 export const finishes={
   matte:   {name:'مات'},
@@ -196,6 +199,24 @@ export const products=[
      ['رزگلد','#D2968B',{finish:'shimmer'}], ['مرجانی براق','#D18C7F'], ['گل‌بهی','#CC8087'],
      ['تمشکی شفاف','#C4737E'], ['شرابی براق','#B2666A']])}
 ];
+
+// Hair colours. Each is the colour the hair's
+// average becomes; the strands' own light and shade are kept around it.
+const HAIR=[
+  ['مشکی','#1C1819'], ['قهوه‌ای تیره','#35251E'], ['شکلاتی','#4E3326'], ['بلوطی','#69412C'],
+  ['فندقی','#835636'], ['کاراملی','#9C6A40'], ['عسلی','#B78A52'], ['بلوند تیره','#9A815F'],
+  ['بلوند دودی','#A49A88'], ['بلوند روشن','#CBB088'], ['پلاتینی','#DAD2C4'], ['مسی','#A44F28'],
+  ['ماهاگونی','#692B25'], ['شرابی','#5E1F2C'], ['رزگلد','#BF8A7F'], ['نقره‌ای','#9C9A9E']
+];
+products.push(
+  {id:'hair-color', type:'hair', category:'hair', mode:'pigment', finish:'satin',
+   name:'رنگ مو', title:'رنگ مو روی موی خودت', region:'مو', search:'رنگ مو',
+   intensity:70, fade:40,
+   description:'۱۶ رنگ، از مشکی تا پلاتینی و مسی. موی خودت از تصویر جدا می‌شود و فقط رنگش عوض می‌شود؛ حالت و سایه‌روشن تارها می‌ماند.',
+   limitation:'نتیجهٔ واقعی رنگ به رنگ فعلی مو، دکلره و زمان ماندن رنگ بستگی دارد؛ روشن‌کردن موی تیره بدون دکلره به این روشنی نمی‌رسد.',
+   mirrorText:'رنگ را عوض کن و همان لحظه روی موی خودت ببین. شدت را کم کن برای سایه‌ای ملایم، زیاد کن برای رنگ کامل. «محوشدن لبه» مرز مو و پوست را نرم‌تر یا تیزتر می‌کند. دو رنگ را کنار هم مقایسه کن یا زیر نورهای مختلف ببین.',
+   shades:range('hcl',HAIR)}
+);
 
 export const byProduct=id=>products.find(p=>p.id===id);
 

@@ -192,9 +192,12 @@ const LIPS=[61,0,291,17,40,270,91,321];
     report.lips={nude:+lipsOn.diff.toFixed(2),deep:+lipsDeep.diff.toFixed(2)};
 
     // Every product renders, and none leaks into the eye opening or off the face.
-    const productIds=await page.evaluate(()=>[...document.querySelectorAll('[data-product]')].map(b=>b.dataset.product));
+    // Hair is off the face by nature; it has its own checks below.
+    const productIds=await page.evaluate(()=>[...document.querySelectorAll('[data-product]')].map(b=>b.dataset.product).filter(id=>!id.startsWith('hair')));
     assert(productIds.length>=14,`expected the full Roja range, got ${productIds.length}`);
     report.products={};
+    // The first-visit tour may sit over the tray; it is not what this checks.
+    if(await page.locator('#tour-skip').isVisible())await page.locator('#tour-skip').click();
     let totalShades=0;
     for(const id of productIds){
       await page.evaluate(()=>document.querySelector('#clear-look').click());
@@ -222,6 +225,29 @@ const LIPS=[61,0,291,17,40,270,91,321];
       totalShades+=shades;
     }
     report.shadeChoices=totalShades;
+
+    /* ---- hair: the colour on the real hair and nowhere on the face ---- */
+    {
+      // Above the forehead (landmark 10, a fifth of the face higher) is the portrait's hair.
+      const hairPatch=()=>page.evaluate(()=>{
+        const s=document.querySelector('#stage'),v=document.querySelector('#video'),w=s.width,h=s.height,lm=window.testLandmarks;
+        const read=src=>{const c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d',{willReadFrequently:true});x.drawImage(src,0,0,w,h);return x;};
+        const a=read(s),b=read(v),face=Math.hypot((lm[454].x-lm[234].x)*w,(lm[454].y-lm[234].y)*h);
+        const at=(px,py,r)=>{const p=a.getImageData(px-r,py-r,2*r,2*r).data,q=b.getImageData(px-r,py-r,2*r,2*r).data;
+          let d=0;for(let i=0;i<p.length;i+=4)d+=Math.abs(p[i]-q[i])+Math.abs(p[i+1]-q[i+1])+Math.abs(p[i+2]-q[i+2]);return d/(p.length/4)/3;};
+        const on=(i,r)=>at(Math.round(lm[i].x*w),Math.round(lm[i].y*h),r);
+        return {hair:at(Math.round(lm[10].x*w),Math.round(lm[10].y*h-face*.2),4),nose:on(4,4),brow:on(105,3),cheek:on(50,4)};
+      });
+      await page.evaluate(()=>document.querySelector('#clear-look').click());
+      await page.locator('[data-product="hair-color"]').click();
+      await page.locator('#shades .shade').nth(10).click();         // platinum, far from the portrait's brown
+      await page.waitForFunction(()=>document.querySelector('#status').textContent.indexOf('مو')<0,null,{timeout:30000}).catch(()=>{});
+      let dyed=null;
+      for(let i=0;i<40&&!(dyed?.hair>12);i++){await page.waitForTimeout(250);dyed=await hairPatch();}
+      assert(dyed.hair>12,`the hair colour did not reach the hair (${dyed.hair.toFixed(2)})`);
+      assert(Math.max(dyed.nose,dyed.brow,dyed.cheek)<1.5,`the hair colour touched the face (${JSON.stringify(dyed)})`);
+      report.hair={dyed:+dyed.hair.toFixed(1),face:+Math.max(dyed.nose,dyed.brow,dyed.cheek).toFixed(2)};
+    }
 
     // With nothing on, the stage is the camera frame.
     await page.evaluate(()=>document.querySelector('#clear-look').click());await settle(page);await page.waitForTimeout(150);
