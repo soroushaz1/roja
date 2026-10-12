@@ -20,11 +20,12 @@ export const categories=[
   {id:'face',name:'صورت',hint:'پوست، گونه، کانتور'},
   {id:'eyes',name:'چشم و ابرو',hint:'سایه، خط چشم، ریمل'},
   {id:'lips',name:'لب',hint:'رژ، مداد، برق لب'},
-  {id:'hair',name:'مو',hint:'رنگ مو'}
+  {id:'hair',name:'مو',hint:'رنگ و مدل مو'}
 ];
 
 // The hair is recoloured first: it is not on the face, and a fringe sits over nothing
-// the face layers paint.
+// the face layers paint. A hairstyle (type 'hairstyle') is not a layer of this list: the
+// stage draws it from its baked style (hairstyle.js).
 export const layerOrder=['hair','foundation','concealer','contour','blush','highlighter','eyeshadow','eyeliner','mascara','brow','lipliner','lipstick','gloss'];
 
 export const finishes={
@@ -215,7 +216,18 @@ products.push(
    description:'۱۶ رنگ، از مشکی تا پلاتینی و مسی. موی خودت از تصویر جدا می‌شود و فقط رنگش عوض می‌شود؛ حالت و سایه‌روشن تارها می‌ماند.',
    limitation:'نتیجهٔ واقعی رنگ به رنگ فعلی مو، دکلره و زمان ماندن رنگ بستگی دارد؛ روشن‌کردن موی تیره بدون دکلره به این روشنی نمی‌رسد.',
    mirrorText:'رنگ را عوض کن و همان لحظه روی موی خودت ببین. شدت را کم کن برای سایه‌ای ملایم، زیاد کن برای رنگ کامل. «محوشدن لبه» مرز مو و پوست را نرم‌تر یا تیزتر می‌کند. دو رنگ را کنار هم مقایسه کن یا زیر نورهای مختلف ببین.',
-   shades:range('hcl',HAIR)}
+   shades:range('hcl',HAIR)},
+  // A whole new hairstyle over the visitor's own, in the same sixteen colours. The styles
+  // are baked offline (tools/hair-bake) and listed in hairstyles/index.json; `style` holds
+  // the picked one's id, which hairstyle.js loads only once it is picked. It is not for
+  // sale, so it has no shop link and no intensity or edge.
+  {id:'hairstyle', type:'hairstyle', category:'hair', mode:'pigment', finish:'natural', sell:false, hairstyles:true,
+   name:'مدل مو', title:'مدل مو روی سر خودت', region:'مو', search:'مدل مو',
+   intensity:100, fade:40, defaultShade:'hst-3',
+   description:'مدل‌های امروزی زنانه و مردانه، روی سر خودت و با حرکت سرت. مدل را انتخاب کن و رنگش را از همان ۱۶ رنگ مو بردار.',
+   limitation:'پیش‌نمایش است، نه نتیجهٔ کار آرایشگر: حالت واقعی مو به جنس، پرپشتی و فر طبیعی موی خودت بستگی دارد. موی بلند و پف‌دار زیر مدل کوتاه کامل پنهان نمی‌شود؛ برای نتیجهٔ بهتر موهایت را پشت سر جمع کن.',
+   mirrorText:'یک مدل زنانه یا مردانه را بزن تا روی سر خودت بنشیند و با چرخش سر همراهت بچرخد. رنگش را از ۱۶ رنگ مو انتخاب کن؛ موی خودت هم زیر مدل به همان رنگ درمی‌آید. با «مقایسه» مدل را کنار موی خودت ببین و از آن عکس بگیر.',
+   shades:range('hst',HAIR)}
 );
 
 export const byProduct=id=>products.find(p=>p.id===id);
