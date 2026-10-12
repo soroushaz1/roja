@@ -80,6 +80,27 @@ def _walk(p0, dir_top, dir_fringe, L, H, h_fore, h_end, nv, yaw_noise=None, foll
     return P
 
 
+def _cut_below_hairline(S, hairline, ov):
+    """arclength (n,) at which each strand first comes ov (n,) below the hairline (front-view
+    y; the hairline's y at the vertex's azimuth); strands that never do keep their length."""
+    n, m, _ = S.shape
+    out = np.empty(n)
+    for a in range(0, n, 20000):
+        P = np.asarray(S[a:a + 20000], np.float64)
+        D = -hairline.dist(P.reshape(-1, 3)).reshape(P.shape[:2])
+        D[:, 0] = -1.0
+        cs = np.concatenate([np.zeros((len(P), 1)), np.cumsum(np.linalg.norm(np.diff(P, axis=1), axis=-1), 1)], 1)
+        o = ov[a:a + 20000][:, None]
+        hit = D >= o
+        any_ = hit.any(1)
+        i1 = np.where(any_, hit.argmax(1), m - 1); i0 = np.maximum(i1 - 1, 0)
+        r = np.arange(len(P))
+        d0, d1 = D[r, i0], D[r, i1]
+        f = np.clip((o[:, 0] - d0) / np.where(np.abs(d1 - d0) > 1e-9, d1 - d0, 1e-9), 0, 1)
+        out[a:a + 20000] = np.where(any_, cs[r, i0] + f * (cs[r, i1] - cs[r, i0]), cs[:, -1])
+    return out
+
+
 def build(rng, q=1.0, log=print):
     scalp = g.Scalp(g.Hairline('men', recession=0.35, jitter=0.007), soft=0.03, edge=0.20)
     hair = g.Hair(scalp, q, STYLE['id'])
@@ -151,23 +172,25 @@ def build(rng, q=1.0, log=print):
         Ss = g.frizz(Ss, rng, frz[0], frz[0] + frz[1], freq=3, power=1.3, root_ramp=0.1)
         groups.append((idx, Ss, cl))
 
-    # ---- the fringe line: every strand that reaches y_end(x) on the forehead is cut there
+    # ---- the fringe line: a strand is cut where it has come `ov` below the hairline (front
+    # view y): ~2.2 cm in the middle of the forehead, little at the temple corners and sides
+    # (so nothing hangs down the temples), with a slow wave, per-piece and per-lock lengths
+    # and point cutting
     ph = rng.uniform(0, 2 * np.pi, 2)
-    nl = 140
-    _, lock = cKDTree(r.p[rng.choice(n, nl * 3, replace=False)]).query(r.p, 1)
-    lock_dy = 0.006 * rng.normal(size=nl * 3)
+    nl = 420
+    _, lock = cKDTree(r.p[rng.choice(n, nl, replace=False)]).query(r.p, 1)
+    lock_dy = 0.006 * rng.normal(size=nl)
     piece_dy = 0.014 * rng.normal(size=npieces)
     for gi, (idx, Ss, cl) in enumerate(groups):
         xe = Ss[:, -1, 0]
-        ye = (0.085 - 0.060 * ((xe - 0.5) / 0.26) ** 2
+        ov = (0.012 + 0.118 * SS(0.40, 0.10, np.abs(xe - 0.5)) ** 1.3
               + 0.012 * (0.7 * np.sin(xe * 13.0 + ph[0]) + 0.3 * np.sin(xe * 29.0 + ph[1]))
-              + piece_dy[piece[idx]] + lock_dy[lock[idx]] + 0.003 * rng.normal(size=len(idx))
+              + (piece_dy[piece[idx]] + lock_dy[lock[idx]]) * SS(0.42, 0.25, np.abs(xe - 0.5))
+              + 0.003 * rng.normal(size=len(idx))
               - (rng.random(len(idx)) < 0.40) * 0.035 * rng.random(len(idx)) ** 0.7)
-        reach = r.y[idx] < ye - 0.02
         Lt = g.lengths(Ss)
-        Lc = np.where(reach, np.minimum(Lt, g.cut_at_y(Ss, ye)), Lt)
-        Lc = np.maximum(Lc, 0.25 * Lt)
-        groups[gi] = (idx, g.cut(Ss, Lc), cl)
+        Lc = np.minimum(Lt, _cut_below_hairline(Ss, scalp.hairline, np.maximum(ov, 0.004)))
+        groups[gi] = (idx, g.cut(Ss, np.maximum(Lc, 0.004)), cl)
 
     op, wd = g.skin_fade(r, y0=0.08, y1=0.46, strength=0.70, top=top)
     width = 0.0010 / np.sqrt(q) * wd * rng.uniform(0.75, 1.25, n)
