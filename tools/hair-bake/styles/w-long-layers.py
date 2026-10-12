@@ -15,8 +15,8 @@ LIGHT = dict(ambient_floor=0.22, env_base=0.55, bounce=0.26, bounce_m=0.45)
 # forehead) and its outer edge (over the temple to the cheekbone), image-right side
 INNER = [(0.030, 0.020), (0.080, 0.090), (0.140, 0.160), (0.205, 0.225), (0.265, 0.290), (0.320, 0.360),
          (0.370, 0.440), (0.410, 0.530)]
-OUTER = [(0.320, 0.030), (0.385, 0.100), (0.435, 0.180), (0.470, 0.270), (0.488, 0.370), (0.497, 0.470),
-         (0.502, 0.570), (0.505, 0.670)]
+OUTER = [(0.320, 0.030), (0.380, 0.095), (0.425, 0.170), (0.450, 0.260), (0.460, 0.360), (0.462, 0.460),
+         (0.460, 0.560), (0.455, 0.650)]
 BANG_H = (0.050, 0.056, 0.052, 0.046, 0.041, 0.037, 0.034, 0.032)
 
 
@@ -75,14 +75,14 @@ def envelope(S, pct=0.96, nb=(120, 240)):
     return E
 
 
-def layer_over(B, E, eps=0.004, t0=(0.04, 0.22), nb=(120, 240)):
+def layer_over(B, E, eps=0.004, t0=(0.04, 0.22), nb=(120, 240), max_push=0.03):
     """push strands B out to lie on top of the hair envelope E (radius per direction) by
     eps, from t0[0] to t0[1] along the strand on (the roots stay)."""
     B = np.array(B, np.float64)
     r, ie, ia, u = _sph(B, nb=nb)
     tgt = E[ie, ia] + eps
     w = smoothstep(t0[0], t0[1], np.linspace(0, 1, B.shape[1]))[None, :]
-    rn = r + w * np.clip(tgt - r, 0, None)
+    rn = r + w * np.clip(tgt - r, 0, max_push)
     out = ENV_C + u * rn[..., None]
     for _ in range(2):                                   # smooth the pushed strands a little
         out[:, 1:-1] += 0.4 * (0.5 * (out[:, :-2] + out[:, 2:]) - out[:, 1:-1])

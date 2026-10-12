@@ -236,12 +236,7 @@ function updateSelection(){
   $('pick-swatch').style.background=swatchStyle(shade);
   $('pick-name').textContent=shade.name;
   $('pick-code').textContent=$('shade-code').textContent;
-  if(product.hairstyles){
-    const name=state.enabled?hairstyleName(state.style):'';
-    $('pick-name').textContent=name||'یک مدل انتخاب کن';
-    $('pick-code').textContent=`${shade.name} · ${$('shade-code').textContent}`;
-    renderHairstyles();
-  }
+  if(product.hairstyles)paintHairstylePick();
   $('shades').querySelectorAll('.shade').forEach(b=>{
     const checked=b.dataset.id===shade.id;
     b.setAttribute('aria-checked',String(checked));b.tabIndex=checked?0:-1;
@@ -295,6 +290,7 @@ function selectProduct(id,apply=true){
 function afterMakeupChange(look=true){
   if(look)updateLook();
   syncHairstyle();
+  if(look&&product.hairstyles)paintHairstylePick();
   saveSoon();
   invalidate({masks:true});
   updateSeam();
@@ -345,7 +341,7 @@ function cleanItems(items){
   for(const raw of Array.isArray(items)?items:[]){
     if(!Array.isArray(raw))continue;
     const [pid,sid,intensity,style,fade]=raw, item=byProduct(pid);
-    if(!item||kinds.has(item.type)||!item.shades.some(x=>x.id===sid))continue;
+    if(!item||!offered(item)||kinds.has(item.type)||!item.shades.some(x=>x.id===sid))continue;
     kinds.add(item.type);
     const kept=item.styles?.some(x=>x.id===style)||item.hairstyles&&validHairstyle(style)?style:'';
     out.push([pid,sid,level(intensity)??item.intensity,kept,level(fade)??item.fade??45]);
@@ -839,7 +835,7 @@ function syncHairstyle(){
   if(on&&!hs.list){fetchHairstyles();return;}
   if(on&&!st.style){
     const first=hs.list.find(s=>s.group===hs.group)||hs.list[0];
-    if(first){st.style=first.id;saveSoon();if(product===item)updateSelection();else updateLook();return;}
+    if(first){st.style=first.id;if(product===item)updateSelection();else afterMakeupChange();return;}
     st.enabled=false;
   }
   const entry=on?hairstyleEntry(st.style):null;
@@ -849,7 +845,8 @@ function syncHairstyle(){
     return;
   }
   if(hs.style&&hs.style.id===entry.id&&hs.style.rev===entry.rev&&!hs.style.disposed)return;
-  if(hs.loading?.id===entry.id)return;
+  // One that failed is tried again only when asked (picked again, or "again").
+  if(hs.loading?.id===entry.id||hs.failed===entry.id)return;
   if(hs.loading)hs.loading.abort.abort();
   const job={id:entry.id,abort:new AbortController(),progress:0};
   hs.loading=job;hs.failed='';
@@ -866,6 +863,13 @@ function syncHairstyle(){
     renderHairstyles();status(statusText());
     toast(`مدل «${entry.name}» بار نشد. دوباره امتحانش کن.`);
   });
+}
+// The pick card names the style on the head (or asks for one), and the grid marks it.
+function paintHairstylePick(){
+  const state=makeupState[product.id], shade=selected();
+  $('pick-name').textContent=(state.enabled&&hairstyleName(state.style))||'یک مدل انتخاب کن';
+  $('pick-code').textContent=`${shade.name} · ${$('shade-code').textContent}`;
+  renderHairstyles();
 }
 function pickHairstyle(id){
   const item=byProduct('hairstyle'), st=makeupState.hairstyle;
@@ -2003,7 +2007,7 @@ function restoreSaved(){
   const level=(v,fallback)=>Number.isFinite(v)&&v>=0&&v<=100?v:fallback;
   for(const [pid,s] of Object.entries(saved.makeup||{})){
     const item=byProduct(pid), state=makeupState[pid];
-    if(!item||!state||!s||!item.shades.some(x=>x.id===s.shade))continue;
+    if(!item||!state||!s||!offered(item)||!item.shades.some(x=>x.id===s.shade))continue;
     state.shade=s.shade;state.enabled=!!s.enabled;
     state.intensity=level(s.intensity,state.intensity);state.fade=level(s.fade,state.fade);
     if(item.styles?.some(x=>x.id===s.style)||item.hairstyles&&validHairstyle(s.style))state.style=s.style;

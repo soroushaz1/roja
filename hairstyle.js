@@ -18,7 +18,7 @@ const FORMAT='roja-hairstyle', VERSION=1;
 const KINDS=['hair','aux','mask','depth'];
 export const GROUPS=[{id:'women',name:'زنانه'},{id:'men',name:'مردانه'}];
 export const GRID=8;                       // parallax mesh: one vertex every 8 full-resolution texels
-const KEEP=3;                              // decoded styles kept in memory (the current one and two before it)
+const KEEP=2;                              // decoded styles kept in memory: the current one and the one before
 const ID=/^[a-z0-9][a-z0-9-]{0,47}$/;
 export const validId=id=>typeof id==='string'&&ID.test(id);
 
