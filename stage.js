@@ -10,9 +10,9 @@
 //
 // With no layers and an all-zero displacement field the output is a pixel-exact copy
 // of the camera frame.
-import {deformers,displace} from './deform.js?v=24';
-import {CANON,TRIANGLES} from './facemesh.js?v=24';
-import * as GLSL from './shaders.js?v=24';
+import {deformers,displace} from './deform.js?v=25';
+import {CANON,TRIANGLES} from './facemesh.js?v=25';
+import * as GLSL from './shaders.js?v=25';
 
 const COLS=64, ROWS=48;          // resolves the smallest anchor radius
 const GRID=(COLS+1)*(ROWS+1);
@@ -61,7 +61,7 @@ export function createStage(canvas) {
     const F=GLSL.PRECISION;
     programs={out:link(GLSL.MESH_VERT,F+GLSL.OUT_FRAG),down:link(GLSL.QUAD_VERT,F+GLSL.DOWN_FRAG),
       stats:link(GLSL.QUAD_VERT,F+GLSL.STATS_FRAG),layer:link(GLSL.QUAD_VERT,F+GLSL.LAYER_FRAG),
-      mask:link(GLSL.MASK_VERT,F+GLSL.MASK_FRAG)};
+      mask:link(GLSL.MASK_VERT,F+GLSL.MASK_FRAG),frameMask:link(GLSL.QUAD_VERT,F+GLSL.FRAME_MASK_FRAG)};
   }catch{return null;}
 
   /* ---- geometry ---- */
@@ -110,7 +110,7 @@ export function createStage(canvas) {
   function dropTarget(t){if(t){gl.deleteFramebuffer(t.fbo);gl.deleteTexture(t.tex);}}
 
   const camera=makeTexture(0,0);
-  const masks=new Map();                          // key -> {tex, uv, tris, count, verts}
+  const masks=new Map();                          // key -> {tex, uv, tris, count, verts} or {frame, tex, box, edge}
   let targets=null, size={w:0,h:0};
   const stats=makeTarget(1,1,gl.NEAREST);
   function ensureTargets(w,h){
@@ -159,6 +159,11 @@ export function createStage(canvas) {
   }
   // Where a mask lands on screen this frame: around the live corners of its triangles.
   function screenBox(mask){
+    if(mask.frame){
+      const b=mask.box;if(!b)return null;
+      const px=3/size.w,py=3/size.h,x0=Math.max(0,b.x-px),y0=Math.max(0,b.y-py);
+      return {x:x0,y:y0,w:Math.min(1,b.x+b.w+px)-x0,h:Math.min(1,b.y+b.h+py)-y0};
+    }
     let x0=1,y0=1,x1=0,y1=0;
     for(const i of mask.verts){const x=facePos[i*2],y=facePos[i*2+1];
       if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y;}
@@ -173,6 +178,12 @@ export function createStage(canvas) {
     const t=targets.mask,p=programs.mask;
     gl.bindFramebuffer(gl.FRAMEBUFFER,t.fbo);gl.viewport(0,0,t.w,t.h);
     gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT);
+    if(mask.frame){
+      const q=programs.frameMask;useQuad(q);
+      bindTex(0,mask.tex,q.uniforms.u_mask);gl.uniform2f(q.uniforms.u_edge,mask.edge[0],mask.edge[1]);
+      gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+      return;
+    }
     gl.useProgram(p.program);
     gl.bindBuffer(gl.ARRAY_BUFFER,facePosBuffer);
     gl.enableVertexAttribArray(p.pos);gl.vertexAttribPointer(p.pos,2,gl.FLOAT,false,0,0);
@@ -265,8 +276,23 @@ export function createStage(canvas) {
       }
       entry.uv={...uv};
     },
+    // A mask already in frame space, one byte a pixel, stretched over the whole frame:
+    // `box` bounds what is in it, `edge` the two levels its coverage ramps between.
+    setFrameMask(key,{w,h,data,box},edge){
+      if(disposed)return;
+      let entry=masks.get(key);
+      if(!entry||!entry.frame){
+        if(entry){gl.deleteTexture(entry.tex);gl.deleteBuffer(entry.tris);}
+        entry={frame:true,tex:makeTexture(0,0),count:1,box:null,edge:[.4,.6]};masks.set(key,entry);
+      }
+      gl.bindTexture(gl.TEXTURE_2D,entry.tex);
+      gl.pixelStorei(gl.UNPACK_ALIGNMENT,1);
+      gl.texImage2D(gl.TEXTURE_2D,0,gl.ALPHA,w,h,0,gl.ALPHA,gl.UNSIGNED_BYTE,data);
+      gl.pixelStorei(gl.UNPACK_ALIGNMENT,4);
+      entry.box=box;entry.edge=edge;
+    },
     dropMasks(keep){
-      for(const [key,entry] of masks)if(!keep||!keep.has(key)){gl.deleteTexture(entry.tex);gl.deleteBuffer(entry.tris);masks.delete(key);}
+      for(const [key,entry] of masks)if(!keep||!keep.has(key)){gl.deleteTexture(entry.tex);if(entry.tris)gl.deleteBuffer(entry.tris);masks.delete(key);}
     },
     // after/before: {layers, landmarks, amounts}. `before` is drawn from `seam` (a
     // canvas-space fraction) to the far edge. The canvas is mirrored in CSS, so the
@@ -318,7 +344,7 @@ export function createStage(canvas) {
       disposed=true;
       for(const handle of [posBuffer,uvBuffer,indexBuffer,quadBuffer,facePosBuffer,canonBuffer])gl.deleteBuffer(handle);
       gl.deleteTexture(camera);
-      for(const entry of masks.values()){gl.deleteTexture(entry.tex);gl.deleteBuffer(entry.tris);}
+      for(const entry of masks.values()){gl.deleteTexture(entry.tex);if(entry.tris)gl.deleteBuffer(entry.tris);}
       if(targets)Object.values(targets).flat().forEach(dropTarget);
       dropTarget(stats);
       for(const p of Object.values(programs))gl.deleteProgram(p.program);

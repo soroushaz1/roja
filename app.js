@@ -1,17 +1,18 @@
-import {products,categories,finishes,looks,byProduct} from './catalog.js?v=24';
-import {layerSpecs,createMaskPainter,renderFallback,createSmoother,landmarksByType,frameLandmarks,hexToRgb} from './makeup.js?v=24';
-import {createStage,layerModes} from './stage.js?v=24';
-import {controls,regions,controlLandmarks,controlRange,deformers,textureLayers} from './deform.js?v=24';
-import {procedures,byId,amountsFor,resolve,kinds} from './procedures.js?v=24';
-import {renderDebug,nearest} from './debug.js?v=24';
-import {createBrush,brushModes} from './brush.js?v=24';
-import {metrics,measure,points as placed,symmetry,pose as poseOf} from './measure.js?v=24';
-import {CANON,CANON_ASPECT,TRIANGLES} from './facemesh.js?v=24';
-import {createSkinScanner} from './skin-scan.js?v=24';
-import {createSkinPanel} from './skin-panel.js?v=24';
-import {skincareById} from './skin.js?v=24';
-import {count} from './usage.js?v=24';
-import {currentShop,shopUrl,searchWords} from './shops.js?v=24';
+import {products,categories,finishes,looks,byProduct} from './catalog.js?v=25';
+import {layerSpecs,createMaskPainter,renderFallback,createSmoother,landmarksByType,frameLandmarks,hexToRgb} from './makeup.js?v=25';
+import {createStage,layerModes} from './stage.js?v=25';
+import {controls,regions,controlLandmarks,controlRange,deformers,textureLayers} from './deform.js?v=25';
+import {procedures,byId,amountsFor,resolve,kinds} from './procedures.js?v=25';
+import {renderDebug,nearest} from './debug.js?v=25';
+import {createBrush,brushModes} from './brush.js?v=25';
+import {metrics,measure,points as placed,symmetry,pose as poseOf} from './measure.js?v=25';
+import {CANON,CANON_ASPECT,TRIANGLES} from './facemesh.js?v=25';
+import {createSkinScanner} from './skin-scan.js?v=25';
+import {createSkinPanel} from './skin-panel.js?v=25';
+import {skincareById} from './skin.js?v=25';
+import {count} from './usage.js?v=25';
+import {currentShop,shopUrl,searchWords} from './shops.js?v=25';
+import {loadIndex as loadHairstyles,loadStyle as loadHairstyle,GROUPS as HAIR_GROUPS,validId as validHairstyle} from './hairstyle.js?v=25';
 
 const $=id=>document.getElementById(id);
 // GitHub Pages ignores the ?v= query, and browsers and its CDN keep a page for up to ten
@@ -19,7 +20,7 @@ const $=id=>document.getElementById(id);
 // newer script, which would then look for elements that page does not have. Such a
 // page is loaded afresh, once; if it is still the old one, it says a new version is
 // on its way instead of failing.
-const RELEASE='24';
+const RELEASE='25';
 if(document.documentElement.dataset.release!==RELEASE){
   let tried=null;
   try{tried=sessionStorage.getItem('roja-reloaded');sessionStorage.setItem('roja-reloaded',RELEASE);}catch{}
@@ -57,6 +58,9 @@ const native=window.RojaAndroid||null;
 // tracking on the GPU and the drawing happen under the page, which shows through a hole
 // where the mirror is. The page stays the interface and paints the masks.
 let nativeMirror=(()=>{try{return !!native?.nativeMirror?.();}catch{return false;}})();
+// The app's own renderer has no hair segmenter and no hairstyle drawing, so the hair
+// products are not offered there.
+const offered=item=>!(item?.category==='hair'&&nativeMirror);
 // Every browser on an iPhone is WebKit underneath; Chrome and Firefox there only change
 // the settings screen that grants the camera. In-app browsers (Instagram, Telegram…)
 // often have no camera at all.
@@ -98,7 +102,7 @@ let masksDirty=true, dirty=true, debugDirty=true, measureDirty=true;
 // Skin products start from a middle shade, not the lightest one: the shade finder or
 // the shopper moves it from there.
 const makeupState=Object.fromEntries(products.map(p=>[p.id,{
-  shade:(p.finder?p.shades[Math.floor(p.shades.length/2)]:p.shades[0]).id,
+  shade:(p.shades.find(s=>s.id===p.defaultShade)||(p.finder?p.shades[Math.floor(p.shades.length/2)]:p.shades[0])).id,
   intensity:p.intensity,fade:p.fade??45,enabled:p.id==='velvet',style:p.styles?.[0]?.id}]));
 let product=byProduct('velvet');
 let category=product.category;
@@ -116,11 +120,14 @@ for(const m of brushModes)brushState.strength[m.id]=m.strength;
 let brushPointer=null;
 
 const painter=createMaskPainter();
+// Hair: the segmenter's mask of the real hair (from the tracker, in step with the
+// landmarks) for the hair colour.
+let hairMask=null, hairVersion=0, hairUploaded=-1, hairState='';
 const debug={on:false,points:true,mesh:false,contours:false,axes:false,masks:false,field:false,strokes:false,
   labelSize:10,highlight:true,onlyActive:false,find:null,hud:false,inspect:false};
 let topology=null, maskView=null;
 const maskTint=document.createElement('canvas');
-const perf={frames:0,fps:0,since:0,draws:0,drawn:0,detections:0,hz:0,latency:0,inferMs:0,lastHud:0,maskMs:0,drawMs:0,lastError:'',trackerNote:''};
+const perf={hairMs:0,frames:0,fps:0,since:0,draws:0,drawn:0,detections:0,hz:0,latency:0,inferMs:0,lastHud:0,maskMs:0,drawMs:0,lastError:'',trackerNote:''};
 const ema=(old,v)=>old?old*.85+v*.15:v;
 let finder={state:'idle',samples:[],tries:0,result:null};
 let wantSkin=false;
@@ -202,14 +209,17 @@ function updateLook(){
   $('look-items').replaceChildren();
   for(const item of products.filter(p=>makeupState[p.id].enabled)){
     const shade=shadeOf(item,makeupState[item.id].shade);
-    const chip=el('button',{class:'look-chip','aria-label':`حذف ${item.name} از آینه`,text:`${item.name} ${shade.name}`});
+    const name=item.hairstyles?hairstyleName(makeupState[item.id].style)||item.name:item.name;
+    const chip=el('button',{class:'look-chip','aria-label':`حذف ${name} از آینه`,text:`${name} ${shade.name}`});
     chip.style.setProperty('--chip-color',shade.color);
     chip.onclick=()=>{makeupState[item.id].enabled=false;afterMakeupChange();};
     $('look-items').append(chip);
   }
   if(!$('look-items').childElementCount)
     $('look-items').append(el('span',{class:'quiet',text:'بدون آرایش. یک محصول و رنگ انتخاب کن یا یک استایل آماده را بزن.'}));
-  $('product-toggle').textContent=makeupState[product.id].enabled?'برداشتن از صورت':'گذاشتن روی صورت';
+  $('product-toggle').textContent=product.hairstyles
+    ?(makeupState[product.id].enabled?'برداشتن مدل':'گذاشتن مدل')
+    :(makeupState[product.id].enabled?'برداشتن از صورت':'گذاشتن روی صورت');
   $('product-toggle').setAttribute('aria-pressed',String(makeupState[product.id].enabled));
   const any=products.some(p=>makeupState[p.id].enabled);
   $('add-look').disabled=$('save-look').disabled=$('link-look').disabled=!any;
@@ -226,6 +236,7 @@ function updateSelection(){
   $('pick-swatch').style.background=swatchStyle(shade);
   $('pick-name').textContent=shade.name;
   $('pick-code').textContent=$('shade-code').textContent;
+  if(product.hairstyles)paintHairstylePick();
   $('shades').querySelectorAll('.shade').forEach(b=>{
     const checked=b.dataset.id===shade.id;
     b.setAttribute('aria-checked',String(checked));b.tabIndex=checked?0:-1;
@@ -245,8 +256,9 @@ function select(id){
   return {product:product.id,id,variant:shade.variantId,name:shade.name};
 }
 function selectProduct(id,apply=true){
-  const next=byProduct(id);
+  let next=byProduct(id);
   if(!next)throw new Error('Unknown product');
+  if(!offered(next)){next=byProduct('velvet');apply=false;}
   product=next;category=next.category;if(apply)enableProduct(next);
   const cat=categories.find(c=>c.id===next.category);
   $('product-kicker').textContent=`${cat?.name} · ${next.region}`;
@@ -255,11 +267,21 @@ function selectProduct(id,apply=true){
   $('product-limitation').textContent=next.limitation;
   const skin=next.mode==='foundation';
   $('intensity-label').textContent=skin?'پوشش':'شدت رنگ';
+  document.querySelector('.buy-card').hidden=next.sell===false;
   $('finder').hidden=!next.finder;
   renderFinder();
   $('style-field').hidden=!next.styles;
+  // A hairstyle has its grid instead of an intensity and an edge.
+  $('hairstyle-field').hidden=!next.hairstyles;
+  $('amount-fields').hidden=!!next.hairstyles;
+  if(next.hairstyles){
+    const on=hairstyleEntry(makeupState[next.id].style);
+    if(on)hs.group=on.group;
+    fetchHairstyles();
+  }
   $('style-options').replaceChildren(...(next.styles||[]).map(s=>el('button',{type:'button',role:'radio',data:{style:s.id},text:s.name,
-    onclick:()=>{makeupState[product.id].style=s.id;enableProduct(product);updateSelection();}})));
+    onclick:()=>{
+      makeupState[product.id].style=s.id;enableProduct(product);updateSelection();}})));
   $('brush-target-product').textContent=`فقط ${next.name}`;
   if(brushState.target!=='all')brushState.target=next.type;
   renderShades();updateSelection();
@@ -267,6 +289,8 @@ function selectProduct(id,apply=true){
 }
 function afterMakeupChange(look=true){
   if(look)updateLook();
+  syncHairstyle();
+  if(look&&product.hairstyles)paintHairstylePick();
   saveSoon();
   invalidate({masks:true});
   updateSeam();
@@ -317,9 +341,10 @@ function cleanItems(items){
   for(const raw of Array.isArray(items)?items:[]){
     if(!Array.isArray(raw))continue;
     const [pid,sid,intensity,style,fade]=raw, item=byProduct(pid);
-    if(!item||kinds.has(item.type)||!item.shades.some(x=>x.id===sid))continue;
+    if(!item||!offered(item)||kinds.has(item.type)||!item.shades.some(x=>x.id===sid))continue;
     kinds.add(item.type);
-    out.push([pid,sid,level(intensity)??item.intensity,item.styles?.some(x=>x.id===style)?style:'',level(fade)??item.fade??45]);
+    const kept=item.styles?.some(x=>x.id===style)||item.hairstyles&&validHairstyle(style)?style:'';
+    out.push([pid,sid,level(intensity)??item.intensity,kept,level(fade)??item.fade??45]);
   }
   return out;
 }
@@ -669,10 +694,12 @@ function buildTray(){
   if(mode==='makeup'){
     $('tray').setAttribute('aria-label','انتخاب محصول');
     for(const cat of categories){
+      const items=products.filter(p=>p.category===cat.id&&offered(p));
+      if(!items.length)continue;
       groups.append(el('button',{type:'button','aria-pressed':String(cat.id===category),data:{group:cat.id},text:cat.name,
         title:cat.hint,onclick:()=>{category=cat.id;updateTrayState();chips.querySelector(`[data-sep="${cat.id}"]`)?.scrollIntoView({inline:'start',block:'nearest'});}}));
       chips.append(el('span',{class:'tray-sep',data:{sep:cat.id},text:cat.name}));
-      for(const item of products.filter(p=>p.category===cat.id)){
+      for(const item of items){
         const dot=el('i',{class:'dot'});
         chips.append(el('button',{class:'chip',type:'button',data:{product:item.id},'aria-pressed':String(item.id===product.id),
           onclick:()=>{selectProduct(item.id);showPane('color');}},dot,item.name));
@@ -725,6 +752,8 @@ function statusText(){
     const m=brushModes.find(x=>x.id===brushState.mode);
     return `روی تصویر بکش: ${m.name}. ${frozen||source.kind==='photo'?'':'برای دقت بیشتر تصویر را ثابت کن.'}`;
   }
+  if(hairState==='loading'&&wantHair())return 'آماده‌سازی تشخیص مو…';
+  if(hs.loading&&makeupState.hairstyle.enabled)return 'بارگیری مدل مو…';
   if(pin)return 'مرز را بکش تا دو رنگ را کنار هم روی صورتت ببینی.';
   if(compare)return 'مرز را بکش تا با و بدون آرایش را مقایسه کنی.';
   if(frozen)return 'تصویر ثابت است. برای ادامه، دوباره «ثابت» را بزن.';
@@ -754,6 +783,164 @@ function setMode(next){
   status(statusText());
 }
 
+/* ---------- hair -------------------------------------------------------- */
+// Whether the tracker should find the hair in each frame: only while something uses it,
+// and only where the stage can paint with it.
+function wantHair(){
+  if(!source||source.native||stageBroken)return false;
+  if(mode!=='makeup'&&!(mode==='procedure'&&$('with-makeup').checked))return false;
+  return !!(makeupState['hair-color'].enabled);
+}
+// The hair mask for the stage: the latest one, or an empty one while there is none.
+const NO_HAIR={w:1,h:1,data:new Uint8Array(1),box:null};
+function uploadHair(p){
+  const spec=[...p.after,...(p.before||[])].find(s=>s.type==='hair');
+  if(!spec||hairUploaded===hairVersion)return;
+  const w=.05+.3*Math.max(0,Math.min(100,spec.fade??40))/100;
+  stage.setFrameMask('hair',hairMask||NO_HAIR,[.55-w*.6,.55+w*.6]);
+  hairUploaded=hairVersion;
+}
+
+/* ---------- hairstyles -------------------------------------------------- */
+// The list is hairstyles/index.json (hairstyle.js), fetched the first time the product
+// is opened or a remembered style needs it. A style's own textures are fetched only when
+// it is picked, and the previous one stays on the head until the new one is ready.
+// hs.style is the loaded style on the head, for the stage.
+const HAIR_GROUP='roja-hair-group';
+const hs={list:null,state:'',error:'',group:'women',loading:null,failed:'',style:null};
+try{const g=localStorage.getItem(HAIR_GROUP);if(HAIR_GROUPS.some(x=>x.id===g))hs.group=g;}catch{}
+const hairstyleEntry=id=>hs.list&&id?hs.list.find(s=>s.id===id)||null:null;
+const hairstyleName=id=>hairstyleEntry(id)?.name||'';
+function fetchHairstyles(){
+  if(hs.list||hs.state==='loading')return;
+  hs.state='loading';hs.error='';renderHairstyles();
+  loadHairstyles().then(list=>{
+    hs.list=list;hs.state='ready';
+    // A remembered or linked style the site no longer has is dropped quietly.
+    const st=makeupState.hairstyle;
+    if(st.style&&!hairstyleEntry(st.style)){st.style='';st.enabled=false;}
+    const on=hairstyleEntry(st.style);
+    if(on&&product.hairstyles)hs.group=on.group;
+    if(product.hairstyles)updateSelection();else afterMakeupChange();
+  },e=>{
+    hs.state='failed';hs.error=String(e?.message||e);perf.lastError=`hairstyles: ${hs.error}`;
+    renderHairstyles();
+  });
+}
+// The style on the head follows the product's state: load what is picked, drop what is
+// taken off. Picking the product without a style puts on the first one of the list shown.
+function syncHairstyle(){
+  const st=makeupState.hairstyle, item=byProduct('hairstyle');
+  const on=st.enabled&&offered(item);
+  if(on&&!hs.list){fetchHairstyles();return;}
+  if(on&&!st.style){
+    const first=hs.list.find(s=>s.group===hs.group)||hs.list[0];
+    if(first){st.style=first.id;if(product===item)updateSelection();else afterMakeupChange();return;}
+    st.enabled=false;
+  }
+  const entry=on?hairstyleEntry(st.style):null;
+  if(!entry){
+    if(hs.loading){hs.loading.abort.abort();hs.loading=null;}
+    if(hs.style){hs.style=null;invalidate();}
+    return;
+  }
+  if(hs.style&&hs.style.id===entry.id&&hs.style.rev===entry.rev&&!hs.style.disposed)return;
+  // One that failed is tried again only when asked (picked again, or "again").
+  if(hs.loading?.id===entry.id||hs.failed===entry.id)return;
+  if(hs.loading)hs.loading.abort.abort();
+  const job={id:entry.id,abort:new AbortController(),progress:0};
+  hs.loading=job;hs.failed='';
+  renderHairstyles();status(statusText());
+  loadHairstyle(entry,{signal:job.abort.signal,onProgress:p=>{job.progress=p;paintHairstyleProgress(job);}}).then(style=>{
+    if(hs.loading!==job)return;
+    hs.loading=null;hs.style=style;
+    renderHairstyles();invalidate();status(statusText());
+  },e=>{
+    if(hs.loading!==job)return;
+    hs.loading=null;
+    if(e?.name==='AbortError')return;
+    hs.failed=entry.id;perf.lastError=`hairstyle ${entry.id}: ${e?.message||e}`;
+    renderHairstyles();status(statusText());
+    toast(`مدل «${entry.name}» بار نشد. دوباره امتحانش کن.`);
+  });
+}
+// The pick card names the style on the head (or asks for one), and the grid marks it.
+function paintHairstylePick(){
+  const state=makeupState[product.id], shade=selected();
+  $('pick-name').textContent=(state.enabled&&hairstyleName(state.style))||'یک مدل انتخاب کن';
+  $('pick-code').textContent=`${shade.name} · ${$('shade-code').textContent}`;
+  renderHairstyles();
+}
+function pickHairstyle(id){
+  const item=byProduct('hairstyle'), st=makeupState.hairstyle;
+  if(st.enabled&&st.style===id&&hs.failed!==id)return;
+  st.style=id;hs.failed='';enableProduct(item);
+  if(product!==item)selectProduct(item.id);else updateSelection();
+}
+function renderHairstyles(){
+  const grid=$('hairstyle-grid'), note=$('hairstyle-note');
+  $('hairstyle-groups').querySelectorAll('[data-group]').forEach(b=>{
+    const on=b.dataset.group===hs.group;b.setAttribute('aria-checked',String(on));b.tabIndex=on?0:-1;
+  });
+  if(!product.hairstyles)return;
+  if(!hs.list){
+    if(hs.state==='failed'){
+      grid.replaceChildren();
+      note.replaceChildren('فهرست مدل‌ها بار نشد.',el('button',{type:'button',class:'link',text:'دوباره',onclick:fetchHairstyles}));
+    }else{
+      grid.replaceChildren(...Array.from({length:4},()=>el('span',{class:'hs-skel','aria-hidden':'true'})));
+      note.textContent='';
+    }
+    return;
+  }
+  const st=makeupState.hairstyle, list=hs.list.filter(s=>s.group===hs.group);
+  const focused=grid.contains(document.activeElement)?document.activeElement.dataset.style:null;
+  grid.replaceChildren(...list.map(s=>{
+    const checked=st.enabled&&st.style===s.id;
+    const b=el('button',{class:'hs-card',type:'button',role:'radio','aria-checked':String(checked),tabIndex:'-1',
+      data:{style:s.id},title:s.name,onclick:()=>pickHairstyle(s.id)},
+      el('span',{class:'hs-pic'},s.thumb?el('img',{src:s.thumb,alt:'',width:'80',height:'100',decoding:'async',draggable:'false'}):null),
+      el('span',{class:'hs-name',text:s.name}));
+    if(hs.loading?.id===s.id){
+      b.setAttribute('aria-busy','true');
+      const bar=el('i');bar.style.setProperty('--p',`${Math.round(hs.loading.progress*100)}%`);
+      b.append(el('span',{class:'hs-bar','aria-hidden':'true'},bar));
+    }
+    return b;
+  }));
+  // One stop in the tab order: the checked card, or the first.
+  (grid.querySelector('[aria-checked=true]')||grid.firstElementChild)?.setAttribute('tabindex','0');
+  if(focused)grid.querySelector(`[data-style="${focused}"]`)?.focus();
+  const failed=hairstyleEntry(hs.failed), loading=hairstyleEntry(hs.loading?.id);
+  if(failed)note.replaceChildren(`«${failed.name}» بار نشد.`,el('button',{type:'button',class:'link',text:'دوباره',onclick:()=>{hs.failed='';syncHairstyle();}}));
+  else if(loading)note.textContent=`بارگیری «${loading.name}»… ${pct(hs.loading.progress*100)}`;
+  else if(!list.length)note.textContent='هنوز مدلی در این دسته نیست.';
+  else note.textContent=st.enabled&&st.style?'':'یک مدل را بزن تا روی سرت بنشیند؛ رنگش را از نوار رنگ‌ها عوض کن.';
+}
+function paintHairstyleProgress(job){
+  if(hs.loading!==job||!product.hairstyles)return;
+  $('hairstyle-grid').querySelector(`[data-style="${job.id}"] .hs-bar i`)?.style.setProperty('--p',`${Math.round(job.progress*100)}%`);
+  const entry=hairstyleEntry(job.id);
+  if(entry)$('hairstyle-note').textContent=`بارگیری «${entry.name}»… ${pct(job.progress*100)}`;
+}
+$('hairstyle-groups').querySelectorAll('[data-group]').forEach(b=>b.onclick=()=>{
+  hs.group=b.dataset.group;
+  try{localStorage.setItem(HAIR_GROUP,hs.group);}catch{}
+  renderHairstyles();
+});
+// Arrow keys move through a radio group (right to left: left is the next one).
+for(const [box,item] of [['hairstyle-groups','[data-group]'],['hairstyle-grid','.hs-card']])
+  $(box).addEventListener('keydown',e=>{
+    if(!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key))return;
+    const all=[...$(box).querySelectorAll(item)], i=all.indexOf(document.activeElement);
+    if(i<0)return;
+    e.preventDefault();
+    const next=all[(i+(['ArrowLeft','ArrowDown'].includes(e.key)?1:-1)+all.length)%all.length];
+    const key=box==='hairstyle-grid'?'style':'group', id=next.dataset[key];
+    next.click();                         // the grid is drawn again: focus the new card
+    $(box).querySelector(`[data-${key}="${id}"]`)?.focus();
+  });
+
 /* ---------- drawing ----------------------------------------------------- */
 function ensureStage(){
   if(!stage&&!stageBroken){
@@ -764,6 +951,13 @@ function ensureStage(){
   return stage;
 }
 function stageLayer(spec,face){
+  // Hair takes the colour as its new average and keeps every strand's own light and
+  // shade around it, with a little shine.
+  if(spec.type==='hair'){
+    const amount=Math.max(0,Math.min(1,spec.intensity/100));
+    return {key:'hair',color:hexToRgb(spec.color),amount,sheer:.12,lift:0,mode:layerModes.pigment,detail:1,
+      gloss:.22*amount,matte:0,shimmer:0,smooth:0,radius:2,radiusK:0};
+  }
   const f=FINISH[spec.finish]||FINISH.matte;
   const intensity=Math.max(0,Math.min(1,spec.intensity/100));
   const detail=(DETAIL[spec.type]??.8)*($('natural-blend').checked?1:.3);
@@ -811,7 +1005,7 @@ const canonLandmarks=Array.from({length:CANON.length/2},(_,i)=>({x:CANON[i*2],y:
 const maskCrop=document.createElement('canvas');
 function maskSpecs(p){
   const specs=new Map();
-  for(const s of [...p.after,...(p.before||[])])specs.set(s.key,s);
+  for(const s of [...p.after,...(p.before||[])])if(s.type!=='hair')specs.set(s.key,s);
   for(const t of p.textures)specs.set(t.key,{key:t.key,type:'texture',zone:t.zone,fade:60});
   return specs;
 }
@@ -832,7 +1026,7 @@ function rebuildMasks(p){
     else stage.setMask(spec.key,maskCrop,uv);
   }
   if(source?.native)native.mirrorKeep(JSON.stringify([...specs.keys()]));
-  else stage.dropMasks(new Set(specs.keys()));
+  else{stage.dropMasks(new Set([...specs.keys(),'hair']));}
   masksDirty=false;
 }
 // A mask for the native renderer: one byte a pixel (its coverage), base64.
@@ -868,12 +1062,13 @@ function draw(now=performance.now()){
   const {w,h}=frameSize();
   if(overlay.width!==w||overlay.height!==h){overlay.width=w;overlay.height=h;}
   const p=plan();
-  if(source.native){drawNative(p);return;}
+  if(source.native){drawNative({...p,after:p.after.filter(s=>s.type!=='hair'),before:p.before&&p.before.filter(s=>s.type!=='hair')});return;}
   const gl=ensureStage();
   const face=faceWidthPx();
   if(gl){
     if(debug.on&&debug.masks&&landmarks&&(dirty||masksDirty))paintMaskView(p);
     if(masksDirty){const t=performance.now();rebuildMasks(p);perf.maskMs=ema(perf.maskMs,performance.now()-t);}
+    uploadHair(p);
     const t=performance.now();
     const sync=source.kind==='camera'&&syncing();
     const ok=gl.draw({
@@ -898,7 +1093,7 @@ function draw(now=performance.now()){
     photo.hidden=source.kind!=='photo';
     overlay.classList.toggle('natural',$('natural-blend').checked);
     if(masksDirty||dirty){
-      const specs=mode==='makeup'&&!compare?layerSpecs(makeupState):[];
+      const specs=mode==='makeup'&&!compare?layerSpecs(makeupState).filter(s=>s.type!=='hair'):[];
       renderFallback(octx,specs,landmarks,painter,landmarks?brush.maps(landmarks,w,h):null);
       masksDirty=false;
     }
@@ -994,7 +1189,7 @@ function debugStats(){
     ['نمایش',source?.native?`${nativeInfo.fps||0} fps (native)`:`${perf.drawn} fps (حلقه ${perf.fps})`],
     ['ردیابی',source?.native?`${nativeInfo.hz||0} Hz · native · ${nativeInfo.delegate||'—'}`
       :`${perf.hz} Hz · ${Math.round(perf.latency)} ms · ${tracker?(tracker.kind==='worker'?'worker':'main thread'):trackerStarting?'starting':'—'}${delegate?' · '+delegate:''}`],
-    ['مدل',`${perf.inferMs.toFixed(1)} ms هر فریم${source?.native?(nativeInfo.note?' · '+nativeInfo.note.slice(0,60):''):gpuError?' · GPU: '+gpuError.slice(0,60):''}`],
+    ['مدل',`${perf.inferMs.toFixed(1)} ms هر فریم${perf.hairMs&&wantHair()?` · مو ${perf.hairMs.toFixed(1)} ms`:''}${source?.native?(nativeInfo.note?' · '+nativeInfo.note.slice(0,60):''):gpuError?' · GPU: '+gpuError.slice(0,60):''}`],
     ['هماهنگی',source?.kind==='camera'?(source.native||syncing()?'فریم و نقاط هم‌زمان':'تصویر زنده'):'—'],
     ['هزینهٔ هر فریم',`masks ${perf.maskMs.toFixed(1)} ms · draw ${(source?.native?nativeInfo.draw||0:perf.drawMs).toFixed(1)} ms`],
     ['نقاط',landmarks?String(landmarks.length):'0'],
@@ -1102,6 +1297,12 @@ function onTracker(d){
     if(source.kind==='photo')photoPasses++;
     poseAngles=d.landmarks?poseOf(d.matrix):null;
     if(d.blendshapes)blendshapes=d.blendshapes;
+    if('hair' in d||!d.landmarks||!wantHair()){hairMask=d.hair||null;hairVersion++;}
+    if(d.hairMs)perf.hairMs=ema(perf.hairMs,d.hairMs);
+    if(d.hairState!==undefined&&d.hairState!==hairState){
+      hairState=d.hairState;
+      if(hairState.startsWith('failed'))perf.lastError=`hair: ${hairState}`;
+    }else if('hair' in d)hairState='ready';
     if('skin' in d)onSkin(d.skin);
     else if(wantSkin&&!d.landmarks)onSkin(null);
     $('guide').hidden=!!landmarks;
@@ -1118,7 +1319,7 @@ function onTracker(d){
 function ensureTracker(){
   if(tracker||trackerStarting)return;
   let w=null;
-  try{w=new Worker(new URL(`face-worker.js?v=24${gpuQuery}`,import.meta.url));}catch(e){perf.lastError=`worker: ${e.message}`;}
+  try{w=new Worker(new URL(`face-worker.js?v=25${gpuQuery}`,import.meta.url));}catch(e){perf.lastError=`worker: ${e.message}`;}
   if(!w){useTracker('page','no worker');return;}
   ready=false;busy=false;
   tracker={kind:'worker',post:(m,transfer)=>w.postMessage(m,transfer),close:()=>w.terminate()};
@@ -1138,7 +1339,7 @@ async function useTracker(kind,reason){
   const token=++trackerGeneration;
   try{
     const Vision=await import('./vendor/vision_bundle.mjs');
-    await import('./face-core.js?v=24');
+    await import('./face-core.js?v=25');
     const core=self.rojaFaceCore(Vision,new URL('./',import.meta.url).href);
     const found=await core.init('CPU',(loaded,total)=>{if(token===trackerGeneration)onTracker({type:'progress',loaded,total});});
     if(token!==trackerGeneration){core.close();return;}
@@ -1437,7 +1638,7 @@ function detect(now){
   if(source.kind==='camera'){
     if(video.readyState<2)return;
     if(frozen){
-      if(landmarks&&!wantSkin)return;
+      if(landmarks&&!wantSkin&&!(wantHair()&&!hairMask))return;
       if(now-lastSent<100)return;
     }else{
       // Each camera frame once, as soon as the last one is measured. Without
@@ -1448,7 +1649,8 @@ function detect(now){
       if(tracker.kind==='page'&&now-lastSent<80)return;
     }
   }else{
-    if(photoPasses>=PHOTO_PASSES&&!wantSkin)return;
+    // A still picture is measured a few times, and again while the hair is still wanted.
+    if(photoPasses>=PHOTO_PASSES&&!wantSkin&&!(wantHair()&&!hairMask))return;
     if(now-lastSent<30)return;
   }
   busy=true;freshFrame=false;lastSent=now;sentAt=performance.now();sentGen=generation;
@@ -1456,7 +1658,7 @@ function detect(now){
   grabFrame().then(({frame,transfer,keep})=>{
     if(token!==generation||!tracker){frame.close?.();keep?.close();busy=false;return;}
     inFlight?.close();inFlight=keep||null;
-    tracker.post({type:'frame',frame,timestamp:sentAt,extras:debug.on||$('debug-panel').open,sample:wantSkin},transfer);
+    tracker.post({type:'frame',frame,timestamp:sentAt,extras:debug.on||$('debug-panel').open,sample:wantSkin,hair:wantHair()},transfer);
   }).catch(e=>{busy=false;perf.lastError=`frame: ${e?.message||e}`;
     if(token===generation)stop('پردازش تصویر روی این مرورگر انجام نشد. مرورگر دیگری را امتحان کن.'+code(e));});
 }
@@ -1770,7 +1972,7 @@ function buyLink(link,item,shade){
   return link;
 }
 function renderBuy(){
-  const items=products.filter(p=>makeupState[p.id].enabled);
+  const items=products.filter(p=>makeupState[p.id].enabled&&p.sell!==false);
   $('buy-items').replaceChildren(...items.map(item=>{
     const shade=shadeOf(item,makeupState[item.id].shade);
     return el('div',{class:'buy-row'},
@@ -1805,10 +2007,10 @@ function restoreSaved(){
   const level=(v,fallback)=>Number.isFinite(v)&&v>=0&&v<=100?v:fallback;
   for(const [pid,s] of Object.entries(saved.makeup||{})){
     const item=byProduct(pid), state=makeupState[pid];
-    if(!item||!state||!s||!item.shades.some(x=>x.id===s.shade))continue;
+    if(!item||!state||!s||!offered(item)||!item.shades.some(x=>x.id===s.shade))continue;
     state.shade=s.shade;state.enabled=!!s.enabled;
     state.intensity=level(s.intensity,state.intensity);state.fade=level(s.fade,state.fade);
-    if(item.styles?.some(x=>x.id===s.style))state.style=s.style;
+    if(item.styles?.some(x=>x.id===s.style)||item.hairstyles&&validHairstyle(s.style))state.style=s.style;
   }
   if(byProduct(saved.product)){product=byProduct(saved.product);category=product.category;}
   // Worth a word only when it differs from a first visit: more than the starting lipstick.
@@ -2022,7 +2224,9 @@ viewport.addEventListener('pointermove',e=>{
     tip.textContent=`#${hit.index}  x ${(l.x*w).toFixed(1)}  y ${(l.y*h).toFixed(1)}  z ${(l.z||0).toFixed(3)}`;
   }else $('inspect-tip').hidden=true;
 });
-const endStroke=e=>{if(brushPointer===e.pointerId){brush.end();brushPointer=null;updateBrushInfo();}};
+const endStroke=e=>{
+  if(brushPointer===e.pointerId){brush.end();brushPointer=null;updateBrushInfo();}
+};
 viewport.addEventListener('pointerup',endStroke);
 viewport.addEventListener('pointercancel',endStroke);
 viewport.addEventListener('pointerleave',()=>{$('brush-cursor').hidden=true;$('inspect-tip').hidden=true;});

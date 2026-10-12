@@ -6,7 +6,8 @@ fetched from a third-party CDN.
 
 ## MediaPipe Tasks Vision — `vendor/`
 
-`@mediapipe/tasks-vision` 1.0.1 and the `face_landmarker.task` model, by Google.
+`@mediapipe/tasks-vision` 1.0.1, the `face_landmarker.task` model and the
+`hair_segmenter.tflite` model, by Google.
 
 - Licence: Apache License 2.0 — full text in `vendor/LICENSE-Apache-2.0.txt`
 - Home: https://mediapipe.dev

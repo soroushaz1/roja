@@ -20,6 +20,13 @@ const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const SITE='https://pythonpath.ir/';
 const check=process.argv.includes('--check');
 const fa=new Intl.NumberFormat('fa-IR');
+// What the mirror offers for sale-like comparison: the hairstyle is not a product.
+const sold=products.filter(p=>p.sell!==false);
+// The baked hairstyles (tools/hair-bake/manifest.py), for the hairstyle page.
+const hairstyles=(()=>{
+  try{return JSON.parse(fs.readFileSync(path.join(path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..'),'hairstyles','index.json'),'utf8')).styles||[];}
+  catch{return [];}
+})();
 
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 // Pages sit in folders (procedures/rhinoplasty/index.html) for clean addresses, and link
@@ -133,6 +140,7 @@ for(const item of products){
   const related=products.filter(x=>x.category===item.category&&x.id!==item.id);
   const dir=`makeup/${item.id}`;
   const shadeWord=item.palettes?'پالت':'رنگ';
+  if(item.hairstyles){out.set(`${dir}/index.html`,hairstylePage(item,cat,related,dir));continue;}
   out.set(`${dir}/index.html`,page({dir,
     title:`امتحان آنلاین ${item.title} روی صورت خودت | رُژا`,
     description:`${item.title} را پیش از خرید روی صورت خودت امتحان کن: ${fa.format(item.shades.length)} ${shadeWord}، زنده با دوربین. ${item.description}`,
@@ -150,14 +158,40 @@ for(const item of products){
 <ul class="shades">${item.shades.map(s=>`<li><i style="background:${esc(s.colors?`linear-gradient(90deg,${s.colors.join(',')})`:s.color)}"></i>${esc(s.name)}</li>`).join('')}</ul>
 ${item.styles?.length?`<p>مدل‌ها: ${item.styles.map(s=>esc(s.name)).join('، ')}.</p>`:''}
 <h2>در آینه چه می‌توانی بکنی</h2>
-<p>${shadeWord} را عوض کن و همان لحظه روی صورتت ببین. شدت رنگ و محوشدن لبه را تنظیم کن، با براش پخش یا محوش کن، دو ${shadeWord} را کنار هم مقایسه کن یا تا چهار ${shadeWord} را در یک تصویر کنار هم بچین. با پیش‌نمایش نور می‌بینی زیر نور روز، مهتابی یا نور گرم مهمانی چطور دیده می‌شود.${item.finder?' «پیداکردن رنگ» از روی پوست گونه، پیشانی و چانه، نزدیک‌ترین رنگ را پیشنهاد می‌دهد.':''}</p>
+<p>${item.mirrorText?esc(item.mirrorText):`${shadeWord} را عوض کن و همان لحظه روی صورتت ببین. شدت رنگ و محوشدن لبه را تنظیم کن، با براش پخش یا محوش کن، دو ${shadeWord} را کنار هم مقایسه کن یا تا چهار ${shadeWord} را در یک تصویر کنار هم بچین. با پیش‌نمایش نور می‌بینی زیر نور روز، مهتابی یا نور گرم مهمانی چطور دیده می‌شود.${item.finder?' «پیداکردن رنگ» از روی پوست گونه، پیشانی و چانه، نزدیک‌ترین رنگ را پیشنهاد می‌دهد.':''}`}</p>
 ${cta(`${r}#product=${item.id}`,`امتحان ${item.name} روی صورت خودم`)}
 <p class="disclaimer">${esc(item.limitation)} ${COLOUR_NOTE}</p>
 ${related.length?`<h2>محصولات دیگر ${esc(cat?.name||'')}</h2><ul class="links">${related.map(x=>`<li><a href="../${x.id}/">${esc(x.name)}</a></li>`).join('')}</ul>`:''}`}));
 }
+// A hairstyle is tried on the head, not bought: its page lists the styles instead.
+function hairstylePage(item,cat,related,dir){
+  const groups=[['women','زنانه'],['men','مردانه']].map(([id,name])=>({name,list:hairstyles.filter(s=>s.group===id)}));
+  return page({dir,
+    title:'امتحان آنلاین مدل مو روی سر خودت | رُژا',
+    description:`مدل‌های امروزی زنانه و مردانه را پیش از رفتن به آرایشگاه، زنده روی سر خودت ببین و رنگش را از ${fa.format(item.shades.length)} رنگ مو انتخاب کن. تصویر از گوشی‌ات بیرون نمی‌رود.`,
+    h1:'امتحان مدل مو روی سر خودت',
+    lead:item.description,
+    crumbs:[{name:'آرایش',dir:'makeup'},{name:item.name,dir}],
+    body:r=>`
+<dl class="facts">
+  <div><dt>دسته</dt><dd>${esc(cat?.name||'')}</dd></div>
+  <div><dt>مدل‌ها</dt><dd>${groups.map(g=>`${fa.format(g.list.length)} ${g.name}`).join('، ')}</dd></div>
+  <div><dt>تعداد رنگ</dt><dd>${fa.format(item.shades.length)}</dd></div>
+  <div><dt>حریم خصوصی</dt><dd>تصویر از دستگاهت بیرون نمی‌رود</dd></div>
+</dl>
+${groups.filter(g=>g.list.length).map(g=>`<h2>مدل‌های ${g.name}</h2>
+<ul class="links">${g.list.map(s=>`<li>${esc(s.name)}</li>`).join('')}</ul>`).join('\n')}
+<h2>رنگ‌ها</h2>
+<ul class="shades">${item.shades.map(s=>`<li><i style="background:${esc(s.color)}"></i>${esc(s.name)}</li>`).join('')}</ul>
+<h2>در آینه چه می‌توانی بکنی</h2>
+<p>${esc(item.mirrorText)}</p>
+${cta(`${r}#product=${item.id}`,'امتحان مدل مو روی سر خودم')}
+<p class="disclaimer">${esc(item.limitation)} ${COLOUR_NOTE}</p>
+${related.length?`<h2>دیگر در ${esc(cat?.name||'')}</h2><ul class="links">${related.map(x=>`<li><a href="../${x.id}/">${esc(x.name)}</a></li>`).join('')}</ul>`:''}`});
+}
 out.set('makeup/index.html',page({dir:'makeup',
   title:'امتحان آنلاین آرایش روی صورت خودت | رُژا',
-  description:`رژ لب، کرم‌پودر، سایه، خط چشم، ریمل و ${fa.format(products.length)} محصول دیگر را پیش از خرید، زنده روی صورت خودت امتحان کن. تصویر از گوشی‌ات بیرون نمی‌رود.`,
+  description:`رژ لب، کرم‌پودر، سایه، خط چشم، ریمل و ${fa.format(sold.length)} محصول دیگر را پیش از خرید، زنده روی صورت خودت امتحان کن. تصویر از گوشی‌ات بیرون نمی‌رود.`,
   h1:'امتحان آنلاین آرایش',
   lead:'هر محصول را با رنگ‌هایش روی صورت خودت ببین، پیش از اینکه بخری.',
   crumbs:[{name:'آرایش',dir:'makeup'}],
@@ -233,7 +267,7 @@ const LISTEN=`window.addEventListener('message', e => {
   // e.data.url      that product's address in your shop
   addToCart(e.data);   // your own cart
 });`;
-const shadeCount=products.reduce((a,p)=>a+p.shades.length,0);
+const shadeCount=sold.reduce((a,p)=>a+p.shades.length,0);
 const wa=/^\d{8,15}$/.test(contact.whatsapp)?`https://wa.me/${contact.whatsapp}?text=${encodeURIComponent('سلام، دربارهٔ گذاشتن آینهٔ رُژا روی سایت فروشگاهمان سؤال دارم.')}`:'';
 const tg=/^[A-Za-z]\w{3,31}$/.test(contact.telegram)?`https://t.me/${contact.telegram}`:'';
 out.set('business/index.html',page({dir:'business',
@@ -244,7 +278,7 @@ out.set('business/index.html',page({dir:'business',
   crumbs:[{name:'برای فروشگاه‌ها',dir:'business'}],
   body:r=>`
 <dl class="facts">
-  <div><dt>محصول</dt><dd>${fa.format(products.length)} نوع، ${fa.format(shadeCount)} رنگ</dd></div>
+  <div><dt>محصول</dt><dd>${fa.format(sold.length)} نوع، ${fa.format(shadeCount)} رنگ</dd></div>
   <div><dt>مراقبت پوست</dt><dd>تحلیل پوست و روتین با ${fa.format(skincare.length)} نوع محصول</dd></div>
   <div><dt>نصب</dt><dd>یک قطعه کد؛ بدون برنامه و بدون سرور</dd></div>
   <div><dt>حریم خصوصی</dt><dd>تصویر صورت از گوشی مشتری بیرون نمی‌رود</dd></div>

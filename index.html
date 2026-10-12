@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="fa" dir="rtl" data-release="24">
+<html lang="fa" dir="rtl" data-release="25">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -30,7 +30,7 @@
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <meta name="mobile-web-app-capable" content="yes">
 <link rel="preload" href="fonts/Estedad-var.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="roja.css?v=24">
+<link rel="stylesheet" href="roja.css?v=25">
 </head>
 <body>
 
@@ -145,7 +145,7 @@
         <h2>آرایش را روی صورت خودت امتحان کن</h2>
         <p>رنگ‌ها را زنده ببین، با براش پخش یا محوشان کن و پیش از خرید تصمیم بگیر. تصویر روی همین دستگاه پردازش می‌شود و جایی فرستاده یا ذخیره نمی‌شود.</p>
         <ul class="welcome-points" aria-label="در رُژا">
-          <li><svg class="ico"><use href="#i-face"/></svg>۱۶ محصول، ۱۲۱ رنگ</li>
+          <li><svg class="ico"><use href="#i-face"/></svg>۱۷ محصول، ۱۳۷ رنگ، با رنگ و مدل مو</li>
           <li><svg class="ico"><use href="#i-drop"/></svg>تحلیل پوست و روتین</li>
           <li><svg class="ico"><use href="#i-wand"/></svg>پیش‌نمایش عمل زیبایی</li>
         </ul>
@@ -229,12 +229,24 @@
           <div class="segmented" id="style-options" role="radiogroup" aria-label="فرم"></div>
         </div>
 
+        <!-- Hairstyles: the list is hairstyles/index.json, loaded when this opens. -->
+        <div id="hairstyle-field" hidden>
+          <div class="segmented" id="hairstyle-groups" role="radiogroup" aria-label="مدل‌های زنانه یا مردانه">
+            <button type="button" role="radio" data-group="women" aria-checked="true">زنانه</button>
+            <button type="button" role="radio" data-group="men" aria-checked="false">مردانه</button>
+          </div>
+          <div class="hs-grid" id="hairstyle-grid" role="radiogroup" aria-label="مدل مو"></div>
+          <p class="help hs-note" id="hairstyle-note" aria-live="polite"></p>
+        </div>
+
+        <div id="amount-fields">
         <label class="field" for="intensity"><span id="intensity-label">شدت رنگ</span> <output id="amount">۵۵٪</output></label>
         <input id="intensity" type="range" min="5" max="100" value="55">
 
         <label class="field" for="fade">محوشدن لبه <output id="fade-amount">۴۵٪</output></label>
         <input id="fade" type="range" min="0" max="100" value="45" aria-describedby="fade-help">
         <p class="help" id="fade-help">کم، لبهٔ مشخص‌تر. زیاد، پخش نرم‌تر رنگ.</p>
+        </div>
 
         <div class="pair">
           <button id="pin-shade" class="ghost" aria-pressed="false">مقایسه با رنگ دیگر</button>
@@ -538,6 +550,6 @@
 })();
 </script>
 <script nomodule>document.getElementById('status').textContent='این مرورگر قدیمی است و این برنامه را اجرا نمی‌کند. آخرین نسخهٔ Safari یا Chrome را نصب کن.';</script>
-<script type="module" src="app.js?v=24"></script>
+<script type="module" src="app.js?v=25"></script>
 </body>
 </html>

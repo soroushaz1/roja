@@ -2,12 +2,16 @@
 // kept as they are fetched; the face model and its runtime (~15 MB) are kept the
 // first time the camera is used, so after that the mirror works without a network.
 //
+// Hairstyles (hairstyles/<id>/) are not part of the shell: a style's files are kept the
+// first time it is picked, under addresses that name its version (?r=), and the list of
+// styles is fetched fresh when online, so a newly baked style appears without a release.
+//
 // Only this origin's own files are cached, and nothing from the camera ever passes
 // through here: frames never leave the page.
-const CACHE='roja-v24';
-const SHELL=['./','index.html','roja.css?v=24','app.js?v=24','catalog.js?v=24','makeup.js?v=24','stage.js?v=24',
-  'deform.js?v=24','procedures.js?v=24','debug.js?v=24','brush.js?v=24','measure.js?v=24','blur.js?v=24','facemesh.js?v=24','shaders.js?v=24',
-  'face-worker.js?v=24','face-core.js?v=24','skin.js?v=24','skin-scan.js?v=24','skin-panel.js?v=24','usage.js?v=24','shops.js?v=24',
+const CACHE='roja-v25';
+const SHELL=['./','index.html','roja.css?v=25','app.js?v=25','catalog.js?v=25','makeup.js?v=25','stage.js?v=25',
+  'deform.js?v=25','procedures.js?v=25','debug.js?v=25','brush.js?v=25','measure.js?v=25','blur.js?v=25','facemesh.js?v=25','shaders.js?v=25',
+  'face-worker.js?v=25','face-core.js?v=25','skin.js?v=25','skin-scan.js?v=25','skin-panel.js?v=25','usage.js?v=25','shops.js?v=25','hairstyle.js?v=25',
   'fonts/Estedad-var.woff2','favicon.svg','manifest.webmanifest','icons/icon-192.png','icons/app-qr.svg'];
 
 // From the server, not the browser's cache: that can still hold the previous release's
@@ -33,10 +37,11 @@ self.addEventListener('fetch',event=>{
     const cache=await caches.open(CACHE);
     // The page itself: fresh when online, so a new version is picked up at once. Checked
     // with the server every time, as the browser would otherwise reuse its copy for ten
-    // minutes and pair it with a newer script.
-    if(request.mode==='navigate'){
+    // minutes and pair it with a newer script. The list of hairstyles likewise.
+    const page=request.mode==='navigate';
+    if(page||url.pathname.endsWith('/hairstyles/index.json')){
       try{const response=await fetch(request,{cache:'no-cache'});if(response.ok)cache.put(request,response.clone());return response;}
-      catch{return (await cache.match(request))||(await cache.match('./'))||Response.error();}
+      catch{return (await cache.match(request))||(page&&await cache.match('./'))||Response.error();}
     }
     // Everything else is versioned or never changes: the cache first.
     const hit=await cache.match(request);

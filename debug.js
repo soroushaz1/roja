@@ -6,7 +6,7 @@
 //
 // It draws on its own canvas rather than the makeup overlay, so the multiply blend
 // used by «ترکیب رنگ با بافت پوست» never touches it.
-import {displace} from './deform.js?v=24';
+import {displace} from './deform.js?v=25';
 
 const PLAIN='#3FD0F0';   // a point nothing is currently using
 const ACTIVE='#FFC53D';  // a point driving what is on screen right now
