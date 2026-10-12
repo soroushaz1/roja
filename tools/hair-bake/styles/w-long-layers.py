@@ -42,6 +42,53 @@ def unkink(S, h=0.004, thresh=22.0, iters=5, alpha=0.6, log=None):
     return S
 
 
+ENV_C = np.array([0.5, 0.25, -0.30])          # centre of the spherical hair envelope
+
+
+def _sph(P, C=ENV_C, nb=(120, 240)):
+    v = np.asarray(P, np.float64) - C
+    r = np.linalg.norm(v, axis=-1) + 1e-12
+    az = np.arctan2(v[..., 0], v[..., 2])
+    el = np.arcsin(np.clip(-v[..., 1] / r, -1, 1))
+    ie = np.clip(((el + np.pi / 2) / np.pi * nb[0]).astype(int), 0, nb[0] - 1)
+    ia = ((az + np.pi) / (2 * np.pi) * nb[1]).astype(int) % nb[1]
+    return r, ie, ia, v / r[..., None]
+
+
+def envelope(S, pct=0.96, nb=(120, 240)):
+    """the outer surface of a hair volume, as a radius per direction from ENV_C (a robust
+    high percentile of the vertices in each direction bin, dilated and smoothed)."""
+    from scipy import ndimage
+    P = np.asarray(S[:, 1:], np.float64).reshape(-1, 3)
+    r, ie, ia, _ = _sph(P, nb=nb)
+    b = ie * nb[1] + ia
+    o = np.lexsort((r, b))
+    b, r = b[o], r[o]
+    first = np.r_[0, np.flatnonzero(np.diff(b)) + 1]
+    cnt = np.diff(np.r_[first, len(b)])
+    k = first + np.minimum(cnt - 1, (pct * cnt).astype(int))
+    E = np.zeros(nb[0] * nb[1])
+    E[b[first]] = r[k]
+    E = E.reshape(nb)
+    E = ndimage.grey_dilation(E, size=(3, 3), mode='wrap')
+    E = ndimage.gaussian_filter(E, 1.0, mode='wrap')
+    return E
+
+
+def layer_over(B, E, eps=0.004, t0=(0.04, 0.22), nb=(120, 240)):
+    """push strands B out to lie on top of the hair envelope E (radius per direction) by
+    eps, from t0[0] to t0[1] along the strand on (the roots stay)."""
+    B = np.array(B, np.float64)
+    r, ie, ia, u = _sph(B, nb=nb)
+    tgt = E[ie, ia] + eps
+    w = smoothstep(t0[0], t0[1], np.linspace(0, 1, B.shape[1]))[None, :]
+    rn = r + w * np.clip(tgt - r, 0, None)
+    out = ENV_C + u * rn[..., None]
+    for _ in range(2):                                   # smooth the pushed strands a little
+        out[:, 1:-1] += 0.4 * (0.5 * (out[:, :-2] + out[:, 2:]) - out[:, 1:-1])
+    return out.astype(np.float32)
+
+
 def build(rng, q=1.0, log=print):
     scalp = g.Scalp(g.Hairline('women', jitter=0.009),
                     g.Parting(0.503, drift=-0.012, width=0.0035, zigzag=0.0045),
@@ -77,10 +124,11 @@ def build(rng, q=1.0, log=print):
     # the ends kick out, away from the face (a round-brushed curtain)
     P = bangs.P
     side = np.where(P[:, 0, 0] >= 0.5, 1.0, -1.0)
-    toward = np.stack([side, -0.25 + 0 * side, -0.55 + 0 * side], -1)
+    toward = np.stack([side, -0.20 + 0 * side, -0.10 + 0 * side], -1)
     toward /= np.linalg.norm(toward, axis=-1, keepdims=True)
     amt = rng.uniform(0.015, 0.04, len(P))
     bangs.P = g.bend_ends(P, amt, start=0.6, toward=np.broadcast_to(toward[:, None, :], P.shape).astype(np.float32))
+    bangs.P = layer_over(bangs.P, envelope(S.P[::3]))
     hair.add(bangs.set(opacity=0.9))
     hair.add(g.flyaways(bangs.P, rng, 0.02, start=(0.3, 0.7), amp=(0.02, 0.008)), kind='flyaway')
     hair.add(g.flyaways(S.P, rng, 0.006), kind='flyaway')
