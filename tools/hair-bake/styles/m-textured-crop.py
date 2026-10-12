@@ -95,7 +95,7 @@ def build(rng, q=1.0, log=print):
     # ---- lengths: a mid fade on the sides, the long top
     side_len = g.fade_length(r, 0.006, 0.068, 0.44, -0.06, power=1.35)
     side_len = side_len * (1 - 0.45 * SS(-0.2, 0.1, r.z) * SS(0.05, 0.25, r.y))     # temples, sideburns
-    top_len = (0.265 + 0.07 * rng.random(n)) * (1 - 0.40 * back) * (1 - 0.30 * rim) * (1 + 0.10 * front)
+    top_len = (0.265 + 0.07 * rng.random(n)) * (1 - 0.40 * back) * (1 - 0.35 * rim) * (1 + 0.12 * front)
     L = side_len * (1 - top) + top_len * top
 
     # ---- pieces (~1 cm locks of the top) with their own yaw, length, bend and tip lift
@@ -105,7 +105,7 @@ def build(rng, q=1.0, log=print):
     centres = rng.choice(n, npieces, replace=False)
     from scipy.spatial import cKDTree
     _, piece = cKDTree(r.p[centres]).query(r.p, 1)
-    pyaw = rng.normal(0, 0.30, npieces)[piece] * tex + rng.normal(0, 0.04, n)
+    pyaw = rng.normal(0, 0.22, npieces)[piece] * tex + rng.normal(0, 0.035, n)
     plen = 1 + 0.16 * rng.normal(size=npieces)[piece] * tex + 0.06 * rng.normal(size=n)
     plift = rng.normal(0.004, 0.022, npieces)[piece]
     L = np.clip(L * plen, 0.004, None)
@@ -113,23 +113,23 @@ def build(rng, q=1.0, log=print):
     # ---- directions: the top forward (slight sweep to image left; out and down at the rim),
     # behind the crown down the back of the head, the sides down and back
     sweep = -0.18
-    fwd = np.stack([sweep + 0.55 * np.sign(r.x - 0.5) * rim, 0.10 + 0.25 * rim, np.ones(n)], -1)
+    fwd = np.stack([sweep + 0.35 * np.sign(r.x - 0.5) * rim, 0.10 + 0.30 * rim, np.ones(n)], -1)
     down_back = np.stack([0.10 * np.sign(r.x - 0.5), np.ones(n), -np.ones(n)], -1)
     wf = top * (1 - back)
     d0 = g.unit(fwd) * wf[:, None] + g.unit(down_back) * (1 - wf)[:, None]
     d0 = g.rotate_about(g.tangent(d0, r.n), r.n, pyaw)
     # over the forehead: down, with each piece's own sideways drift (pieces converge and part)
-    psx = rng.normal(0, 0.22, npieces)[piece]
+    psx = rng.normal(0, 0.16, npieces)[piece]
     dir_fringe = np.stack([sweep * 1.3 + psx + 0.25 * (r.x - 0.5), np.ones(n), 0.15 * np.ones(n)], -1)
 
     # ---- heights: the top stands 1.4-2.2 cm off the scalp; lies close on the forehead
-    H = (0.085 + 0.035 * rng.random(n)) * (1 + 0.25 * mid) * (1 - 0.45 * back) * (1 - 0.55 * rim) \
+    H = (0.085 + 0.035 * rng.random(n)) * (1 + 0.25 * mid) * (1 - 0.45 * back) * (1 - 0.70 * rim) \
         * (0.55 + 0.45 * SS(0.0, 0.08, r.dist))
     H = H * top + (0.008 + 0.008 * SS(0.45, 0.0, r.y)) * (1 - top)
     h_fore = 0.012 + 0.010 * rng.random(n) + 0.022 * np.clip(r.dist / 0.20, 0, 1)
     h_end = plift * top * (1 - front) - 0.010 * front
 
-    bend = (g.smooth_noise(rng, npieces, 40, 1.2, 2)[piece] * 0.20 + g.smooth_noise(rng, n, 40, 2.0, 1) * 0.06) \
+    bend = (g.smooth_noise(rng, npieces, 40, 1.2, 2)[piece] * 0.16 + g.smooth_noise(rng, n, 40, 2.0, 1) * 0.06) \
         * tex[:, None, None]
     nv = 40
     log('crop: walking %d strands' % n)
@@ -138,35 +138,36 @@ def build(rng, q=1.0, log=print):
     # ---- clumping: the top into pointed pieces (matte), the sides hardly at all
     groups = []
     for sel, clumps, frz in ((~is_top, ((4000, 0.0, 0.15, 1.0),), (0.0002, 0.0005)),
-                             (is_top, ((int(npieces * 1.1), 0.05, 0.70, 0.8), (5500, 0.08, 0.32, 1.0)),
+                             (is_top, ((-1, 0.04, 0.80, 0.9), (5000, 0.06, 0.30, 1.0)),
                               (0.0003, 0.0010))):
         idx = np.where(sel)[0]
         Ss = S[idx]
         cl = np.zeros(len(idx), int)
-        for (cnt, a, b, pw) in clumps:
-            Ss, cl = g.clump(Ss, r.p[idx], None, min(len(idx), cnt),
-                             lambda tt, a=a, b=b, pw=pw: a + b * SS(0.1, 1.0, tt) ** pw, rng)
+        for k, (cnt, a, b, pw) in enumerate(clumps):
+            # the top's first level gathers each piece to one point (its centre strand)
+            cen = np.searchsorted(idx, np.intersect1d(centres, idx)) if (k == 0 and cnt < 0) else None
+            Ss, cl = g.clump(Ss, r.p[idx], None, len(cen) if cen is not None else min(len(idx), cnt),
+                             lambda tt, a=a, b=b, pw=pw: a + b * SS(0.1, 1.0, tt) ** pw, rng, centres=cen)
         Ss = g.frizz(Ss, rng, frz[0], frz[0] + frz[1], freq=3, power=1.3, root_ramp=0.1)
         groups.append((idx, Ss, cl))
 
-    # ---- the fringe line: cut where the strands reach y_end(x) on the forehead
-    idx, St, clt = groups[1]
-    rt = r.take(idx)
-    xe = St[:, -1, 0]
+    # ---- the fringe line: every strand that reaches y_end(x) on the forehead is cut there
     ph = rng.uniform(0, 2 * np.pi, 2)
     nl = 140
-    _, lock = cKDTree(rt.p[rng.choice(len(idx), nl, replace=False)]).query(rt.p, 1)
-    ye = (0.064 - 0.050 * ((xe - 0.5) / 0.26) ** 2
-          + 0.012 * (0.7 * np.sin(xe * 13.0 + ph[0]) + 0.3 * np.sin(xe * 29.0 + ph[1]))
-          + 0.013 * rng.normal(size=npieces)[piece[idx]]
-          + 0.006 * rng.normal(size=nl)[lock] + 0.003 * rng.normal(size=len(idx))
-          - (rng.random(len(idx)) < 0.40) * 0.030 * rng.random(len(idx)) ** 0.7)
-    reach = rt.y < ye - 0.02
-    Lt = g.lengths(St)
-    Lc = np.where(reach, np.minimum(Lt, g.cut_at_y(St, ye)), Lt)
-    Lc = np.maximum(Lc, 0.25 * Lt)
-    St = g.cut(St, Lc)
-    groups[1] = (idx, St, clt)
+    _, lock = cKDTree(r.p[rng.choice(n, nl * 3, replace=False)]).query(r.p, 1)
+    lock_dy = 0.006 * rng.normal(size=nl * 3)
+    piece_dy = 0.014 * rng.normal(size=npieces)
+    for gi, (idx, Ss, cl) in enumerate(groups):
+        xe = Ss[:, -1, 0]
+        ye = (0.085 - 0.060 * ((xe - 0.5) / 0.26) ** 2
+              + 0.012 * (0.7 * np.sin(xe * 13.0 + ph[0]) + 0.3 * np.sin(xe * 29.0 + ph[1]))
+              + piece_dy[piece[idx]] + lock_dy[lock[idx]] + 0.003 * rng.normal(size=len(idx))
+              - (rng.random(len(idx)) < 0.40) * 0.035 * rng.random(len(idx)) ** 0.7)
+        reach = r.y[idx] < ye - 0.02
+        Lt = g.lengths(Ss)
+        Lc = np.where(reach, np.minimum(Lt, g.cut_at_y(Ss, ye)), Lt)
+        Lc = np.maximum(Lc, 0.25 * Lt)
+        groups[gi] = (idx, g.cut(Ss, Lc), cl)
 
     op, wd = g.skin_fade(r, y0=0.08, y1=0.46, strength=0.70, top=top)
     width = 0.0010 / np.sqrt(q) * wd * rng.uniform(0.75, 1.25, n)

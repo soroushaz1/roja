@@ -5,7 +5,7 @@ Recipe (v2, work in progress)
 import numpy as np
 from scipy.special import ndtr
 from hairbake import groom as g
-from hairbake.head import smoothstep
+from hairbake.head import smoothstep, body_sdf
 
 STYLE = dict(id='w-long-layers', name='لایه‌ای بلند با چتری پرده‌ای', group='women')
 RENDER = dict(taper=(0.7, 1.0), res=300, max_hair_px=140000, spec=0.85, margin=0.08)
@@ -15,8 +15,8 @@ LIGHT = dict(ambient_floor=0.22, env_base=0.55, bounce=0.26, bounce_m=0.45)
 # forehead) and its outer edge (over the temple to the cheekbone), image-right side
 INNER = [(0.030, 0.020), (0.080, 0.090), (0.140, 0.160), (0.205, 0.225), (0.265, 0.290), (0.320, 0.360),
          (0.370, 0.440), (0.410, 0.530)]
-OUTER = [(0.320, 0.030), (0.380, 0.095), (0.425, 0.170), (0.450, 0.260), (0.460, 0.360), (0.462, 0.460),
-         (0.460, 0.560), (0.455, 0.650)]
+OUTER = [(0.320, 0.030), (0.375, 0.095), (0.415, 0.170), (0.437, 0.260), (0.445, 0.360), (0.445, 0.460),
+         (0.442, 0.560), (0.437, 0.650)]
 BANG_H = (0.050, 0.056, 0.052, 0.046, 0.041, 0.037, 0.034, 0.032)
 
 PARAMS = dict(
@@ -143,6 +143,12 @@ def build(rng, q=1.0, log=print, P=None):
     bangs, br = g.curtain_bangs(scalp, rng, int(p['bang_n'] * q), width=bw, depth=bd, inner=INNER, outer=OUTER,
                                 h=BANG_H, h_back=0.45, length=p['bang_len'], clumps=(60, 220), tip_clump=0.55,
                                 ends=dict(piece=0.10, strand=0.03, point=0.35, point_depth=0.22, floor=0.45), log=log)
+    # drop the rare strand whose path left the face's silhouette (lifted onto the far background)
+    sd = body_sdf()(bangs.P.reshape(-1, 3).astype(np.float64)).reshape(bangs.P.shape[:2])
+    ok = (sd.max(1) < 0.12) & (bangs.P[..., 2].min(1) > -0.30)
+    if log:
+        log(f'  curtain: dropped {int((~ok).sum())} stray paths')
+    bangs = bangs.take(ok)
     # the lower curtain curves out, away from the face (a smooth field: whole pieces move together)
     B = bangs.P
     side = np.where(B[:, :1, 0] >= 0.5, 1.0, -1.0)
