@@ -21,8 +21,8 @@ BANG_H = (0.050, 0.056, 0.052, 0.046, 0.041, 0.037, 0.034, 0.032)
 
 PARAMS = dict(
     root_h=(0.004, 0.012), volume=(0.07, 0.095), crown_lift=0.05, asym=0.18, gravity=(0.16, 0.45),
-    length_y=2.02, inner_frac=0.30, inner_keep=(0.62, 0.92),
-    frame_y=(1.02, 1.70), frame_depth=0.22, frame_width=0.18,
+    length_y=2.08, top_short=0.30, inner_frac=0.15, inner_keep=(0.70, 0.90),
+    frame_y=(1.06, 2.0), frame_depth=0.55, frame_width=0.25,
     bang_w=0.30, bang_d=0.19, bang_n=8000, bang_len=(0.58, 0.42), flick=0.03,
     ears=True, flat_front=0.75,
 )
@@ -106,15 +106,25 @@ def build(rng, q=1.0, log=print, P=None):
     hair = g.Hair(scalp, q, STYLE['id'])
 
     def cut(r, rng_, lock):
-        y = g.layered_cut(r, rng_, lock, length_y=p['length_y'], back_extra=0.10, centre_shorter=0.20, frame=True,
-                          frame_y=p['frame_y'], frame_depth=p['frame_depth'], frame_width=p['frame_width'],
+        """front-view cut height per strand: the long perimeter (U-shaped behind), the top
+        layers shorter than the hair underneath, graduated face-framing layers from the chin
+        down beside the face, and a few shorter locks inside the lengths."""
+        y = g.layered_cut(r, rng_, lock, length_y=p['length_y'], back_extra=0.10, centre_shorter=0.20, frame=False,
                           jitter=(0.06, 0.035))
+        top = smoothstep(0.55, 1.35, r.elev)
+        y = y - p['top_short'] * top
+        aphi = np.abs(r.phi)
+        back = smoothstep(-0.30, -0.60, r.z)
+        ff = smoothstep(1.25, 0.85, aphi) * (1 - back)
+        fd = np.clip((0.20 - r.z) / p['frame_depth'], 0, 1)
+        y_ff = p['frame_y'][0] + (p['frame_y'][1] - p['frame_y'][0]) * fd ** 1.3 + p['frame_width'] * smoothstep(0.7, 1.2, aphi) \
+            + 0.05 * lock + 0.02 * rng_.normal(size=len(r))
+        y = np.where(ff > 0.02, np.minimum(y, y_ff * ff + y * (1 - ff)), y)
         u = ndtr(lock)                                   # uniform per lock
         fi = p['inner_frac']
-        inner = u < fi                                   # internal layers: shorter locks inside the lengths
         k0, k1 = p['inner_keep']
         f = k0 + (k1 - k0) * (u / max(fi, 1e-6))
-        return np.where(inner, 0.9 + (y - 0.9) * f, y)
+        return np.where(u < fi, 0.9 + (y - 0.9) * f, y)
 
     out = g.long_hair(scalp, rng, q, n=100000, n_guides=3200, accept=lambda P_, N: ~bang(P_, N),
                       root_h=p['root_h'], volume=p['volume'], crown_lift=p['crown_lift'], asym=p['asym'],
