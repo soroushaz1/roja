@@ -1,11 +1,11 @@
-// Anonymous usage counts: which shades, looks and procedures are tried, what is opened in
+// Anonymous usage counts: which shades and looks are tried, what is opened in
 // the shop, how often things are shared, and how far a visit got. Each count is a pair
 // like ['shade','vlv-3'], sent in batches with the id of the shop whose mirror it is to
 // server/stats.mjs, which keeps only a per-day total for each. No key, cookie, picture
 // or answer is ever part of it.
 //
 // Not from the Android app (its pages are not on the site) or a development server.
-import {currentShop} from './shops.js?v=24';
+import {currentShop} from './shops.js?v=25';
 
 const API='api/stats';
 // The shop whose mirror this is, so each shop's counts can be read on their own.

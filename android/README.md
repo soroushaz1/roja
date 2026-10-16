@@ -9,7 +9,7 @@
 The same mirror as the website, as an installable Android app (Android 8.0 and later),
 with the live camera done natively. The site at the root of this repository is copied
 into the app's assets at build time and is the app's interface, shown in a WebView, so
-every feature — makeup, the brush, looks, the shade finder, procedures, debug mode —
+every feature — makeup, the brush, looks, the shade finder, the skin check, debug mode —
 works the same in both. The heavy part of the live mirror, the camera, face tracking and
 drawing, runs natively under the page, for a picture that keeps up with the face.
 
@@ -31,8 +31,10 @@ drawing, runs natively under the page, for a picture that keeps up with the face
   read out of `shaders.js` and `facemesh.js` in the APK (`SiteCode.kt`). The page still
   paints the makeup masks, once per change, in the face's own space, and sends them with
   the list of layers; the renderer places them on the face through the mesh every frame.
-  The procedure warp (`Deform.kt`) and the landmark smoothing (`Smoother.kt`) are ports of
-  `deform.js` and the One Euro filter in `makeup.js`, and must change with them.
+  The landmark smoothing (`Smoother.kt`) is a port of the One Euro filter in `makeup.js`
+  and must change with it. `Deform.kt` and the renderer's warp grid served the procedure
+  preview, which has left the site (it is now Roja Clinic, a separate product): the page
+  no longer sends `amounts`, so the grid is always drawn flat. They can be removed.
 - **Camera permission.** Asked for when the mirror first starts. When the app is hidden,
   the camera is turned off. Photos are drawn by the page's own WebGL, as on the web.
 - **Photos.** «انتخاب عکس» opens the system photo picker, which needs no storage permission.

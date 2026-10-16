@@ -1,4 +1,4 @@
-// Browser checks for Roja: makeup, the brush, compare, looks, photos, procedures,
+// Browser checks for Roja: makeup, the brush, compare, looks, photos, the skin check,
 // the debug overlay and the phone layout.
 //
 //   node tools/preview.cjs      # in one terminal
@@ -173,7 +173,9 @@ const LIPS=[61,0,291,17,40,270,91,321];
     await settle(page);
 
     /* ---- makeup on the WebGL stage ---- */
-    assert.equal(await page.locator('#webgl-missing').isVisible(),false,'WebGL reported missing');
+    // The procedures moved out to Roja Clinic: nothing of them is left on the page.
+    assert.equal(await page.locator('#mode-procedure,[data-procedure],#panel-procedure').count(),0,'procedure controls are still on the page');
+    assert.equal(await page.locator('a[href*="procedures/"]').count(),0,'a link to the procedure pages is still on the page');
     const lipsOn=await page.evaluate(region,{ids:LIPS});
     // The default shade is a nude. 4 encoded the old inflated coverage, where a slider
     // at 62 painted at 86; stageLayer() now paints what the slider says, and a sheer
@@ -341,7 +343,68 @@ const LIPS=[61,0,291,17,40,270,91,321];
     assert((await page.evaluate(probe,{GX,GY})).diff<1.5,'the "without makeup" side is not the camera frame');
     await dragSeam(0);await settle(page);
     assert((await page.evaluate(region,{ids:LIPS})).diff>4,'the "with makeup" side lost the makeup');
+    // The drawn line must sit exactly on the cut. `object-fit:contain` letterboxes the
+    // frame, and measuring the seam against the element instead of the frame made the
+    // two use different scales — they agreed only at dead centre, and were ~70px apart
+    // near the edges. Checked by finding the cut in the pixels, not from a formula: here
+    // the edge of a deep lipstick against the bare lips.
+    await page.locator('[data-id="vlv-8"]').click();await page.waitForTimeout(150);await settle(page);
+    const keep=key=>page.evaluate(k=>{
+      const s=document.querySelector('#stage');
+      const c=document.createElement('canvas');c.width=s.width;c.height=s.height;
+      const x=c.getContext('2d',{willReadFrequently:true});x.drawImage(s,0,0);
+      window[k]=x.getImageData(0,0,c.width,c.height);
+    },key);
+    await dragSeam(0);await settle(page);await keep('__full');      // nothing hidden
+    await dragSeam(1);await settle(page);await keep('__ident');     // everything hidden
+    // Across the lips, where the two sides differ: the frame is mirrored on screen.
+    const [lipA,lipB]=await page.evaluate(()=>[1-window.testLandmarks[61].x,1-window.testLandmarks[291].x].sort((a,b)=>a-b));
+
+    const alignment=()=>page.evaluate(()=>{
+      const s=document.querySelector('#stage');
+      const c=document.createElement('canvas');c.width=s.width;c.height=s.height;
+      const x=c.getContext('2d',{willReadFrequently:true});x.drawImage(s,0,0);
+      const now=x.getImageData(0,0,c.width,c.height);
+      const {__full:full,__ident:ident}=window, w=c.width, h=c.height;
+      const spread=(A,B,px)=>{let m=0;for(let y=0;y<h;y+=2){const i=(y*w+px)*4;
+        for(let k=0;k<3;k++){const v=Math.abs(A.data[i+k]-B.data[i+k]);if(v>m)m=v;}}return m;};
+      let cut=-1;
+      for(let px=0;px<w;px++){
+        if(spread(full,ident,px)<=18)continue;                 // the lipstick is invisible here
+        if(spread(now,full,px)<spread(now,ident,px))cut=px;    // this column shows the lipstick
+      }
+      if(cut<0)return null;
+      const vp=document.querySelector('#viewport').getBoundingClientRect();
+      const v=document.querySelector('#video');
+      const ratio=v.videoWidth/v.videoHeight;
+      let bw=vp.width,bh=vp.width/ratio;
+      if(bh>vp.height){bh=vp.height;bw=vp.height*ratio;}
+      const left=(vp.width-bw)/2;
+      // The canvas is mirrored in CSS, so canvas x maps to the far side of the frame.
+      const cutScreen=left+bw-((cut+1)/w)*bw;
+      const lineScreen=document.querySelector('#seam-line').getBoundingClientRect().left-vp.left;
+      return Math.round(cutScreen-lineScreen);
+    });
+    const offsets=[];
+    for(const f of [.2,.35,.5,.65,.8].map(t=>lipA+(lipB-lipA)*t)){
+      await dragSeam(f);await settle(page);
+      const offset=await alignment();
+      assert.notEqual(offset,null,`could not locate the cut at ${f.toFixed(3)}`);
+      offsets.push(offset);
+    }
+    const worst=Math.max(...offsets.map(Math.abs));
+    assert(worst<=4,`the seam line is ${worst}px away from the cut (${offsets.join(', ')})`);
+    report.seamAlignmentPx=worst;
+    await dragSeam(.5);
     await page.locator('#compare').click();
+
+    // Losing the face must not leave makeup behind on the frame.
+    await page.evaluate(()=>window.testBlank=true);
+    await page.waitForFunction(()=>document.querySelector('#status').textContent.startsWith('صورت پیدا نشد'),null,{timeout:20000});
+    await settle(page);
+    assert((await page.evaluate(probe,{GX,GY})).diff<1.5,'makeup stayed on the frame after the face was lost');
+    await page.evaluate(()=>{window.testBlank=false;window.testLandmarks=null;});
+    await page.waitForFunction(()=>window.testLandmarks,null,{timeout:20000});
     assert.equal(await page.locator('#seam').isVisible(),false,'the seam stayed after compare was switched off');
 
     await page.locator('[data-id="vlv-8"]').click();
@@ -450,12 +513,6 @@ const LIPS=[61,0,291,17,40,270,91,321];
         return out;
       };
 
-      const deform=read('deform.js');
-      const declared=nums(between(deform,'controlLandmarks={','};'))
-        .concat(nums(between(deform,'frameLandmarks=[',']')));
-      const stale=anchors(deform).filter(i=>!declared.includes(i));
-      assert.deepEqual(stale,[],`deform.js anchors on ${stale} but controlLandmarks omits them`);
-
       // makeup.js: every landmark it reads must be in some layer's list.
       const byType=await page.evaluate(async()=>{const m=await import('./makeup.js?v=13');
         return [...new Set([...Object.values(m.landmarksByType).flat(),...m.frameLandmarks])];});
@@ -467,159 +524,10 @@ const LIPS=[61,0,291,17,40,270,91,321];
       report.landmarkMaps='in step with the code';
     }
 
-    /* ---- procedures ---- */
+    /* ---- buying ---- */
     await page.evaluate(()=>document.querySelector('#clear-look').click());
-    await page.locator('#mode-procedure').click();
-    await page.waitForFunction(()=>{const s=document.querySelector('#stage');return !s.hidden&&s.width>0;},null,{timeout:20000});
-    assert.equal(await page.locator('#badge').isVisible(),true,'simulation badge missing');
-
-    const identity=await page.evaluate(probe,{GX,GY});
-    assert(identity.diff<1.5,`identity differs from source by ${identity.diff}`);
-    report.identityDiff=Number(identity.diff.toFixed(4));
-
-    const ids=await page.evaluate(()=>[...document.querySelectorAll('[data-procedure]')].map(b=>b.dataset.procedure));
-    assert(ids.length>=16,`expected the full procedure tray, got ${ids.length}`);
-    report.procedures={};
-    for(const id of ids){
-      await page.locator(`[data-procedure="${id}"]`).click();
-      await setSlider(page,'#strength',100);
-      await page.waitForTimeout(80);await settle(page);
-      const spot=changed(identity,await page.evaluate(probe,{GX,GY}),.8);
-      assert(spot.count>0,`${id} changed nothing`);
-      assert(spot.share<0.5,`${id} changed ${Math.round(spot.share*100)}% of the frame`);
-      assert.equal(await page.locator('#procedure-facts').isVisible(),true,`${id} shows no facts`);
-      report.procedures[id]=spot.count;
-      await page.locator('#procedure-reset').click();
-      await settle(page);
-      assert(changed(identity,await page.evaluate(probe,{GX,GY}),.8).count===0,`${id} did not reset`);
-    }
-
-    // Variants change the result, and the measurements report the change.
-    await page.locator('[data-procedure="rhinoplasty"]').click();
-    await setSlider(page,'#strength',100);
-    await page.locator('#variant-options [data-variant="natural"]').click();await settle(page);
-    const natural=(await page.evaluate(region,{ids:[1,2,64,294,98,327],pad:10})).diff;
-    await page.locator('#variant-options [data-variant="fantasy"]').click();await settle(page);
-    const fantasy=(await page.evaluate(region,{ids:[1,2,64,294,98,327],pad:10})).diff;
-    assert(fantasy>natural,`the fantasy rhinoplasty is not a bigger change than the natural one (${fantasy} vs ${natural})`);
-    await page.waitForTimeout(300);
-    const noseRow=await page.evaluate(()=>{
-      const cells=[...document.querySelectorAll('#measure-table span')];
-      const i=cells.findIndex(c=>c.textContent==='پهنای پرهٔ بینی');
-      return i<0?null:{changed:cells[i].classList.contains('changed'),change:cells[i+3].textContent};
-    });
-    assert(noseRow&&noseRow.changed,'the measurements did not register a narrower nose');
-    report.variants={natural:+natural.toFixed(2),fantasy:+fantasy.toFixed(2),noseWidth:noseRow.change};
-    await page.locator('#procedure-reset').click();
-
-    // Makeup can stay on during a procedure.
-    await page.locator('#with-makeup').check();
-    await page.locator('#mode-makeup').click();await page.locator('[data-product="velvet"]').click();
-    await page.locator('#mode-procedure').click();await settle(page);await page.waitForTimeout(150);
-    assert((await page.evaluate(region,{ids:LIPS})).diff>4,'"keep makeup on" did not show the makeup in procedure mode');
-    await page.locator('#with-makeup').uncheck();await settle(page);await page.waitForTimeout(150);
-    assert((await page.evaluate(probe,{GX,GY})).diff<1.5,'makeup stayed after "keep makeup on" was cleared');
-
-    // The seam: "before" fills from the left edge, so dragging it right hides more.
-    await page.locator('[data-procedure="rhinoplasty"]').click();
-    await setSlider(page,'#strength',100);
-    await settle(page);
-    await dragSeam(0.5);await settle(page);
-    const half=moved(identity,await page.evaluate(probe,{GX,GY}));
-    assert(half.count>0,'the seam hid the whole result at the half-way point');
-    assert(half.maxX<=0.56,`warped pixels leaked past the seam (to ${half.maxX})`);
-    await dragSeam(0.04);await settle(page);
-    const mostlyAfter=moved(identity,await page.evaluate(probe,{GX,GY}));
-    await dragSeam(0.96);await settle(page);
-    const mostlyBefore=moved(identity,await page.evaluate(probe,{GX,GY}));
-    assert(mostlyAfter.count>0,'nothing visible with the seam at the "after" end');
-    assert.equal(mostlyBefore.count,0,'dragging to "before" left warped pixels on screen');
-    assert(mostlyAfter.count>=half.count&&half.count>=mostlyBefore.count,'the seam is not monotonic');
-    report.seam={after:mostlyAfter.count,half:half.count,before:mostlyBefore.count};
-
-    // The drawn line must sit exactly on the cut. `object-fit:contain` letterboxes the
-    // frame, and measuring the seam against the element instead of the frame made the
-    // two use different scales — they agreed only at dead centre, and were ~70px apart
-    // near the edges. Checked by finding the cut in the pixels, not from a formula.
-    // One at a time is the default: a second procedure replaces the first.
-    await page.evaluate(()=>document.getElementById('procedure-reset').click());
-    const pressed=()=>page.evaluate(()=>[...document.querySelectorAll('[data-procedure][aria-pressed=true]')].map(b=>b.dataset.procedure));
-    await page.locator('[data-procedure="rhinoplasty"]').click();
-    await page.locator('[data-procedure="lip-filler"]').click();
-    assert.deepEqual(await pressed(),['lip-filler'],'a second procedure did not replace the first');
-    report.oneAtATime='replaces';
-    // This needs several on at once.
-    await page.locator('#combine-procedures').check();
-    await page.locator('[data-procedure="rhinoplasty"]').click();
-    assert.deepEqual((await pressed()).sort(),['lip-filler','rhinoplasty'],'combined, a second procedure did not add to the first');
-    await page.locator('#procedure-reset').click();
-    for(const id of ['jaw-contour','cheek-filler','brow-lift','lip-filler']){
-      await page.locator(`[data-procedure="${id}"]`).click();
-      await setSlider(page,'#strength',100);
-    }
-    const keep=key=>page.evaluate(k=>{
-      const s=document.querySelector('#stage');
-      const c=document.createElement('canvas');c.width=s.width;c.height=s.height;
-      const x=c.getContext('2d',{willReadFrequently:true});x.drawImage(s,0,0);
-      window[k]=x.getImageData(0,0,c.width,c.height);
-    },key);
-    await dragSeam(0);await settle(page);await keep('__full');      // nothing hidden
-    await dragSeam(1);await settle(page);await keep('__ident');     // everything hidden
-
-    const alignment=()=>page.evaluate(()=>{
-      const s=document.querySelector('#stage');
-      const c=document.createElement('canvas');c.width=s.width;c.height=s.height;
-      const x=c.getContext('2d',{willReadFrequently:true});x.drawImage(s,0,0);
-      const now=x.getImageData(0,0,c.width,c.height);
-      const {__full:full,__ident:ident}=window, w=c.width, h=c.height;
-      const spread=(A,B,px)=>{let m=0;for(let y=0;y<h;y+=2){const i=(y*w+px)*4;
-        for(let k=0;k<3;k++){const v=Math.abs(A.data[i+k]-B.data[i+k]);if(v>m)m=v;}}return m;};
-      let cut=-1;
-      for(let px=0;px<w;px++){
-        if(spread(full,ident,px)<=18)continue;                 // the warp is invisible here
-        if(spread(now,full,px)<spread(now,ident,px))cut=px;    // this column shows the warp
-      }
-      if(cut<0)return null;
-      const vp=document.querySelector('#viewport').getBoundingClientRect();
-      const v=document.querySelector('#video');
-      const ratio=v.videoWidth/v.videoHeight;
-      let bw=vp.width,bh=vp.width/ratio;
-      if(bh>vp.height){bh=vp.height;bw=vp.height*ratio;}
-      const left=(vp.width-bw)/2;
-      // The canvas is mirrored in CSS, so canvas x maps to the far side of the frame.
-      const cutScreen=left+bw-((cut+1)/w)*bw;
-      const lineScreen=document.querySelector('#seam-line').getBoundingClientRect().left-vp.left;
-      return Math.round(cutScreen-lineScreen);
-    });
-    const offsets=[];
-    for(const f of [0.46,0.50,0.54,0.58,0.62]){
-      await dragSeam(f);await settle(page);
-      const offset=await alignment();
-      assert.notEqual(offset,null,`could not locate the cut at ${f}`);
-      offsets.push(offset);
-    }
-    const worst=Math.max(...offsets.map(Math.abs));
-    assert(worst<=4,`the seam line is ${worst}px away from the cut (${offsets.join(', ')})`);
-    report.seamAlignmentPx=worst;
-    await page.locator('#procedure-reset').click();
-    await page.locator('[data-procedure="rhinoplasty"]').click();
-    await setSlider(page,'#strength',100);
-    await settle(page);
-
-    // Losing the face must not leave a warped frame behind.
-    await page.evaluate(()=>window.testBlank=true);
-    await page.waitForFunction(()=>document.querySelector('#status').textContent.startsWith('صورت پیدا نشد'),null,{timeout:20000});
-    await settle(page);
-    assert((await page.evaluate(probe,{GX,GY})).diff<1.5,'stale warp after the face was lost');
-    await page.evaluate(()=>{window.testBlank=false;window.testLandmarks=null;});
-    await page.waitForFunction(()=>window.testLandmarks,null,{timeout:20000});
-    await page.locator('#procedure-reset').click();
-
-    /* ---- back to makeup ---- */
-    await page.locator('#mode-makeup').click();await settle(page);
     await page.locator('[data-product="velvet"]').click();
     await page.waitForTimeout(150);await settle(page);
-    assert((await page.evaluate(region,{ids:LIPS})).diff>4,'makeup stopped rendering after the procedure mode');
     await page.locator('#shades .shade').nth(1).click();
     // "Buy" is a link to the shop's search for the product and the shade's colour.
     const buy=new URL(await page.locator('#add').getAttribute('href'));
@@ -703,33 +611,12 @@ const LIPS=[61,0,291,17,40,270,91,321];
       await page.waitForTimeout(350);await settle(page);
       assert(await debugPixels()>base,`the ${layer} layer drew nothing`);
       await page.locator(`#debug-${layer}`).uncheck();
+      await page.waitForTimeout(150);await settle(page);   // gone before the next baseline
     }
     await page.locator('#debug-find').fill('1');
     await page.waitForTimeout(300);await settle(page);
     assert((await page.locator('#debug-find-info').textContent()).includes('۱'),'finding a landmark reported nothing');
     await page.locator('#debug-find').fill('');
-
-    // Procedures highlight the region they move, and nothing else.
-    await page.locator('#mode-procedure').click();
-    await page.waitForTimeout(300);await settle(page);
-    assert.equal(await dotAt(1),'plain','the nose is marked with no procedure applied');
-    await page.locator('[data-procedure="rhinoplasty"]').click();
-    await setSlider(page,'#strength',100);
-    await page.waitForTimeout(300);await settle(page);
-    assert.equal(await dotAt(1),'active','rhinoplasty did not mark the nose');
-    assert.equal(await dotAt(0),'plain','rhinoplasty marked the lip');
-    await page.locator('[data-procedure="lip-filler"]').click();
-    await setSlider(page,'#strength',100);
-    await page.waitForTimeout(300);await settle(page);
-    assert.equal(await dotAt(0),'active','the lip filler did not mark the lip');
-    assert.equal(await dotAt(1),'active','the nose stopped being marked');
-    {
-      const base=await debugPixels();
-      await page.locator('#debug-field').check();
-      await page.waitForTimeout(350);await settle(page);
-      assert(await debugPixels()>base,'the displacement field drew nothing');
-      await page.locator('#debug-field').uncheck();
-    }
 
     // Labels respond to the slider, and the filter narrows the overlay.
     await setSlider(page,'#debug-size',16);
@@ -740,13 +627,13 @@ const LIPS=[61,0,291,17,40,270,91,321];
     await page.waitForTimeout(300);await settle(page);
     const narrowed=await debugPixels();
     assert(narrowed<withLabels,'"active only" did not reduce the overlay');
-    assert.equal(await dotAt(1),'active','the nose vanished under "active only"');
+    assert.equal(await dotAt(13),'active','the lip contour vanished under "active only"');
     await page.locator('#debug-only').uncheck();
 
     // Highlighting off leaves the points but drops the second colour.
     await page.locator('#debug-highlight').uncheck();
     await page.waitForTimeout(300);await settle(page);
-    assert.equal(await dotAt(1),'plain','the active colour survived turning highlighting off');
+    assert.equal(await dotAt(13),'plain','the active colour survived turning highlighting off');
     await page.locator('#debug-highlight').check();
 
     // The live readout and the export.
@@ -757,11 +644,10 @@ const LIPS=[61,0,291,17,40,270,91,321];
     const [download]=await Promise.all([page.waitForEvent('download'),page.locator('#debug-export').click()]);
     const exported=JSON.parse(fs.readFileSync(await download.path(),'utf8'));
     assert(exported.landmarks&&exported.landmarks.length>=468,'the export has no landmarks');
-    assert(exported.procedures.active.rhinoplasty===100,'the export does not record the procedures');
+    assert(exported.makeup.some(m=>m.product==='velvet'),'the export does not record the makeup');
     await page.locator('#debug-hud').uncheck();
 
-    await page.locator('#procedure-reset').click();
-    await page.locator('#mode-makeup').click();await settle(page);
+    await settle(page);
     assert((await page.evaluate(region,{ids:LIPS})).diff>2,'makeup stopped rendering with the debug overlay on');
     report.debug={dotsOnly,withLabels,narrowed};
     await page.locator('#debug-on').uncheck();
@@ -783,14 +669,6 @@ const LIPS=[61,0,291,17,40,270,91,321];
     await settle(page);
     const top1=await page.evaluate(()=>document.querySelector('#viewport').getBoundingClientRect().top);
     assert.equal(top0,top1,'picking a shade moved the mirror');
-
-    await page.locator('#mode-procedure').click();
-    await page.locator('[data-procedure="lip-filler"]').click();
-    await settle(page);
-    assert(await onScreen(page,'#viewport'),'the mirror is not visible in procedure mode on a phone');
-    assert(await onScreen(page,'#strength'),'the amount slider is off-screen on a phone');
-    await page.locator('#procedure-reset').click();
-    await page.locator('#mode-makeup').click();
     report.phone='mirror and controls share one screen';
     await page.setViewportSize({width:1440,height:960});
 
@@ -813,7 +691,6 @@ const LIPS=[61,0,291,17,40,270,91,321];
     // Regression: stopping the camera loses the WebGL context, and reusing its canvas
     // dropped the next source to the 2D fallback.
     assert.equal(await page.locator('#stage').isVisible(),true,'the photo fell back to the 2D path after a camera session');
-    assert.equal(await page.locator('#webgl-missing').isVisible(),false,'WebGL reported missing after a camera session');
     assert.equal(await page.locator('#freeze').isDisabled(),true,'freeze is offered for a still photo');
     assert((await page.evaluate(region,{ids:LIPS})).diff>4,'makeup did not render on the photo');
     // The photo is shown the right way round. The stage is mirrored in CSS like a
@@ -854,11 +731,8 @@ const LIPS=[61,0,291,17,40,270,91,321];
     await plain.goto(origin,{waitUntil:'domcontentloaded',timeout:60000});
     await plain.locator('#start').click();
     await plain.waitForFunction(()=>window.testLandmarks,null,{timeout:90000});
-    await plain.locator('#mode-procedure').click();
-    await plain.waitForFunction(()=>!document.querySelector('#webgl-missing').hidden,null,{timeout:20000});
-    assert.equal(await plain.locator('#stage').isVisible(),false,'stage shown without WebGL');
-    await plain.locator('#mode-makeup').click();
     await plain.waitForTimeout(300);
+    assert.equal(await plain.locator('#stage').isVisible(),false,'stage shown without WebGL');
     const fallbackPixels=await plain.evaluate(()=>{const c=document.querySelector('#overlay');
       const d=c.getContext('2d').getImageData(0,0,c.width,c.height).data;
       let n=0;for(let i=3;i<d.length;i+=4)if(d[i])n++;return n;});
@@ -1082,12 +956,6 @@ const LIPS=[61,0,291,17,40,270,91,321];
       await app.locator('#compare').click();await app.waitForTimeout(300);c=await calls();
       assert(Array.isArray(last().before)&&typeof last().seam==='number','compare sent no before side and seam');
       await app.locator('#compare').click();
-      // A procedure: amounts for the renderer's warp.
-      await app.locator('#mode-procedure').click();
-      await app.locator('[data-procedure="rhinoplasty"]').click();
-      await setSlider(app,'#strength',100);await app.waitForTimeout(300);c=await calls();
-      assert(Object.entries(last().amounts||{}).some(([k,v])=>k.startsWith('nose')&&v!==0),'the procedure sent no amounts');
-      await app.locator('#mode-makeup').click();
       // Snapshot, freeze and the readout go through the app.
       await app.locator('#snap').click();
       await app.waitForFunction(()=>document.querySelector('#shots-count').textContent==='۱',null,{timeout:5000});

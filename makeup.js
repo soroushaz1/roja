@@ -3,8 +3,8 @@
 // The WebGL stage (stage.js) uploads each mask and decides how the colour meets the
 // skin. Without WebGL, renderFallback() paints the same masks in flat colour on the 2D
 // overlay, so makeup still works on a device that cannot run the stage.
-import {products,layerOrder} from './catalog.js?v=24';
-import {blurInto} from './blur.js?v=24';
+import {products,layerOrder} from './catalog.js?v=25';
+import {blurInto} from './blur.js?v=25';
 export {products};
 
 // MediaPipe's contours. Eye openings and the mouth opening are never painted.
@@ -24,7 +24,6 @@ const eyes=[
 const blushAnchors=[145,374,61,291,234,454,1,33,263];
 const highlightAnchors=[116,117,118,123,345,346,347,352,6,195,0];
 const contourAnchors=[132,361,61,291,122,126,351,355];
-const foreheadAnchors=[54,103,67,109,10,338,297,332,284,9];
 
 // Which landmarks each layer reads, so the debug overlay can pick out the ones in
 // play. roja-check.cjs re-reads every p(N) in this file and fails if one is missing.
@@ -44,8 +43,7 @@ export const landmarksByType={
   brow:[...browAll],
   lipliner:[...lipOuter],
   lipstick:[...lipOuter,...lipInner],
-  gloss:[...lipOuter,...lipInner],
-  texture:[...faceOval,...foreheadAnchors,...eyeUpper,...eyeLower]
+  gloss:[...lipOuter,...lipInner]
 };
 
 /* ---- geometry helpers --------------------------------------------------- */
@@ -348,40 +346,13 @@ const shapes={
       pts.push(...shape);
     }
     return pts;
-  },
-  // Skin-texture areas for the non-surgical procedures.
-  texture(ctx,p,f,spec){
-    if(spec.zone==='skin')return shapes.foundation(ctx,p,f);
-    ctx.fillStyle='#fff';
-    if(spec.zone==='forehead'){
-      // Across the top from one temple to the other, then back along the brows.
-      const top=foreheadAnchors.slice(0,9).map(p);
-      const brows=[...eyes[1].browTop.map(p),p(9),...eyes[0].browTop.slice().reverse().map(p)];
-      const c=centroid(top);
-      const shape=[...scaleAbout(top,c,.92),...brows.map(q=>add(q,f.up,f.face*.02))];
-      ctx.beginPath();polygon(ctx,shape);ctx.fill();
-      return shape;
-    }
-    if(spec.zone==='eyes'){
-      const pts=[];
-      for(const eye of eyes){
-        const outer=p(eye.upper[0]),inner=p(eye.upper[eye.upper.length-1]),width=distance(outer,inner);
-        const away=unit(sub(outer,inner));
-        const c=add(outer,away,width*.3);
-        ellipse(ctx,c,width*.32,width*.42,Math.atan2(f.ex.y,f.ex.x),[[0,1],[.6,.75],[1,0]]);
-        pts.push(add(c,f.ex,-width*.5),add(c,f.ex,width*.5),add(c,f.ey,width*.5),add(c,f.up,width*.5));
-      }
-      return [...pts,...shapes.concealer(ctx,p,f)];
-    }
-    if(spec.zone==='undereye')return shapes.concealer(ctx,p,f);
-    return [];
   }
 };
 
 /* ---- masks -------------------------------------------------------------- */
 // How far each layer's edge is feathered at 100% on the fade slider, in face widths.
 const FEATHER={foundation:.06,concealer:.05,contour:.07,blush:.07,highlighter:.045,eyeshadow:.02,
-  eyeliner:.012,mascara:.004,brow:.02,lipliner:.012,lipstick:.024,gloss:.024,texture:.05};
+  eyeliner:.012,mascara:.004,brow:.02,lipliner:.012,lipstick:.024,gloss:.024};
 
 function makeCanvas(){return document.createElement('canvas');}
 function fit(canvas,w,h){if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;}}
@@ -398,7 +369,7 @@ function boundsOf(points,pad,W,H){
 // Broad, soft layers are painted at half resolution: their edges are feathered far
 // wider than a pixel anyway, and a quarter of the pixels is a quarter of the work.
 // Thin ones (liner, lashes, lip liner, brows, lipstick edges) keep every pixel.
-const HALF=new Set(['foundation','concealer','contour','blush','highlighter','texture']);
+const HALF=new Set(['foundation','concealer','contour','blush','highlighter']);
 
 // One painter per renderer. It owns its scratch canvases and returns the same mask
 // canvas each time, so the caller must use (or upload) it before the next paint.
@@ -495,7 +466,7 @@ export function renderFallback(ctx,specs,landmarks,painter,brush){
     tctx.clearRect(0,0,width,height);tctx.globalCompositeOperation='source-over';tctx.drawImage(mask,0,0,width,height);
     tctx.globalCompositeOperation='source-in';tctx.fillStyle=spec.color;tctx.fillRect(0,0,width,height);
     tctx.globalCompositeOperation='source-over';
-    const soften={foundation:.55,concealer:.5,texture:0,highlighter:.6}[spec.type]??1;
+    const soften={foundation:.55,concealer:.5,highlighter:.6}[spec.type]??1;
     ctx.globalAlpha=Math.min(1,spec.intensity/100*soften);ctx.drawImage(tint,0,0);ctx.globalAlpha=1;
   }
 }
