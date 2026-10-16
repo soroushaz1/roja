@@ -1,11 +1,8 @@
-// Measurements of the face, before and after the procedures on screen.
+// Measurements of the face, for the debug readout and its export.
 //
 // Lengths are given as a share of face width (ear to ear, landmarks 234–454), so
-// they do not change with the distance to the camera. The "after" value moves every
-// landmark through the same displacement field the stage draws with, so the numbers
-// describe exactly the change you see. They describe the picture, not the anatomy:
-// a frontal photo cannot measure depth, and a turned head skews every one of them.
-import {displace} from './deform.js?v=24';
+// they do not change with the distance to the camera. They describe the picture, not
+// the anatomy: a frontal photo cannot measure depth, and a turned head skews every one.
 
 export const metrics=[
   {id:'nose-width', name:'پهنای پرهٔ بینی', span:[64,294]},
@@ -31,16 +28,8 @@ export const measuredLandmarks=[...new Set(metrics.flatMap(m=>[
 
 const PAIRS=[[33,263],[133,362],[61,291],[105,334],[172,397],[50,280],[70,300]];
 
-// Landmark positions in pixels, optionally carried through a displacement field.
-export function points(landmarks,W,H,defs){
-  const out=new Array(landmarks.length),o={x:0,y:0};
-  for(let i=0;i<landmarks.length;i++){
-    let x=landmarks[i].x*W,y=landmarks[i].y*H;
-    if(defs&&defs.length){displace(defs,x,y,o);x+=o.x;y+=o.y;}
-    out[i]={x,y};
-  }
-  return out;
-}
+// Landmark positions in pixels.
+export const points=(landmarks,W,H)=>landmarks.map(l=>({x:l.x*W,y:l.y*H}));
 
 export function measure(pts){
   const d=(a,b)=>Math.hypot(pts[a].x-pts[b].x,pts[a].y-pts[b].y);

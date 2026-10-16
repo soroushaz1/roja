@@ -1,7 +1,6 @@
 // The page behind stats.html: reads the anonymous counts from /api/stats with the key
 // set on the server, and names every item from the site's own catalogue.
 import {products,looks,byProduct} from './catalog.js';
-import {procedures} from './procedures.js';
 import {skincareById} from './skin.js';
 
 const $=id=>document.getElementById(id);
@@ -18,17 +17,18 @@ const shadeById=new Map(products.flatMap(p=>p.shades.map(s=>[s.id,{p,s}])));
 const names={
   shade:id=>{const x=shadeById.get(id);return x?{name:`${x.p.name}، ${x.s.name}`,color:x.s.color}:{name:id};},
   look:id=>({name:looks.find(l=>l.id===id)?.name||(id==='mine'?'استایل‌های ذخیره‌شده':id==='link'?'از لینک فرستاده‌شده':id)}),
-  procedure:id=>({name:procedures.find(p=>p.id===id)?.name||id}),
   buy:key=>{
     const [pid,sid]=key.split(':'), item=byProduct(pid)||skincareById(pid), shade=item?.shades.find(s=>s.variantId===sid);
     return item?{name:`${item.name}، ${shade?.name||sid}`,color:shade?.color}:{name:key};
   },
   share:id=>({name:{shot:'عکس',multi:'تصویر چند رنگ',link:'لینک استایل'}[id]||id}),
-  // From before Roja stopped selling: kept so older days still read.
+  // From before the procedures moved out of Roja (to Roja Clinic) and before Roja
+  // stopped selling: kept so older days still read.
+  procedure:id=>({name:id}),
   order:id=>({name:{whatsapp:'واتس‌اپ',telegram:'تلگرام',share:'فرستادن لیست'}[id]||id})
 };
 names.cart=names.buy;
-const titles={shade:'رنگ‌های پرامتحان',look:'استایل‌ها',procedure:'عمل‌های زیبایی',buy:'باز‌شده در فروشگاه همکار',share:'اشتراک‌گذاری',cart:'افزوده به سبد (پیش از همکاری)',order:'سفارش (پیش از همکاری)'};
+const titles={shade:'رنگ‌های پرامتحان',look:'استایل‌ها',procedure:'عمل‌های زیبایی (پیش از جداشدن)',buy:'باز‌شده در فروشگاه همکار',share:'اشتراک‌گذاری',cart:'افزوده به سبد (پیش از همکاری)',order:'سفارش (پیش از همکاری)'};
 
 try{$('key').value=localStorage.getItem('roja-stats-key')||'';}catch{}
 $('form').onsubmit=e=>{e.preventDefault();load();};
@@ -102,5 +102,5 @@ function render({from,to,rows:all}){
     funnel,
     el('section',{style:{marginBottom:'12px'}},el('h2',{text:'فعالیت روزانه'}),
       el('div',{class:'days'},...[...perDay].map(([d,n])=>el('div',{title:`${day(d)}: ${fa.format(n)}`,style:{height:`${n/peak*100}%`}})))),
-    el('div',{class:'grid'},...['shade','look','buy','procedure','share',...['cart','order'].filter(e=>by[e])].map(list)));
+    el('div',{class:'grid'},...['shade','look','buy','share',...['procedure','cart','order'].filter(e=>by[e])].map(list)));
 }

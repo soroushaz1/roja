@@ -1,17 +1,15 @@
-import {products,categories,finishes,looks,byProduct} from './catalog.js?v=24';
-import {layerSpecs,createMaskPainter,renderFallback,createSmoother,landmarksByType,frameLandmarks,hexToRgb} from './makeup.js?v=24';
-import {createStage,layerModes} from './stage.js?v=24';
-import {controls,regions,controlLandmarks,controlRange,deformers,textureLayers} from './deform.js?v=24';
-import {procedures,byId,amountsFor,resolve,kinds} from './procedures.js?v=24';
-import {renderDebug,nearest} from './debug.js?v=24';
-import {createBrush,brushModes} from './brush.js?v=24';
-import {metrics,measure,points as placed,symmetry,pose as poseOf} from './measure.js?v=24';
-import {CANON,CANON_ASPECT,TRIANGLES} from './facemesh.js?v=24';
-import {createSkinScanner} from './skin-scan.js?v=24';
-import {createSkinPanel} from './skin-panel.js?v=24';
-import {skincareById} from './skin.js?v=24';
-import {count} from './usage.js?v=24';
-import {currentShop,shopUrl,searchWords} from './shops.js?v=24';
+import {products,categories,finishes,looks,byProduct} from './catalog.js?v=25';
+import {layerSpecs,createMaskPainter,renderFallback,createSmoother,landmarksByType,frameLandmarks,hexToRgb} from './makeup.js?v=25';
+import {createStage,layerModes} from './stage.js?v=25';
+import {renderDebug,nearest} from './debug.js?v=25';
+import {createBrush,brushModes} from './brush.js?v=25';
+import {measure,points as placed,symmetry,pose as poseOf} from './measure.js?v=25';
+import {CANON,CANON_ASPECT,TRIANGLES} from './facemesh.js?v=25';
+import {createSkinScanner} from './skin-scan.js?v=25';
+import {createSkinPanel} from './skin-panel.js?v=25';
+import {skincareById} from './skin.js?v=25';
+import {count} from './usage.js?v=25';
+import {currentShop,shopUrl,searchWords} from './shops.js?v=25';
 
 const $=id=>document.getElementById(id);
 // GitHub Pages ignores the ?v= query, and browsers and its CDN keep a page for up to ten
@@ -19,7 +17,7 @@ const $=id=>document.getElementById(id);
 // newer script, which would then look for elements that page does not have. Such a
 // page is loaded afresh, once; if it is still the old one, it says a new version is
 // on its way instead of failing.
-const RELEASE='24';
+const RELEASE='25';
 if(document.documentElement.dataset.release!==RELEASE){
   let tried=null;
   try{tried=sessionStorage.getItem('roja-reloaded');sessionStorage.setItem('roja-reloaded',RELEASE);}catch{}
@@ -33,7 +31,6 @@ if(document.documentElement.dataset.release!==RELEASE){
 }
 const fa=new Intl.NumberFormat('fa-IR');
 const fa1=new Intl.NumberFormat('fa-IR',{minimumFractionDigits:1,maximumFractionDigits:1});
-const fa2=new Intl.NumberFormat('fa-IR',{minimumFractionDigits:2,maximumFractionDigits:2});
 const pct=n=>fa.format(Math.round(n))+'٪';
 const el=(tag,props={},...children)=>{
   const node=document.createElement(tag);
@@ -87,13 +84,13 @@ if(shop)document.querySelectorAll('.shop-name').forEach(n=>{n.textContent=shop.n
 if(shop)$('basket').setAttribute('aria-label',`خرید آرایش روی صورت از ${shop.name}`);
 
 /* ---------- state ------------------------------------------------------- */
-let mode='makeup';                       // makeup | procedure | skin
+let mode='makeup';                       // makeup | skin
 let source=null;                         // {kind:'camera'|'photo', el, width, height, live, version}
 let landmarks=null, poseAngles=null, blendshapes=null;
 let stage=null, stageBroken=false;
 let seam=0.5, seamOn=false, compare=false, pin=null;
 let frozen=false, light='none';
-let masksDirty=true, dirty=true, debugDirty=true, measureDirty=true;
+let masksDirty=true, dirty=true, debugDirty=true;
 
 // Skin products start from a middle shade, not the lightest one: the shade finder or
 // the shopper moves it from there.
@@ -104,19 +101,13 @@ let product=byProduct('velvet');
 let category=product.category;
 const shots=[];
 
-const active=new Map();                  // procedure id -> strength 0..100
-const variants=new Map();                // procedure id -> variant id
-let currentProcedure=null;
-const overrides=Object.fromEntries(controls.map(c=>[c.id,0]));
-let procGroup=null;
-
 const brush=createBrush();
 const brushState={on:false,mode:'blend',size:10,strength:{},target:'all'};
 for(const m of brushModes)brushState.strength[m.id]=m.strength;
 let brushPointer=null;
 
 const painter=createMaskPainter();
-const debug={on:false,points:true,mesh:false,contours:false,axes:false,masks:false,field:false,strokes:false,
+const debug={on:false,points:true,mesh:false,contours:false,axes:false,masks:false,strokes:false,
   labelSize:10,highlight:true,onlyActive:false,find:null,hud:false,inspect:false};
 let topology=null, maskView=null;
 const maskTint=document.createElement('canvas');
@@ -165,10 +156,9 @@ function faceWidthPx(){
   const {w,h}=frameSize();
   return Math.hypot((landmarks[454].x-landmarks[234].x)*w,(landmarks[454].y-landmarks[234].y)*h);
 }
-function invalidate({masks=false,measure=false}={}){
+function invalidate({masks=false}={}){
   dirty=true;debugDirty=true;
   if(masks)masksDirty=true;
-  if(measure)measureDirty=true;
 }
 
 let toastTimer;
@@ -375,22 +365,17 @@ async function sendLookLink(){
 // A link into the mirror, from a shared look or one of the site's own pages:
 //   #look=…        that look on the face
 //   #product=velvet  that product, on the face
-//   #procedure=rhinoplasty  that procedure, at its usual strength
 //   #skin          the skin check
 // Taken out of the address once used, so a reload does not apply it again over later
 // changes. Returns whether there was one.
 function lookFromLink(){
-  const m=/^#(look|product|procedure|skin)(?:=(.*))?$/.exec(location.hash);
+  const m=/^#(look|product|skin)(?:=(.*))?$/.exec(location.hash);
   if(!m)return false;
   history.replaceState(null,'',location.pathname+location.search);
   const [,kind,value='']=m;
   if(kind==='skin'){setMode('skin');return true;}
   if(kind==='product'){
     if(byProduct(value)){setMode('makeup');selectProduct(value);}
-    return true;
-  }
-  if(kind==='procedure'){
-    if(byId(value)){setMode('procedure');activateProcedure(value);showProcedure(value);}
     return true;
   }
   let raw='';try{raw=decodeURIComponent(value);}catch{}
@@ -557,71 +542,13 @@ function pinnedStates(){
   return states;
 }
 
-/* ---------- procedures -------------------------------------------------- */
-const procedureAmounts=()=>amountsFor(active,overrides,variants);
-const anyProcedure=()=>[...active.values()].some(v=>v>0)||controls.some(c=>overrides[c.id]!==0);
-
-function showProcedure(id){
-  currentProcedure=id;
-  const procedure=byId(id);
-  $('quick-procedure').hidden=!procedure||mode!=='procedure';
-  $('procedure-reset').hidden=!anyProcedure();
-  $('procedure-facts').hidden=!procedure;
-  $('variant-field').hidden=!procedure?.variants;
-  if(!procedure){
-    $('procedure-kicker').textContent='عمل‌های زیبایی';
-    $('procedure-title').textContent='یک عمل را انتخاب کن';
-    $('procedure-summary').textContent='از نوار زیر آینه عملی را بزن تا نتیجهٔ تقریبی آن روی صورتت ساخته شود. برای دیدن چند عمل با هم، «ترکیب چند عمل با هم» را روشن کن.';
-    $('procedure-note').textContent='';
-    renderActiveList();
-    return;
-  }
-  const {kind,variant}=resolve(procedure,variants.get(id));
-  const strength=active.get(id)||0;
-  $('procedure-kicker').textContent=`عمل‌های زیبایی · ${regions.find(r=>r.id===procedure.region)?.name}`;
-  $('procedure-title').textContent=procedure.name;
-  $('procedure-summary').textContent=procedure.summary;
-  $('procedure-note').textContent=procedure.note;
-  $('fact-kind').textContent=kinds[kind];
-  $('fact-lasts').textContent=procedure.lasts;
-  $('fact-recovery').textContent=procedure.recovery;
-  $('variant-options').replaceChildren(...(procedure.variants||[]).map(v=>el('button',{type:'button',role:'radio',
-    'aria-checked':String(v.id===variant?.id),data:{variant:v.id},text:v.name,
-    onclick:()=>{variants.set(id,v.id);showProcedure(id);invalidate({masks:true,measure:true});}})));
-  $('strength-label').textContent=`میزان ${procedure.name}`;
-  setRange('strength',strength);$('strength-amount').textContent=pct(strength);
-  renderActiveList();
-}
-function renderActiveList(){
-  $('active-list').replaceChildren(...[...active].filter(([,v])=>v>0).map(([id,v])=>{
-    const procedure=byId(id);
-    return el('button',{type:'button','aria-current':String(id===currentProcedure),onclick:()=>showProcedure(id),
-      title:'انتخاب برای تنظیم'},procedure.name,' ',el('b',{text:pct(v)}));
-  }));
-}
-// One procedure at a time unless "combine" is on: picking another replaces the one
-// shown, which is what most people expect. Combined, each one picked is added.
-const COMBINE='roja-combine';
-try{$('combine-procedures').checked=localStorage.getItem(COMBINE)==='1';}catch{}
-function activateProcedure(id){
-  if(active.has(id))return;
-  if(!$('combine-procedures').checked)active.clear();
-  setStrength(id,60);
-}
-function setStrength(id,value){
-  if(value>0){active.set(id,value);count('procedure',id);}else active.delete(id);
-  $('procedure-reset').hidden=!anyProcedure();
-  buildTray();renderActiveList();updateSeam();invalidate({masks:true,measure:true});
-}
-
 /* ---------- the seam ---------------------------------------------------- */
 function seamLabels(){
-  if(mode==='procedure')return ['پیش از عمل','پس از عمل'];
   if(pin)return [shadeOf(byProduct(pin.product),pin.shade).name,selected().name];
   return ['بدون آرایش','با آرایش'];
 }
 function updateSeam(){
-  seamOn=!!source&&(!!stage||!!source.native)&&(mode==='procedure'?anyProcedure():(compare||!!pin));
+  seamOn=!!source&&(!!stage||!!source.native)&&(compare||!!pin);
   $('seam').hidden=!seamOn;
   $('seam').classList.toggle('passive',brushActive());
   if(seamOn){
@@ -667,7 +594,6 @@ function buildTray(){
   const groups=$('tray-groups'),chips=$('tray-chips');
   groups.replaceChildren();chips.replaceChildren();
   if(mode==='makeup'){
-    $('tray').setAttribute('aria-label','انتخاب محصول');
     for(const cat of categories){
       groups.append(el('button',{type:'button','aria-pressed':String(cat.id===category),data:{group:cat.id},text:cat.name,
         title:cat.hint,onclick:()=>{category=cat.id;updateTrayState();chips.querySelector(`[data-sep="${cat.id}"]`)?.scrollIntoView({inline:'start',block:'nearest'});}}));
@@ -680,23 +606,6 @@ function buildTray(){
     }
     updateTrayState();
     chips.querySelector('[aria-pressed=true]')?.scrollIntoView({block:'nearest',inline:'nearest'});
-  }else{
-    $('tray').setAttribute('aria-label','انتخاب عمل');
-    for(const region of regions){
-      const list=procedures.filter(p=>p.region===region.id);
-      if(!list.length)continue;
-      groups.append(el('button',{type:'button','aria-pressed':String(region.id===procGroup),data:{group:region.id},text:region.name,
-        onclick:()=>{procGroup=region.id;groups.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.group===region.id)));
-          chips.querySelector(`[data-sep="${region.id}"]`)?.scrollIntoView({inline:'start',block:'nearest'});}}));
-      chips.append(el('span',{class:'tray-sep',data:{sep:region.id},text:region.name}));
-      for(const procedure of list){
-        const strength=active.get(procedure.id)||0;
-        const b=el('button',{class:'chip',type:'button',data:{procedure:procedure.id},'aria-pressed':String(strength>0)},procedure.name);
-        if(strength>0)b.append(el('span',{class:'on',text:pct(strength)}));
-        b.onclick=()=>{activateProcedure(procedure.id);showProcedure(procedure.id);};
-        chips.append(b);
-      }
-    }
   }
 }
 function updateTrayState(){
@@ -720,7 +629,6 @@ function statusText(){
     return 'کمی مستقیم‌تر به دوربین نگاه کن تا نتیجه دقیق‌تر شود.';
   if(finder.state==='sampling')return 'بی‌حرکت بمان؛ رنگ پوست در حال اندازه‌گیری است…';
   if(mode==='skin')return 'تحلیل پوست: صورت بدون آرایش، روبه‌روی نور روز.';
-  if(mode==='procedure')return anyProcedure()?'مرز روی تصویر را بکش تا پیش و پس از عمل را مقایسه کنی.':'یک عمل را از نوار زیر آینه انتخاب کن.';
   if(brushActive()){
     const m=brushModes.find(x=>x.id===brushState.mode);
     return `روی تصویر بکش: ${m.name}. ${frozen||source.kind==='photo'?'':'برای دقت بیشتر تصویر را ثابت کن.'}`;
@@ -735,22 +643,17 @@ function setMode(next){
   // The tour is about the makeup controls; leaving them ends it.
   if(tourAt>=0&&mode!=='makeup')endTour();
   $('mode-makeup').setAttribute('aria-selected',String(mode==='makeup'));
-  $('mode-procedure').setAttribute('aria-selected',String(mode==='procedure'));
   $('mode-skin').setAttribute('aria-selected',String(mode==='skin'));
   $('panel-makeup').hidden=mode!=='makeup';
-  $('panel-procedure').hidden=mode!=='procedure';
   $('panel-skin').hidden=mode!=='skin';
   $('quick-makeup').hidden=mode!=='makeup';
-  $('quick-procedure').hidden=mode!=='procedure'||!currentProcedure;
   $('tray').hidden=$('quick').hidden=mode==='skin';
   $('brush-toggle').hidden=mode!=='makeup';
   $('compare').hidden=$('light-toggle').hidden=mode==='skin';
   if(mode==='skin'){$('light-menu').hidden=true;$('light-toggle').setAttribute('aria-expanded','false');}
-  $('badge').hidden=mode!=='procedure'||!source;
-  $('badge-text').textContent='شبیه‌سازی تصویری، نه نتیجهٔ قطعی';
   if(mode!=='makeup'&&brushState.on)setBrush(false);
   buildTray();updateSeam();
-  invalidate({masks:true,measure:true});
+  invalidate({masks:true});
   status(statusText());
 }
 
@@ -758,7 +661,7 @@ function setMode(next){
 function ensureStage(){
   if(!stage&&!stageBroken){
     stage=createStage($('stage'));
-    if(!stage){stageBroken=true;$('webgl-missing').hidden=false;}
+    if(!stage)stageBroken=true;
     else{masksDirty=true;queueMicrotask(updateSeam);}
   }
   return stage;
@@ -781,28 +684,19 @@ function stageLayer(spec,face){
     shimmer:(f.shimmer||0)*Math.min(1,intensity*1.6),
     smooth:spec.mode==='foundation'?(f.smooth??.4)*Math.min(1,.45+intensity):0,radius:Math.max(2,face*.03),radiusK:.03};
 }
-function textureLayer(t,face){
-  return {key:t.key,color:[1,1,1],amount:1,mode:layerModes.smooth,detail:0,gloss:0,matte:0,shimmer:0,
-    smooth:t.smooth,bright:t.bright||0,radius:Math.max(2,face*.035),radiusK:.035};
-}
 // What the stage should draw right now: the "after" side, and the "before" side
 // when the seam is showing.
 function plan(){
   // The skin check looks at the bare face.
-  if(mode==='skin')return {after:[],before:null,textures:[],amounts:null};
-  if(mode==='makeup'){
-    const after=layerSpecs(makeupState);
-    let before=null;
-    if(pin)before=layerSpecs(pinnedStates());
-    else if(compare)before=[];
-    return {after,before,textures:[],amounts:null};
-  }
-  const makeup=$('with-makeup').checked?layerSpecs(makeupState):[];
-  const amounts=procedureAmounts();
-  return {after:makeup,before:anyProcedure()?makeup:null,textures:textureLayers(amounts),amounts};
+  if(mode==='skin')return {after:[],before:null};
+  const after=layerSpecs(makeupState);
+  let before=null;
+  if(pin)before=layerSpecs(pinnedStates());
+  else if(compare)before=[];
+  return {after,before};
 }
 const TYPE_COLOR={foundation:'#E0B48C',concealer:'#F5D7B2',contour:'#8E6E5E',blush:'#FF6F91',highlighter:'#FFF1B8',
-  eyeshadow:'#B388FF',eyeliner:'#40C4FF',mascara:'#00E5FF',brow:'#FFAB40',lipliner:'#FF5252',lipstick:'#FF1744',gloss:'#FF80AB',texture:'#69F0AE'};
+  eyeshadow:'#B388FF',eyeliner:'#40C4FF',mascara:'#00E5FF',brow:'#FFAB40',lipliner:'#FF5252',lipstick:'#FF1744',gloss:'#FF80AB'};
 // Masks are painted in the face's own front-on space (facemesh.js) and the stage
 // carries them onto the live face each frame, so they are repainted only when what is
 // on the face changes (a product, a setting, a brush stroke), never because it moved.
@@ -812,7 +706,6 @@ const maskCrop=document.createElement('canvas');
 function maskSpecs(p){
   const specs=new Map();
   for(const s of [...p.after,...(p.before||[])])specs.set(s.key,s);
-  for(const t of p.textures)specs.set(t.key,{key:t.key,type:'texture',zone:t.zone,fade:60});
   return specs;
 }
 function rebuildMasks(p){
@@ -820,7 +713,7 @@ function rebuildMasks(p){
   const specs=maskSpecs(p);
   const cx=maskCrop.getContext('2d',{willReadFrequently:!!source?.native});
   for(const spec of specs.values()){
-    const canvas=painter.paint(spec,canonLandmarks,FACE_W,FACE_H,spec.type==='texture'?null:maps);
+    const canvas=painter.paint(spec,canonLandmarks,FACE_W,FACE_H,maps);
     // Only the painted part is uploaded; the stage treats the rest as empty.
     const b=painter.box,W=canvas.width,H=canvas.height;
     const x0=Math.floor(b.x*W),y0=Math.floor(b.y*H),x1=Math.ceil((b.x+b.w)*W),y1=Math.ceil((b.y+b.h)*H);
@@ -853,7 +746,7 @@ function paintMaskView(p){
   const mv=maskView.getContext('2d'),t=maskTint.getContext('2d');
   const maps=brush.maps(landmarks,w,h);
   for(const spec of maskSpecs(p).values()){
-    const canvas=painter.paint(spec,landmarks,w,h,spec.type==='texture'?null:maps);
+    const canvas=painter.paint(spec,landmarks,w,h,maps);
     t.globalCompositeOperation='source-over';t.clearRect(0,0,w,h);t.drawImage(canvas,0,0,w,h);
     t.globalCompositeOperation='source-in';t.fillStyle=TYPE_COLOR[spec.type]||'#fff';t.fillRect(0,0,w,h);
     mv.drawImage(maskTint,0,0);
@@ -879,8 +772,8 @@ function draw(now=performance.now()){
     const ok=gl.draw({
       source:sync?shown:source.el,width:w,height:h,
       version:sync?`s${shownVersion}`:source.version,live:source.live&&!sync,landmarks,
-      after:{layers:[...p.after.map(s=>stageLayer(s,face)),...p.textures.map(t=>textureLayer(t,face))],amounts:p.amounts},
-      before:p.before?{layers:p.before.map(s=>stageLayer(s,face)),amounts:null}:null,
+      after:{layers:p.after.map(s=>stageLayer(s,face))},
+      before:p.before?{layers:p.before.map(s=>stageLayer(s,face))}:null,
       seam:seamOn?1-seam:null,grade:mode==='skin'?null:lights.find(l=>l.id===light).grade,
       probes:landmarks?probes():null,time:now/1000
     });
@@ -908,24 +801,13 @@ function draw(now=performance.now()){
 function ctxClear(){octx.clearRect(0,0,overlay.width,overlay.height);}
 
 // The landmarks driving what is on screen right now: the contours of each product
-// that is switched on, or the anchors of every control a procedure is moving.
+// that is switched on.
 function activeLandmarks(){
   const set=new Set(frameLandmarks);
   if(mode==='skin')return set;
-  if(mode==='makeup'){
-    for(const item of products)
-      if(makeupState[item.id].enabled)
-        for(const index of landmarksByType[item.type]||[])set.add(index);
-    return set;
-  }
-  const amounts=procedureAmounts();
-  for(const control of controls)
-    if(amounts[control.id])
-      for(const index of controlLandmarks[control.id]||[])set.add(index);
-  if($('with-makeup').checked)
-    for(const item of products)
-      if(makeupState[item.id].enabled)
-        for(const index of landmarksByType[item.type]||[])set.add(index);
+  for(const item of products)
+    if(makeupState[item.id].enabled)
+      for(const index of landmarksByType[item.type]||[])set.add(index);
   return set;
 }
 
@@ -942,39 +824,12 @@ function drawDebug(){
   const settings=JSON.stringify({...debug,hud:0,inspect:0})+[...set].join()+brush.version+mode+(masksDirty?1:0);
   if(landmarks===debugDrawn&&settings===debugSettings&&!debugDirty)return;
   debugDrawn=landmarks;debugSettings=settings;debugDirty=false;
-  const amounts=mode==='procedure'?procedureAmounts():null;
   renderDebug(debugCtx,landmarks,{...debug,active:set,topology,
-    defs:debug.field&&landmarks&&amounts?deformers(landmarks,w,h,amounts):null,
     masks:debug.masks&&maskView?maskView:null,
     strokes:debug.strokes&&landmarks?brush.outlines(landmarks,w,h):null});
   $('debug-count').textContent=set.size>frameLandmarks.length
     ? `${fa.format(set.size)} نقطه در این لحظه درگیرند.`
-    : 'هیچ محصول یا عملی فعال نیست.';
-}
-
-/* ---------- measurements ------------------------------------------------ */
-let lastMeasure=0;
-function renderMeasure(now){
-  if(mode!=='procedure'||!measureDirty||now-lastMeasure<180)return;
-  lastMeasure=now;measureDirty=false;
-  const table=$('measure-table');
-  if(!landmarks){table.replaceChildren(el('span',{class:'empty',text:'صورت روی آینه نیست.'}));return;}
-  const {w,h}=frameSize();
-  const amounts=procedureAmounts();
-  const before=measure(placed(landmarks,w,h));
-  const after=measure(placed(landmarks,w,h,anyProcedure()?deformers(landmarks,w,h,amounts):null));
-  const cells=[el('span',{class:'h',text:'اندازه'}),el('span',{class:'h',text:'پیش'}),el('span',{class:'h',text:'پس'}),el('span',{class:'h',text:'تغییر'})];
-  const format=m=>m.unit==='×'?fa2.format(m.value):m.unit==='°'?fa1.format(m.value)+'°':fa1.format(m.value)+'٪';
-  for(const metric of metrics){
-    const a=before[metric.id],b=after[metric.id];
-    const change=metric.id==='canthal'?b.value-a.value:(b.value-a.value)/(Math.abs(a.value)||1)*100;
-    const moved=Math.abs(change)>=(metric.id==='canthal'?.3:.5);
-    const cls=moved?'changed':'';
-    const sign=change>0?'+':change<0?'−':'';
-    cells.push(el('span',{class:cls,text:metric.name}),el('span',{class:cls,text:format(a)}),el('span',{class:cls,text:format(b)}),
-      el('span',{class:`${cls} ${moved?(change>0?'up':'down'):''}`,text:moved?(metric.id==='canthal'?`${sign}${fa1.format(Math.abs(change))}°`:`${sign}${fa.format(Math.round(Math.abs(change)))}٪`):'—'}));
-  }
-  table.replaceChildren(...cells);
+    : 'هیچ محصولی فعال نیست.';
 }
 
 /* ---------- debug readout ----------------------------------------------- */
@@ -982,9 +837,7 @@ const EXPRESSIONS={jawOpen:'باز بودن دهان',mouthSmileLeft:'لبخند
   eyeBlinkRight:'پلک (راست)',browInnerUp:'بالا رفتن ابرو',browDownLeft:'اخم (چپ)',browDownRight:'اخم (راست)',mouthPucker:'غنچه‌کردن لب'};
 function debugStats(){
   const {w,h}=frameSize();
-  const specs=mode==='makeup'?layerSpecs(makeupState):plan().after;
-  const amounts=mode==='procedure'?procedureAmounts():null;
-  const defs=landmarks&&amounts?deformers(landmarks,w,h,amounts).length:0;
+  const specs=plan().after;
   const pts=landmarks?placed(landmarks,w,h):null;
   const top=(blendshapes||[]).filter(([n])=>n!=='_neutral').sort((a,b)=>b[1]-a[1]).slice(0,3);
   return [
@@ -1001,7 +854,7 @@ function debugStats(){
     ['پهنای صورت',landmarks?`${Math.round(faceWidthPx())} px`:'—'],
     ['زاویهٔ سر',poseAngles?`yaw ${poseAngles.yaw.toFixed(1)}° · pitch ${poseAngles.pitch.toFixed(1)}° · roll ${poseAngles.roll.toFixed(1)}°`:'—'],
     ['تقارن',pts?`${symmetry(pts).toFixed(0)} / 100`:'—'],
-    ['لایه‌ها',`${specs.length} makeup · ${defs} deformers · ${brush.count} strokes`],
+    ['لایه‌ها',`${specs.length} makeup · ${brush.count} strokes`],
     ['حالت چهره',top.length?top.map(([n,s])=>`${EXPRESSIONS[n]||n} ${s.toFixed(2)}`).join('، '):'—'],
     ['مرورگر',`${iOS?'iOS · ':''}${(ua.match(/(CriOS|FxiOS|EdgiOS|Edg|OPR|Chrome|Firefox|Version)\/[\d.]+/)||[''])[0]}${inApp?' · in-app':''}`],
     ['آخرین خطا',perf.lastError||'—']
@@ -1026,16 +879,14 @@ function updateHud(now){
 }
 function exportData(){
   const {w,h}=frameSize();
-  const amounts=procedureAmounts();
   return {
-    app:'roja',version:13,time:new Date().toISOString(),
+    app:'roja',version:14,time:new Date().toISOString(),
     frame:{width:w,height:h,source:source?.kind||null,frozen},
     landmarks:landmarks?landmarks.map(l=>[+l.x.toFixed(5),+l.y.toFixed(5),+(l.z||0).toFixed(5)]):null,
     pose:poseAngles,blendshapes:blendshapes?Object.fromEntries(blendshapes.map(([n,s])=>[n,+s.toFixed(4)])):null,
     measurements:landmarks?measure(placed(landmarks,w,h)):null,
     symmetry:landmarks?symmetry(placed(landmarks,w,h)):null,
     makeup:layerSpecs(makeupState).map(s=>({product:s.product,zone:s.zone||null,color:s.color,intensity:s.intensity,fade:s.fade,finish:s.finish,style:s.style||null})),
-    procedures:{active:Object.fromEntries(active),variants:Object.fromEntries(variants),amounts:Object.fromEntries(Object.entries(amounts).filter(([,v])=>v))},
     brushStrokes:brush.count
   };
 }
@@ -1106,7 +957,7 @@ function onTracker(d){
     else if(wantSkin&&!d.landmarks)onSkin(null);
     $('guide').hidden=!!landmarks;
     status(landmarks||source.kind==='photo'?statusText():'صورت پیدا نشد. کمی روبه‌روی دوربین و در نور بیشتر قرار بگیر.');
-    invalidate({measure:true});
+    invalidate();
   }else if(d.type==='error'){
     busy=false;inFlight?.close();inFlight=null;
     perf.lastError=`${d.stage||'tracker'}: ${d.message||''}`;
@@ -1118,7 +969,7 @@ function onTracker(d){
 function ensureTracker(){
   if(tracker||trackerStarting)return;
   let w=null;
-  try{w=new Worker(new URL(`face-worker.js?v=24${gpuQuery}`,import.meta.url));}catch(e){perf.lastError=`worker: ${e.message}`;}
+  try{w=new Worker(new URL(`face-worker.js?v=25${gpuQuery}`,import.meta.url));}catch(e){perf.lastError=`worker: ${e.message}`;}
   if(!w){useTracker('page','no worker');return;}
   ready=false;busy=false;
   tracker={kind:'worker',post:(m,transfer)=>w.postMessage(m,transfer),close:()=>w.terminate()};
@@ -1138,7 +989,7 @@ async function useTracker(kind,reason){
   const token=++trackerGeneration;
   try{
     const Vision=await import('./vendor/vision_bundle.mjs');
-    await import('./face-core.js?v=24');
+    await import('./face-core.js?v=25');
     const core=self.rojaFaceCore(Vision,new URL('./',import.meta.url).href);
     const found=await core.init('CPU',(loaded,total)=>{if(token===trackerGeneration)onTracker({type:'progress',loaded,total});});
     if(token!==trackerGeneration){core.close();return;}
@@ -1182,7 +1033,6 @@ function goLive(){
   $('toolbar').hidden=false;$('stop').disabled=false;
   $('stop').lastChild.textContent=source.kind==='photo'?'بستن عکس':'خاموش‌کردن';
   $('guide').hidden=false;
-  $('badge').hidden=mode!=='procedure';
   landmarks=null;poseAngles=null;photoPasses=0;
   overlay.width=source.width;overlay.height=source.height;
   enableTools(ready||!!source.native);
@@ -1190,7 +1040,7 @@ function goLive(){
   if(!source.native)ensureTracker();
   native?.keepScreenOn?.(true);
   cancelAnimationFrame(raf);raf=requestAnimationFrame(frame);
-  updateSeam();invalidate({masks:true,measure:true});
+  updateSeam();invalidate({masks:true});
   setTimeout(startTour,1200);
 }
 
@@ -1207,14 +1057,13 @@ function stop(message='دوربین خاموش شد.'){
   // lost context back forever; the next source needs a fresh canvas.
   if(stage){stage.dispose();stage=null;const fresh=$('stage').cloneNode(false);$('stage').replaceWith(fresh);}
   stageBroken=false;$('stage').hidden=true;video.style.visibility='';photo.hidden=true;
-  $('webgl-missing').hidden=true;
   debugCanvas.hidden=true;debugDrawn=null;
   viewport.classList.remove('live');
   ctxClear();
   $('welcome').hidden=false;$('start').disabled=false;
   $('start').lastChild.textContent='روشن‌کردن دوربین';
   $('stop').disabled=true;$('toolbar').hidden=true;$('seam').hidden=true;seamOn=false;
-  $('guide').hidden=true;$('badge').hidden=true;$('hud').hidden=true;$('loading').hidden=true;$('brush-cursor').hidden=true;$('tap-start').hidden=true;
+  $('guide').hidden=true;$('hud').hidden=true;$('loading').hidden=true;$('brush-cursor').hidden=true;$('tap-start').hidden=true;
   if(brushState.on)setBrush(false);
   enableTools(false);
   if(finder.state==='sampling'){finder.state='idle';wantSkin=false;renderFinder();}
@@ -1303,7 +1152,7 @@ window.addEventListener('resize',()=>placeNative());
 function drawNative(p){
   if(masksDirty){const t=performance.now();rebuildMasks(p);perf.maskMs=ema(perf.maskMs,performance.now()-t);}
   const json=JSON.stringify({
-    after:[...p.after.map(s=>stageLayer(s,0)),...p.textures.map(t=>textureLayer(t,0))],amounts:p.amounts,
+    after:p.after.map(s=>stageLayer(s,0)),
     before:p.before?p.before.map(s=>stageLayer(s,0)):null,
     seam:seamOn?1-seam:null,grade:lights.find(l=>l.id===light).grade
   });
@@ -1351,7 +1200,7 @@ window.rojaNative={
     if(extras!==nativeExtras){nativeExtras=extras;native.mirrorExtras(extras);}
     $('guide').hidden=!!landmarks;
     status(landmarks?statusText():'صورت پیدا نشد. کمی روبه‌روی دوربین و در نور بیشتر قرار بگیر.');
-    invalidate({measure:true});
+    invalidate();
   },
   onError(name,message){
     if(!nativeStarting&&!source?.native)return;
@@ -1386,7 +1235,7 @@ video.addEventListener('resize',()=>{
   if(video.videoWidth===source.width&&video.videoHeight===source.height)return;
   source.width=video.videoWidth;source.height=video.videoHeight;
   overlay.width=source.width;overlay.height=source.height;
-  invalidate({masks:true,measure:true});
+  invalidate({masks:true});
   if(seamOn)placeSeam();
 });
 // Some browsers only start a camera picture from a tap on the page itself.
@@ -1428,7 +1277,6 @@ function frame(now){
   if(source.native?(dirty||masksDirty):((source.live&&!syncing())||dirty||masksDirty||hasShimmer()))draw(now);
   drawDebug();
   if(mode==='skin')skinPanel.tick(now);
-  renderMeasure(now);
   updateHud(now);
 }
 function hasShimmer(){return plan().after.some(s=>(FINISH[s.finish]?.shimmer||0)>0);}
@@ -1579,8 +1427,7 @@ function brandMark(x,w,s){
 async function snapshot(){
   const c=await capture();
   if(!c){if(source)toast('عکس گرفته نشد. دوباره امتحان کن.');return;}
-  const label=mode==='skin'?'تحلیل پوست':mode==='procedure'
-    ?([...active.keys()].map(id=>byId(id).short).join('، ')||'بدون عمل')
+  const label=mode==='skin'?'تحلیل پوست'
     :(products.filter(p=>makeupState[p.id].enabled).map(p=>`${p.name} ${shadeOf(p,makeupState[p.id].shade).name}`).join('، ')||'بدون آرایش');
   const shot=await addShot(c,label);
   if(!shot)return;
@@ -1861,7 +1708,6 @@ paintThemeButton();
 
 /* ---------- wiring ------------------------------------------------------ */
 $('mode-makeup').onclick=()=>setMode('makeup');
-$('mode-procedure').onclick=()=>setMode('procedure');
 $('mode-skin').onclick=()=>setMode('skin');
 
 $('shades').addEventListener('keydown',e=>{
@@ -1929,51 +1775,6 @@ $('app-open').onclick=$('welcome-app-open').onclick=()=>$('app-dialog').showModa
 $('app-close').onclick=()=>$('app-dialog').close();
 for(const dialog of [$('buy'),$('gallery'),$('app-dialog'),$('multi')])dialog.addEventListener('click',e=>{if(e.target===dialog)dialog.close();});
 
-$('strength').oninput=()=>{
-  const value=Number($('strength').value);
-  $('strength-amount').textContent=pct(value);
-  if(currentProcedure)setStrength(currentProcedure,value);
-};
-$('procedure-reset').onclick=()=>{
-  active.clear();
-  for(const control of controls){
-    overrides[control.id]=0;
-    const input=$(`fine-${control.id}`);if(input)setRange(input.id,0);
-    const amount=$(`fine-${control.id}-amount`);if(amount)amount.textContent=fa.format(0);
-  }
-  showProcedure(null);buildTray();updateSeam();invalidate({masks:true,measure:true});
-};
-$('with-makeup').onchange=()=>{updateSeam();invalidate({masks:true});};
-// Turned off with several on: keep the one being looked at.
-$('combine-procedures').onchange=()=>{
-  const on=$('combine-procedures').checked;
-  try{localStorage.setItem(COMBINE,on?'1':'0');}catch{}
-  if(!on&&active.size>1){
-    const keep=active.has(currentProcedure)?currentProcedure:[...active.keys()].pop();
-    const value=active.get(keep);
-    active.clear();setStrength(keep,value);showProcedure(keep);
-  }
-  toast(on?'عمل‌ها با هم ترکیب می‌شوند: هر عملی که بزنی به قبلی‌ها اضافه می‌شود.':'هر بار یک عمل: عمل تازه جای قبلی را می‌گیرد.');
-};
-for(const region of regions){
-  const list=controls.filter(c=>c.region===region.id);
-  $('fine-controls').append(el('p',{class:'fine-group',text:region.name}));
-  for(const control of list){
-    const [min,max]=controlRange(control);
-    const amount=el('output',{id:`fine-${control.id}-amount`,text:fa.format(0)});
-    const label=el('label',{class:'field',for:`fine-${control.id}`,title:control.help},`${control.name} `,amount);
-    const input=el('input',{id:`fine-${control.id}`,type:'range',min:String(min),max:String(max),step:'1',value:'0',data:{fine:control.id},'aria-describedby':`fine-${control.id}-help`});
-    paintRange(input);
-    input.oninput=()=>{
-      overrides[control.id]=Number(input.value);
-      amount.textContent=fa.format(Number(input.value));
-      $('procedure-reset').hidden=!anyProcedure();
-      updateSeam();invalidate({masks:true,measure:true});
-    };
-    $('fine-controls').append(label,input,el('p',{class:'help',id:`fine-${control.id}-help`,text:control.help}));
-  }
-}
-
 /* brush controls */
 $('brush-on').onchange=()=>setBrush($('brush-on').checked);
 $('brush-toggle').onclick=()=>setBrush(!brushState.on);
@@ -2028,10 +1829,7 @@ viewport.addEventListener('pointercancel',endStroke);
 viewport.addEventListener('pointerleave',()=>{$('brush-cursor').hidden=true;$('inspect-tip').hidden=true;});
 
 /* the mirror's toolbar */
-$('compare').onclick=()=>{
-  if(mode==='procedure'){toast(anyProcedure()?'مرز را روی تصویر بکش.':'اول یک عمل را انتخاب کن.');return;}
-  toggleCompare();
-};
+$('compare').onclick=toggleCompare;
 $('freeze').onclick=toggleFreeze;
 $('snap').onclick=snapshot;
 $('light-toggle').onclick=()=>{
@@ -2050,7 +1848,7 @@ document.addEventListener('click',e=>{
 
 /* debug */
 $('debug-on').onchange=()=>{debug.on=$('debug-on').checked;viewport.classList.toggle('inspecting',debug.on&&debug.inspect);invalidate({masks:debug.masks});};
-for(const key of ['points','mesh','contours','axes','masks','field','strokes','hud','inspect'])
+for(const key of ['points','mesh','contours','axes','masks','strokes','hud','inspect'])
   $(`debug-${key}`).onchange=()=>{
     debug[key]=$(`debug-${key}`).checked;
     viewport.classList.toggle('inspecting',debug.on&&debug.inspect);
@@ -2071,8 +1869,7 @@ function setFind(index){
   if(debug.find===null){info.textContent='';}
   else if(landmarks&&landmarks[debug.find]){
     const {w,h}=frameSize(),l=landmarks[debug.find];
-    const uses=Object.entries(landmarksByType).filter(([,list])=>list.includes(debug.find)).map(([t])=>t)
-      .concat(Object.entries(controlLandmarks).filter(([,list])=>list.includes(debug.find)).map(([c])=>c));
+    const uses=Object.entries(landmarksByType).filter(([,list])=>list.includes(debug.find)).map(([t])=>t);
     info.textContent=`نقطهٔ ${fa.format(debug.find)}: x ${fa1.format(l.x*w)} ، y ${fa1.format(l.y*h)}${uses.length?` · در ${uses.join('، ')}`:''}`;
   }else info.textContent=`نقطهٔ ${fa.format(debug.find)}`;
   invalidate();

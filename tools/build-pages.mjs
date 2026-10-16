@@ -1,18 +1,17 @@
 // Builds the site's static pages from the same data the mirror uses, so a search engine
-// (and anyone without a camera) can find and read them: one page per procedure and per
-// makeup product, an index of each, the questions people ask, the privacy note, and the
-// sitemap. Each page leads into the mirror with that item already chosen.
+// (and anyone without a camera) can find and read them: one page per makeup product,
+// an index of them, the questions people ask, the privacy note, the page for shops, and
+// the sitemap. Each page leads into the mirror with that item already chosen.
 //
 //   node tools/build-pages.mjs           # writes the pages
 //   node tools/build-pages.mjs --check   # fails if a committed page is out of date
 //
 // The output is committed, like the rest of the site: there is still no build step to
-// serve it. Run this after changing procedures.js, catalog.js or the text below.
+// serve it. Run this after changing catalog.js or the text below.
 import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {products,categories,finishes} from '../catalog.js';
-import {procedures,regions,kinds} from '../procedures.js';
 import {skincare} from '../skin.js';
 import {contact} from '../shops.js';
 
@@ -22,7 +21,7 @@ const check=process.argv.includes('--check');
 const fa=new Intl.NumberFormat('fa-IR');
 
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-// Pages sit in folders (procedures/rhinoplasty/index.html) for clean addresses, and link
+// Pages sit in folders (makeup/velvet/index.html) for clean addresses, and link
 // to each other relatively, so they also work from a sub-path such as /roja/.
 const up=dir=>dir?'../'.repeat(dir.split('/').length):'';
 
@@ -61,7 +60,6 @@ ${ld.map(x=>`<script type="application/ld+json">${JSON.stringify(x).replace(/</g
   <a class="brand" href="${r}">رُژا <span>آینهٔ زنده</span></a>
   <nav aria-label="صفحه‌ها">
     <a href="${r}makeup/">آرایش</a>
-    <a href="${r}procedures/">عمل‌های زیبایی</a>
     <a href="${r}faq/">پرسش‌ها</a>
     <a href="${r}business/">برای فروشگاه‌ها</a>
   </nav>
@@ -75,57 +73,16 @@ ${body(r)}
 </main>
 <footer>
   <p>رُژا آینه‌ای زنده در مرورگر است. تصویر دوربین روی همین دستگاه پردازش می‌شود و جایی فرستاده یا ذخیره نمی‌شود.</p>
-  <p><a href="${r}">آینه</a> · <a href="${r}makeup/">آرایش</a> · <a href="${r}procedures/">عمل‌های زیبایی</a> · <a href="${r}faq/">پرسش‌ها</a> · <a href="${r}business/">برای فروشگاه‌ها</a> · <a href="${r}privacy/">حریم خصوصی</a></p>
+  <p><a href="${r}">آینه</a> · <a href="${r}makeup/">آرایش</a> · <a href="${r}faq/">پرسش‌ها</a> · <a href="${r}business/">برای فروشگاه‌ها</a> · <a href="${r}privacy/">حریم خصوصی</a></p>
 </footer>
 </body>
 </html>
 `;
 }
 const cta=(href,text)=>`<p class="cta"><a class="button" href="${href}">${esc(text)}</a></p>`;
-const NOT_MEDICAL='این پیش‌نمایش فقط شبیه‌سازی تصویری تغییر شکل است، نه پیش‌بینی نتیجه. تورم، کبودی، بهبود، ضخامت پوست و کار هر جراح را در نظر نمی‌گیرد. مدت ماندگاری و دورهٔ نقاهت، بازه‌های رایج و کلی‌اند، نه توصیهٔ پزشکی. برای هر تصمیم درمانی با پزشک متخصص مشورت کن.';
 const COLOUR_NOTE='رنگ‌ها نمونه‌ای روی صفحه‌اند، نه اندازه‌گیری دقیق محصول؛ نور محیط، دوربین و رنگ طبیعی پوست، چیزی را که می‌بینی جابه‌جا می‌کنند.';
 
 const out=new Map();      // relative path -> content
-
-/* ---- procedures ---- */
-for(const p of procedures){
-  const region=regions.find(r=>r.id===p.region);
-  const related=procedures.filter(x=>x.region===p.region&&x.id!==p.id);
-  const dir=`procedures/${p.id}`;
-  out.set(`${dir}/index.html`,page({dir,
-    title:`شبیه‌سازی ${p.name} روی صورت خودت | رُژا`,
-    description:`نتیجهٔ تقریبی ${p.name} را پیش از تصمیم، زنده روی صورت خودت ببین. ${p.summary} ماندگاری: ${p.lasts}.`,
-    h1:`شبیه‌سازی ${p.name}`,
-    lead:p.summary,
-    crumbs:[{name:'عمل‌های زیبایی',dir:'procedures'},{name:p.name,dir}],
-    body:r=>`
-<dl class="facts">
-  <div><dt>نوع</dt><dd>${esc(kinds[p.kind]||p.kind)}</dd></div>
-  <div><dt>ناحیه</dt><dd>${esc(region?.name||'')}</dd></div>
-  <div><dt>ماندگاری</dt><dd>${esc(p.lasts)}</dd></div>
-  <div><dt>دورهٔ نقاهت</dt><dd>${esc(p.recovery)}</dd></div>
-</dl>
-${p.variants?.length>1?`<h2>حالت‌ها</h2><p>در آینه می‌توانی بین ${p.variants.map(v=>`«${esc(v.name)}»`).join('، ')} جابه‌جا شوی و شدت را با یک لغزنده کم و زیاد کنی.</p>`:''}
-<h2>در آینه چه می‌بینی</h2>
-<p>دوربین را روشن کن یا یک عکس روبه‌رو انتخاب کن. ${esc(p.name)} روی صورت خودت اعمال می‌شود و با حرکت سر همراهت می‌آید. خط برنجی را روی صورت بکش تا قبل و بعد را کنار هم ببینی. جدول اندازه‌ها نشان می‌دهد پیش‌نمایش چه چیزی را چقدر عوض کرده است. با روشن کردن «ترکیب چند عمل با هم» می‌توانی چند عمل را با هم ببینی، و آرایش را هم روی صورت نگه داری.</p>
-${p.note?`<p class="note">${esc(p.note)}</p>`:''}
-${cta(`${r}#procedure=${p.id}`,`دیدن ${p.name} روی صورت خودم`)}
-<p class="disclaimer">${NOT_MEDICAL}</p>
-${related.length?`<h2>عمل‌های دیگر ${esc(region?.name||'')}</h2><ul class="links">${related.map(x=>`<li><a href="../${x.id}/">${esc(x.name)}</a></li>`).join('')}</ul>`:''}`}));
-}
-out.set('procedures/index.html',page({dir:'procedures',
-  title:'شبیه‌سازی عمل‌های زیبایی روی صورت خودت | رُژا',
-  description:`نتیجهٔ تقریبی ${fa.format(procedures.length)} عمل زیبایی، از جراحی بینی و فیلر لب تا لیفت صورت و بوتاکس، را زنده روی صورت خودت ببین. بدون ارسال تصویر.`,
-  h1:'شبیه‌سازی عمل‌های زیبایی',
-  lead:'پیش از مشاوره، تصویری تقریبی از تغییر شکل را روی صورت خودت ببین: زنده با دوربین یا روی یک عکس، و همه‌چیز روی همین دستگاه.',
-  crumbs:[{name:'عمل‌های زیبایی',dir:'procedures'}],
-  body:r=>`
-${regions.map(region=>{
-  const list=procedures.filter(p=>p.region===region.id);
-  return list.length?`<h2>${esc(region.name)}</h2><ul class="cards">${list.map(p=>`<li><a href="${p.id}/"><strong>${esc(p.name)}</strong><span>${esc(p.summary)}</span></a></li>`).join('')}</ul>`:'';
-}).join('\n')}
-${cta(`${r}#procedure=${procedures[0].id}`,'باز کردن آینه')}
-<p class="disclaimer">${NOT_MEDICAL}</p>`}));
 
 /* ---- makeup ---- */
 for(const item of products){
@@ -174,7 +131,6 @@ ${cta(r,'باز کردن آینه')}
 const faq=[
   ['آیا تصویر صورتم جایی فرستاده یا ذخیره می‌شود؟','نه. تصویر دوربین یا عکسی که انتخاب می‌کنی روی همین دستگاه پردازش می‌شود و هیچ‌جا فرستاده یا ذخیره نمی‌شود. فقط عکسی که خودت می‌گیری در همین صفحه نگه داشته می‌شود تا ذخیره یا ارسالش کنی.'],
   ['رنگی که در آینه می‌بینم دقیقاً رنگ محصول است؟','نه دقیقاً. رنگ‌ها نمونه‌ای روی صفحه‌اند. نور محیط، دوربین و رنگ طبیعی پوستت چیزی را که می‌بینی جابه‌جا می‌کنند. با «پیش‌نمایش نور» می‌توانی ببینی همان رنگ زیر نور روز، مهتابی یا نور گرم چطور دیده می‌شود.'],
-  ['شبیه‌سازی عمل زیبایی نتیجهٔ واقعی را نشان می‌دهد؟','نه. پیش‌نمایش فقط تغییر شکل را تقریبی و تصویری نشان می‌دهد. تورم، بهبود، ضخامت پوست و کار هر جراح در آن نیست. برای تصمیم درمانی حتماً با پزشک متخصص مشورت کن.'],
   ['تحلیل پوست بیماری پوستی را تشخیص می‌دهد؟','نه. تحلیل پوست یک ارزیابی آرایشی و مراقبتی است: نوع پوست (فیتزپاتریک و باومن)، چند امتیاز و یک روتین صبح و شب. اگر جوش شدید، قرمزی پایدار یا خالی داری که تغییر می‌کند، پیش پزشک متخصص پوست برو.'],
   ['چرا دوربین روشن نمی‌شود؟','دوربین فقط روی HTTPS کار می‌کند و باید اجازهٔ دسترسی به آن را بدهی. مرورگرهای داخل اپ‌ها (اینستاگرام، تلگرام و…) معمولاً دوربین ندارند؛ صفحه را در Chrome یا Safari باز کن. اگر دوربین در دسترس نیست، می‌توانی یک عکس روبه‌رو انتخاب کنی.'],
   ['روی چه گوشی‌ها و مرورگرهایی کار می‌کند؟','Chrome، Edge، Firefox و Samsung Internet روی اندروید و کامپیوتر؛ Safari و Chrome روی آیفون و آیپد؛ و Safari روی مک. اپ اندروید رُژا هم آینه را روان‌تر اجرا می‌کند.'],
@@ -187,7 +143,7 @@ const faq=[
 ];
 out.set('faq/index.html',page({dir:'faq',
   title:'پرسش‌های رایج دربارهٔ آینهٔ رُژا | رُژا',
-  description:'پاسخ پرسش‌های رایج دربارهٔ رُژا: حریم خصوصی تصویر، دقت رنگ‌ها، شبیه‌سازی عمل‌های زیبایی، تحلیل پوست، دوربین و خرید.',
+  description:'پاسخ پرسش‌های رایج دربارهٔ رُژا: حریم خصوصی تصویر، دقت رنگ‌ها، تحلیل پوست، دوربین و خرید.',
   h1:'پرسش‌های رایج',
   crumbs:[{name:'پرسش‌ها',dir:'faq'}],
   jsonld:[{'@context':'https://schema.org','@type':'FAQPage',mainEntity:faq.map(([q,a])=>({'@type':'Question',name:q,acceptedAnswer:{'@type':'Answer',text:a}}))}],
@@ -275,7 +231,7 @@ ${cta(`${r}?shop=demo`,'باز کردن آینه با فروشگاه نمونه'
 <h2>گفت‌وگو</h2>
 <p>برای راه‌اندازی، قیمت، یا دیدن آینه با محصولات خودتان، پیام بدهید:</p>
 <p class="cta contact">${wa?`<a class="button" href="${wa}" rel="noopener">واتس‌اپ</a>`:''} ${tg?`<a class="button ghost" href="${tg}" rel="noopener">تلگرام</a>`:''}</p>
-<p class="disclaimer">${COLOUR_NOTE} پیش‌نمایش عمل‌های زیبایی و تحلیل پوست هم در آینه هست و می‌تواند روی سایت شما روشن یا خاموش باشد.</p>`}));
+<p class="disclaimer">${COLOUR_NOTE} تحلیل پوست هم در آینه هست و می‌تواند روی سایت شما روشن یا خاموش باشد.</p>`}));
 
 /* ---- sitemap, robots ---- */
 const urls=['',...[...out.keys()].map(k=>k.replace(/index\.html$/,''))];

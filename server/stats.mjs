@@ -1,4 +1,4 @@
-// Anonymous usage counts: how many times each shade, look, procedure was tried and how often
+// Anonymous usage counts: how many times each shade and look was tried and how often
 // a product was opened on the partner store, per day and per shop whose mirror it was
 // (or Roja's own site). That is all a row is, (day, shop, event, item, count): no key, no
 // cookie, no address, no time of day, nothing that tells one visitor from another. nginx
@@ -9,7 +9,6 @@
 // nobody can read them.
 import {timingSafeEqual,createHash} from 'node:crypto';
 import {products,looks} from '../catalog.js';
-import {procedures} from '../procedures.js';
 import {skincare} from '../skin.js';
 import {shops} from '../shops.js';
 
@@ -18,7 +17,6 @@ const productKeys=new Set([...products,...skincare].flatMap(p=>p.shades.map(s=>`
 export const events={
   shade:item=>shadeIds.has(item),
   look:item=>looks.some(l=>l.id===item)||item==='mine'||item==='link',
-  procedure:item=>procedures.some(p=>p.id===item),
   // A product (and shade) opened on the partner store (partner.js).
   buy:item=>productKeys.has(item),
   share:item=>['shot','multi','link'].includes(item),
