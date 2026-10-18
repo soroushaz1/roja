@@ -243,6 +243,7 @@ ${urls.map(u=>`  <url><loc>${SITE}${u}</loc></url>`).join('\n')}
 out.set('robots.txt',`User-agent: *
 Disallow: /api/
 Disallow: /stats.html
+Disallow: /clinic/
 
 Sitemap: ${SITE}sitemap.xml
 `);
