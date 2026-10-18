@@ -1,5 +1,6 @@
 User-agent: *
 Disallow: /api/
 Disallow: /stats.html
+Disallow: /clinic/
 
 Sitemap: https://pythonpath.ir/sitemap.xml
