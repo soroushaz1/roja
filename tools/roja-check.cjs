@@ -175,6 +175,8 @@ const LIPS=[61,0,291,17,40,270,91,321];
     /* ---- makeup on the WebGL stage ---- */
     // The procedures moved out to Roja Clinic: nothing of them is left on the page.
     assert.equal(await page.locator('#mode-procedure,[data-procedure],#panel-procedure').count(),0,'procedure controls are still on the page');
+    // The procedures are Roja Clinic's: their tab leads there.
+    assert.equal(await page.locator('#mode-clinic').getAttribute('href'),'clinic/','the procedures tab does not lead to Roja Clinic');
     assert.equal(await page.locator('a[href*="procedures/"]').count(),0,'a link to the procedure pages is still on the page');
     const lipsOn=await page.evaluate(region,{ids:LIPS});
     // The default shade is a nude. 4 encoded the old inflated coverage, where a slider
