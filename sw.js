@@ -4,10 +4,10 @@
 //
 // Only this origin's own files are cached, and nothing from the camera ever passes
 // through here: frames never leave the page.
-const CACHE='roja-v25';
-const SHELL=['./','index.html','roja.css?v=25','app.js?v=25','catalog.js?v=25','makeup.js?v=25','stage.js?v=25',
-  'debug.js?v=25','brush.js?v=25','measure.js?v=25','blur.js?v=25','facemesh.js?v=25','shaders.js?v=25',
-  'face-worker.js?v=25','face-core.js?v=25','skin.js?v=25','skin-scan.js?v=25','skin-panel.js?v=25','usage.js?v=25','shops.js?v=25',
+const CACHE='roja-v26';
+const SHELL=['./','index.html','roja.css?v=26','app.js?v=26','catalog.js?v=26','makeup.js?v=26','stage.js?v=26',
+  'debug.js?v=26','brush.js?v=26','measure.js?v=26','blur.js?v=26','facemesh.js?v=26','shaders.js?v=26',
+  'face-worker.js?v=26','face-core.js?v=26','skin.js?v=26','skin-scan.js?v=26','skin-panel.js?v=26','usage.js?v=26','shops.js?v=26',
   'fonts/Estedad-var.woff2','favicon.svg','manifest.webmanifest','icons/icon-192.png','icons/app-qr.svg'];
 
 // From the server, not the browser's cache: that can still hold the previous release's
@@ -27,8 +27,10 @@ self.addEventListener('fetch',event=>{
   const request=event.request;
   const url=new URL(request.url);
   // The API answers change with every call (a skin check's saved results, the counts):
-  // straight to the server, never from the cache.
-  if(request.method!=='GET'||url.origin!==self.location.origin||url.pathname.includes('/api/'))return;
+  // straight to the server, never from the cache. Roja Clinic (/clinic/) is another
+  // product on this site with releases of its own: it is left alone entirely, or a
+  // page kept here could keep an open tab on an old release of it.
+  if(request.method!=='GET'||url.origin!==self.location.origin||url.pathname.includes('/api/')||url.pathname.startsWith('/clinic/'))return;
   event.respondWith((async()=>{
     const cache=await caches.open(CACHE);
     // The page itself: fresh when online, so a new version is picked up at once. Checked
