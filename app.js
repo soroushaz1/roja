@@ -1,17 +1,17 @@
-import {products,categories,finishes,looks,byProduct} from './catalog.js?v=29';
-import {layerSpecs,createMaskPainter,renderFallback,createSmoother,landmarksByType,frameLandmarks,hexToRgb} from './makeup.js?v=29';
-import {createStage,layerModes} from './stage.js?v=29';
-import {renderDebug,nearest} from './debug.js?v=29';
-import {createBrush,brushModes} from './brush.js?v=29';
-import {measure,points as placed,symmetry,pose as poseOf} from './measure.js?v=29';
-import {CANON,CANON_ASPECT,TRIANGLES} from './facemesh.js?v=29';
-import {createSkinScanner} from './skin-scan.js?v=29';
-import {createSkinPanel} from './skin-panel.js?v=29';
-import {skincareById} from './skin.js?v=29';
-import {count} from './usage.js?v=29';
-import {resolveShop,shopUrl,searchWords} from './shops.js?v=29';
-import {planFor,applyFreePlan,freeShadeIds,FREE_LOOKS,FREE_PHOTO_PX} from './plan.js?v=29';
-import {createViewer3d} from './viewer3d.js?v=29';
+import {products,categories,finishes,looks,byProduct} from './catalog.js?v=30';
+import {layerSpecs,createMaskPainter,renderFallback,createSmoother,landmarksByType,frameLandmarks,hexToRgb} from './makeup.js?v=30';
+import {createStage,layerModes} from './stage.js?v=30';
+import {renderDebug,nearest} from './debug.js?v=30';
+import {createBrush,brushModes} from './brush.js?v=30';
+import {measure,points as placed,symmetry,pose as poseOf} from './measure.js?v=30';
+import {CANON,CANON_ASPECT,TRIANGLES} from './facemesh.js?v=30';
+import {createSkinScanner} from './skin-scan.js?v=30';
+import {createSkinPanel} from './skin-panel.js?v=30';
+import {skincareById} from './skin.js?v=30';
+import {count} from './usage.js?v=30';
+import {resolveShop,shopUrl,searchWords} from './shops.js?v=30';
+import {planFor,applyFreePlan,freeShadeIds,FREE_LOOKS,FREE_PHOTO_PX} from './plan.js?v=30';
+import {createViewer3d} from './viewer3d.js?v=30';
 
 const $=id=>document.getElementById(id);
 // GitHub Pages ignores the ?v= query, and browsers and its CDN keep a page for up to ten
@@ -19,7 +19,7 @@ const $=id=>document.getElementById(id);
 // newer script, which would then look for elements that page does not have. Such a
 // page is loaded afresh, once; if it is still the old one, it says a new version is
 // on its way instead of failing.
-const RELEASE='29';
+const RELEASE='30';
 if(document.documentElement.dataset.release!==RELEASE){
   let tried=null;
   try{tried=sessionStorage.getItem('roja-reloaded');sessionStorage.setItem('roja-reloaded',RELEASE);}catch{}
@@ -990,7 +990,7 @@ function onTracker(d){
 function ensureTracker(){
   if(tracker||trackerStarting)return;
   let w=null;
-  try{w=new Worker(new URL(`face-worker.js?v=29${gpuQuery}`,import.meta.url));}catch(e){perf.lastError=`worker: ${e.message}`;}
+  try{w=new Worker(new URL(`face-worker.js?v=30${gpuQuery}`,import.meta.url));}catch(e){perf.lastError=`worker: ${e.message}`;}
   if(!w){useTracker('page','no worker');return;}
   ready=false;busy=false;
   tracker={kind:'worker',post:(m,transfer)=>w.postMessage(m,transfer),close:()=>w.terminate()};
@@ -1010,7 +1010,7 @@ async function useTracker(kind,reason){
   const token=++trackerGeneration;
   try{
     const Vision=await import('./vendor/vision_bundle.mjs');
-    await import('./face-core.js?v=29');
+    await import('./face-core.js?v=30');
     const core=self.rojaFaceCore(Vision,new URL('./',import.meta.url).href);
     const found=await core.init('CPU',(loaded,total)=>{if(token===trackerGeneration)onTracker({type:'progress',loaded,total});});
     if(token!==trackerGeneration){core.close();return;}
@@ -1875,6 +1875,7 @@ $('multi-open').onclick=openMulti;
 // Several shades side by side is the professional plan's (plan.js).
 $('multi-open').hidden=!tier.pro;
 $('view3d').hidden=!tier.pro;
+$('pro-legend').hidden=!tier.showcase;
 if(tier.showcase)$('view3d').title+=' · حرفه‌ای';
 $('multi-run').onclick=runMulti;
 $('multi-close').onclick=()=>$('multi').close();

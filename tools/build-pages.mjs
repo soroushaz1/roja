@@ -22,6 +22,8 @@ const SITE='https://pythonpath.ir/';
 const check=process.argv.includes('--check');
 const fa=new Intl.NumberFormat('fa-IR');
 
+// Whether there are before/after pictures (tools/showcase/), for the links to them.
+const HAS_SHOWCASE=fs.existsSync(path.join(root,'showcase/index.json'));
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 // Pages sit in folders (makeup/velvet/index.html) for clean addresses, and link
 // to each other relatively, so they also work from a sub-path such as /roja/.
@@ -63,7 +65,8 @@ ${ld.map(x=>`<script type="application/ld+json">${JSON.stringify(x).replace(/</g
   <nav aria-label="صفحه‌ها">
     <a href="${r}makeup/">آرایش</a>
     <a href="${r}faq/">پرسش‌ها</a>
-    <a href="${r}business/">برای فروشگاه‌ها</a>
+    ${HAS_SHOWCASE?`<a href="${r}showcase/">پیش و پس</a>
+    `:''}<a href="${r}business/">برای فروشگاه‌ها</a>
   </nav>
 </header>
 <main>
@@ -75,7 +78,7 @@ ${body(r)}
 </main>
 <footer>
   <p>رُژا آینه‌ای زنده در مرورگر است. تصویر دوربین روی همین دستگاه پردازش می‌شود و جایی فرستاده یا ذخیره نمی‌شود.</p>
-  <p><a href="${r}">آینه</a> · <a href="${r}makeup/">آرایش</a> · <a href="${r}faq/">پرسش‌ها</a> · <a href="${r}business/">برای فروشگاه‌ها</a> · <a href="${r}privacy/">حریم خصوصی</a></p>
+  <p><a href="${r}">آینه</a> · <a href="${r}makeup/">آرایش</a> · <a href="${r}faq/">پرسش‌ها</a>${HAS_SHOWCASE?` · <a href="${r}showcase/">پیش و پس</a>`:''} · <a href="${r}business/">برای فروشگاه‌ها</a> · <a href="${r}privacy/">حریم خصوصی</a></p>
 </footer>
 ${script?`<script type="module" src="${r}${script}"></script>
 `:''}</body>
