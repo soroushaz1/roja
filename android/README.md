@@ -64,6 +64,25 @@ cd android
 
 Open the `android` folder in Android Studio to run it on a phone directly.
 
+### On real phones
+
+The emulator draws with a software renderer and shows an emulated camera, so it cannot
+show what a phone's own GPU driver, camera or WebView does to the mirror. On `main`, the
+*real-devices* job runs the same tests on real phones in
+[Firebase Test Lab](https://firebase.google.com/docs/test-lab): a Samsung Galaxy A or M,
+a Xiaomi, a Pixel and the phone with the oldest Android in Test Lab's catalogue, picked
+afresh each run by `.github/testlab-devices.sh` (or the phones named in the repository
+variable `ROJA_TEST_DEVICES`, one `model=…,version=…` per line). Each phone's test results
+and logcat are in the run's `real-device-report` artifact; videos and screenshots are in
+the Firebase console, through the link in the job log. The release does not wait for
+this job.
+
+It is paid by the minute (about $5 an hour per phone after a free half hour a day) and
+needs a Google Cloud project set up once with `tools/testlab-setup.sh`, run in Cloud
+Shell, which prints the four repository variables to set. No key is stored anywhere:
+GitHub vouches for the workflow, and the project lets only this repository's `main` act
+as its test account. Without those variables the job is skipped.
+
 ## Publishing
 
 Every push to `main` that passes the emulator tests becomes a

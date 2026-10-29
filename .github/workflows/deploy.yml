@@ -21,6 +21,8 @@ on:
       - 'android/**'
       - '.github/workflows/android.yml'
       - '.github/device-report.sh'
+      - '.github/testlab-devices.sh'
+      - 'tools/testlab-setup.sh'
       - 'screenshots/**'
       - '**.md'
   workflow_dispatch:
