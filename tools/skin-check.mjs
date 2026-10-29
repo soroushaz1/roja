@@ -18,7 +18,7 @@ const check=async(name,fn)=>{await fn();passed++;console.log('ok',name);};
 
 const base={oil:'0',sens:'-0.4',pig:'-0.4',lines:'-1',sun:'0.5',burn:'3',concern:'prevent',using:[],irritants:[],age:'20',pregnant:'no'};
 const scan=(over={})=>({tone:{L:62,a:12,b:17,ita:35,hue:55,chroma:21,hex:'#c99a84'},samples:6,quality:true,
-  metrics:{shineT:.01,shineU:.002,redness:12,redPatches:.04,redSpots:.015,darkSpots:.015,uneven:1.4,texture:.9,
+  metrics:{shineT:.01,shineU:.002,redness:12,rednessHue:6,redPatches:.04,redSpots:.015,darkSpots:.015,uneven:1.4,texture:.9,
     foreheadLines:.1,crowLines:1.1,underEyeLines:1.2,underEyeDark:4,...over}});
 const ids=list=>list.map(s=>s.product.id);
 

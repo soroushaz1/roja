@@ -8,7 +8,7 @@
 // and lines.
 //
 // A handful of numbers leave this module; the pixels do not. Nothing is kept or sent.
-import {CANON,TRIANGLES} from './facemesh.js?v=30';
+import {CANON,TRIANGLES} from './facemesh.js?v=31';
 
 const FACE_PX=320;
 const SHARP=12;            // the 98th-percentile edge step a focused face reaches
@@ -160,6 +160,10 @@ export function createSkinScanner(){
     const metrics={
       shineT:shineOf(tzone),shineU:shineOf(cheeks),
       redness:median(pick('cheekL','cheekR','nose','chin').map(i=>A[i])),
+      // How far the skin's hue leans to red, in degrees below 60° (yellow-orange), from
+      // the median a* and b* of the same regions: unlike a* alone, not raised by depth.
+      rednessHue:(()=>{const at=pick('cheekL','cheekR','nose','chin');
+        return 60-Math.atan2(median(at.map(i=>B[i])),median(at.map(i=>A[i])))*180/Math.PI;})(),
       redPatches:spotZone.length?spotZone.filter(i=>A[i]>tone.a+7).length/spotZone.length:0,
       redSpots:spotZone.length?spotZone.filter(i=>A[i]-redBase[i]>4.5).length/spotZone.length:0,
       darkSpots:spotZone.length?spotZone.filter(i=>L[i]-coarse[i]<-6&&A[i]-redBase[i]<3).length/spotZone.length:0,

@@ -1,17 +1,17 @@
-import {products,categories,finishes,looks,byProduct} from './catalog.js?v=30';
-import {layerSpecs,createMaskPainter,renderFallback,createSmoother,landmarksByType,frameLandmarks,hexToRgb} from './makeup.js?v=30';
-import {createStage,layerModes} from './stage.js?v=30';
-import {renderDebug,nearest} from './debug.js?v=30';
-import {createBrush,brushModes} from './brush.js?v=30';
-import {measure,points as placed,symmetry,pose as poseOf} from './measure.js?v=30';
-import {CANON,CANON_ASPECT,TRIANGLES} from './facemesh.js?v=30';
-import {createSkinScanner} from './skin-scan.js?v=30';
-import {createSkinPanel} from './skin-panel.js?v=30';
-import {skincareById} from './skin.js?v=30';
-import {count} from './usage.js?v=30';
-import {resolveShop,shopUrl,searchWords} from './shops.js?v=30';
-import {planFor,applyFreePlan,freeShadeIds,FREE_LOOKS,FREE_PHOTO_PX} from './plan.js?v=30';
-import {createViewer3d} from './viewer3d.js?v=30';
+import {products,categories,finishes,looks,byProduct} from './catalog.js?v=31';
+import {layerSpecs,createMaskPainter,renderFallback,createSmoother,landmarksByType,frameLandmarks,hexToRgb} from './makeup.js?v=31';
+import {createStage,layerModes} from './stage.js?v=31';
+import {renderDebug,nearest} from './debug.js?v=31';
+import {createBrush,brushModes} from './brush.js?v=31';
+import {measure,points as placed,symmetry,pose as poseOf} from './measure.js?v=31';
+import {CANON,CANON_ASPECT,TRIANGLES} from './facemesh.js?v=31';
+import {createSkinScanner} from './skin-scan.js?v=31';
+import {createSkinPanel} from './skin-panel.js?v=31';
+import {skincareById} from './skin.js?v=31';
+import {count} from './usage.js?v=31';
+import {resolveShop,shopUrl,searchWords} from './shops.js?v=31';
+import {planFor,applyFreePlan,freeShadeIds,FREE_LOOKS,FREE_PHOTO_PX} from './plan.js?v=31';
+import {createViewer3d} from './viewer3d.js?v=31';
 
 const $=id=>document.getElementById(id);
 // GitHub Pages ignores the ?v= query, and browsers and its CDN keep a page for up to ten
@@ -19,7 +19,7 @@ const $=id=>document.getElementById(id);
 // newer script, which would then look for elements that page does not have. Such a
 // page is loaded afresh, once; if it is still the old one, it says a new version is
 // on its way instead of failing.
-const RELEASE='30';
+const RELEASE='31';
 if(document.documentElement.dataset.release!==RELEASE){
   let tried=null;
   try{tried=sessionStorage.getItem('roja-reloaded');sessionStorage.setItem('roja-reloaded',RELEASE);}catch{}
@@ -485,27 +485,37 @@ function onSkin(sample){
   if(sample)finder.samples.push(sample.rgb);
   if(finder.samples.length>=5||finder.tries>=14){wantSkin=false;finishFinder();}
 }
+// The skin's lightness as a camera sees it (about L 45 for the darkest skin to 77 for the
+// fairest, in daylight) and a product's swatches (pictures of the product, lighter than
+// skin on camera) are on different scales: matched as they are, every face lands in the
+// middle of the range and nobody is offered the lightest shades. So the skin's place in
+// that camera range is taken to the same place in the product's own range of shades,
+// and the undertone is matched as it is. Checked on faces made for it
+// (tools/calibrate/measure.cjs): types I to VI now go from the lightest shades to the
+// darkest in order.
+const CAMERA_L=[45,77];
 function finishFinder(){
   if(finder.samples.length<2){finder.state='failed';finder.onDone=null;renderFinder();return;}
   const median=k=>{const v=finder.samples.map(s=>s[k]).sort((a,b)=>a-b);return v[v.length>>1];};
   const rgb=[median(0),median(1),median(2)].map(v=>v/255);
-  // The same light compensation the stage applies to the colour it paints, so a
-  // shade that "matches" here also disappears into the skin on screen.
-  const light=Math.max(.72,Math.min(1.12,1+(luma(rgb)/.58-1)*.5));
-  const skin=lab(rgb.map(v=>Math.min(1,v/light)));
+  const skin=lab(rgb);
   const hue=Math.atan2(skin[2],skin[1])*180/Math.PI;
   const tone=hue>61?'W':hue<52?'C':'N';
+  const place=Math.max(0,Math.min(1,(skin[0]-CAMERA_L[0])/(CAMERA_L[1]-CAMERA_L[0])));
   const picks={},scores={};
   for(const item of products.filter(p=>p.finder)){
+    const Ls=item.shades.map(s=>lab(hexToRgb(s.color))[0]),lo=Math.min(...Ls),hi=Math.max(...Ls);
+    const target=[Math.min(hi,lo+place*(hi-lo)+(item.lighter?6:0)),skin[1],skin[2]];
     let best=null;
     for(const shade of item.shades){
       const s=lab(hexToRgb(shade.color));
-      const target=item.lighter?[skin[0]+6,skin[1],skin[2]]:skin;
       let d=Math.hypot((s[0]-target[0])*1.1,s[1]-target[1],s[2]-target[2]);
       if(shade.tone&&shade.tone!==tone&&shade.tone!=='N')d+=3;
       if(!best||d<best.d)best={shade,d};
     }
-    picks[item.id]=best.shade.id;scores[item.id]=Math.max(0,Math.round(100-best.d*3.2));
+    // Skin darker or lighter than the range reaches is told by a lower match.
+    const beyond=Math.max(0,CAMERA_L[0]-skin[0],skin[0]-CAMERA_L[1]-6);
+    picks[item.id]=best.shade.id;scores[item.id]=Math.max(0,Math.round(100-(best.d+beyond)*3.2));
   }
   const hex='#'+rgb.map(v=>Math.round(v*255).toString(16).padStart(2,'0')).join('');
   const onDone=finder.onDone;
@@ -990,7 +1000,7 @@ function onTracker(d){
 function ensureTracker(){
   if(tracker||trackerStarting)return;
   let w=null;
-  try{w=new Worker(new URL(`face-worker.js?v=30${gpuQuery}`,import.meta.url));}catch(e){perf.lastError=`worker: ${e.message}`;}
+  try{w=new Worker(new URL(`face-worker.js?v=31${gpuQuery}`,import.meta.url));}catch(e){perf.lastError=`worker: ${e.message}`;}
   if(!w){useTracker('page','no worker');return;}
   ready=false;busy=false;
   tracker={kind:'worker',post:(m,transfer)=>w.postMessage(m,transfer),close:()=>w.terminate()};
@@ -1010,7 +1020,7 @@ async function useTracker(kind,reason){
   const token=++trackerGeneration;
   try{
     const Vision=await import('./vendor/vision_bundle.mjs');
-    await import('./face-core.js?v=30');
+    await import('./face-core.js?v=31');
     const core=self.rojaFaceCore(Vision,new URL('./',import.meta.url).href);
     const found=await core.init('CPU',(loaded,total)=>{if(token===trackerGeneration)onTracker({type:'progress',loaded,total});});
     if(token!==trackerGeneration){core.close();return;}
