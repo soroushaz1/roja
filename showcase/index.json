@@ -84,6 +84,27 @@
   "name": "اسموکی"
  },
  {
+  "file": "clinic-c1-rhinoplasty.jpg",
+  "kind": "clinic",
+  "face": "c1",
+  "id": "rhinoplasty",
+  "name": "جراحی بینی"
+ },
+ {
+  "file": "clinic-c1-lip-filler.jpg",
+  "kind": "clinic",
+  "face": "c1",
+  "id": "lip-filler",
+  "name": "تزریق ژل لب"
+ },
+ {
+  "file": "clinic-c1-chin-implant.jpg",
+  "kind": "clinic",
+  "face": "c1",
+  "id": "chin-implant",
+  "name": "پروتز چانه"
+ },
+ {
   "file": "clinic-c2-jaw-contour.jpg",
   "kind": "clinic",
   "face": "c2",
@@ -103,5 +124,19 @@
   "face": "c2",
   "id": "rhinoplasty",
   "name": "جراحی بینی"
+ },
+ {
+  "file": "clinic-c3-blepharoplasty.jpg",
+  "kind": "clinic",
+  "face": "c3",
+  "id": "blepharoplasty",
+  "name": "جراحی پلک"
+ },
+ {
+  "file": "clinic-c3-fox-eye.jpg",
+  "kind": "clinic",
+  "face": "c3",
+  "id": "fox-eye",
+  "name": "کانتوپلاستی / فاکس‌آی"
  }
 ]
