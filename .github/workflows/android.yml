@@ -1,4 +1,6 @@
-# Builds the Android app (android/) and runs it on an emulator.
+# Builds the Android app (android/) and runs it on an emulator, and, on main once
+# Google Cloud is set up for it, on real phones in Firebase Test Lab (the real-devices
+# job below).
 #
 # The APK is attached to every run as the "roja-android" artifact. With the signing
 # secrets set (see android/README.md) the run also produces a signed release APK and
@@ -121,6 +123,91 @@ jobs:
         with:
           name: device-test-report
           path: android/app/build/reports/androidTests/
+          if-no-files-found: ignore
+
+  # The same instrumented tests on real phones in Firebase Test Lab: the camera, the GPU
+  # and the WebView each maker ships, which the emulator's software renderer and
+  # emulated camera cannot show. Paid by the minute, so only for main (a push, or a run
+  # started by hand), and only once Google Cloud is set up for it: tools/testlab-setup.sh
+  # prints the four repository variables it needs (Settings → Secrets and variables →
+  # Actions → Variables). There is no key to keep: GitHub vouches for this workflow and
+  # Google Cloud lets only this repository's main act as the test account.
+  #
+  # The release does not wait for it, so a lapsed cloud account never holds back the APK.
+  real-devices:
+    name: Run on real phones (Firebase Test Lab)
+    if: github.ref == 'refs/heads/main' && vars.ROJA_GCP_PROVIDER != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      BUCKET: ${{ vars.ROJA_TESTLAB_BUCKET }}
+      RUN_DIR: roja/${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-provider: basic
+
+      - name: The app and its tests
+        working-directory: android
+        run: ./gradlew --no-daemon assembleDebug assembleDebugAndroidTest
+
+      - uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ vars.ROJA_GCP_PROJECT }}
+          workload_identity_provider: ${{ vars.ROJA_GCP_PROVIDER }}
+          service_account: ${{ vars.ROJA_GCP_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v3
+
+      # The phones, from Test Lab's catalogue of today (see .github/testlab-devices.sh),
+      # unless the repository variable ROJA_TEST_DEVICES names them: one model=…,version=…
+      # per line, from `gcloud firebase test android models list`.
+      - name: Choose the phones
+        env:
+          CHOSEN: ${{ vars.ROJA_TEST_DEVICES }}
+        run: |
+          if [ -n "$CHOSEN" ]; then printf '%s\n' "$CHOSEN" | tr -d '\r' | sed '/^ *$/d' > devices.txt
+          else gcloud firebase test android models list --format=json | sh .github/testlab-devices.sh > devices.txt; fi
+          test -s devices.txt || { echo "::error::No phones to run on"; exit 1; }
+          cat devices.txt
+
+      # Each phone runs every test once more before calling it failed, as a phone in a
+      # rack can stall for reasons of its own. The link to the matrix in the Firebase
+      # console (videos, screenshots, performance) is in this step's log.
+      - name: Instrumented tests on the phones
+        run: |
+          set -- $(sed 's/^/--device=/' devices.txt)
+          gcloud firebase test android run --type instrumentation \
+            --app android/app/build/outputs/apk/debug/app-debug.apk \
+            --test android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk \
+            "$@" --timeout 25m --num-flaky-test-attempts 1 \
+            --results-bucket "$BUCKET" --results-dir "$RUN_DIR" \
+            --results-history-name 'Roja Android' \
+            --client-details matrixLabel="${GITHUB_SHA::7} run ${{ github.run_number }}"
+
+      # What each phone says about its run (test results, logcat), without the videos,
+      # which stay in the bucket and the console. The bucket forgets a run after 30 days.
+      - name: The phones' reports
+        if: always()
+        run: |
+          mkdir -p testlab
+          gcloud storage rsync -r --exclude='.*\.(mp4|png|jpg)$' "gs://$BUCKET/$RUN_DIR" testlab || true
+          find testlab -name '*.xml' -exec grep -l '<failure' {} + 2>/dev/null | while read -r f; do
+            echo "== $f"; cat "$f"; done
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: real-device-report
+          path: testlab/
           if-no-files-found: ignore
 
   release:
