@@ -1,0 +1,52 @@
+# Faces to check Roja against (tools/calibrate/faces.json): made by an image model on
+# Vertex AI (no real person), each with the skin type and condition it was asked for,
+# for the skin check and the shade finder, and more face shapes for Roja Clinic's
+# procedures. They go to a branch of their own, calibrate-<run>, to be read from;
+# nothing reaches the site. Runs when that list changes on main, or by hand, signing in
+# the keyless way showcase.yml does.
+name: Calibration faces
+
+on:
+  push:
+    branches: [main]
+    paths: ['tools/calibrate/faces.json']
+  workflow_dispatch:
+
+concurrency:
+  group: calibrate
+  cancel-in-progress: false
+
+jobs:
+  faces:
+    name: Make the calibration faces
+    if: github.ref == 'refs/heads/main' && vars.ROJA_GCP_PROVIDER != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ vars.ROJA_GCP_PROJECT }}
+          workload_identity_provider: ${{ vars.ROJA_GCP_PROVIDER }}
+          service_account: ${{ vars.ROJA_GCP_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: The faces
+        env:
+          ROJA_GCP_PROJECT: ${{ vars.ROJA_GCP_PROJECT }}
+        run: GCP_TOKEN=$(gcloud auth print-access-token) node tools/showcase/make-faces.mjs tools/calibrate/faces.json
+      - name: To a branch of their own
+        run: |
+          branch=calibrate-${{ github.run_number }}
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch -c "$branch"
+          git add tools/calibrate/faces
+          git commit -q -m "Calibration faces, made by the Calibration faces workflow (run ${{ github.run_number }})"
+          git push -q origin "$branch"
+          echo "pushed $branch: $(ls tools/calibrate/faces/*.png | wc -l) faces" | tee -a "$GITHUB_STEP_SUMMARY"
