@@ -182,6 +182,10 @@ ${cta(r,'باز کردن آینه')}`}));
 // any yet: every one a simulation on a face made by AI, and says so on itself.
 const showcase=(()=>{try{return JSON.parse(fs.readFileSync(path.join(root,'showcase/index.json'),'utf8'));}catch{return [];}})();
 const SHOW_NOTE='همهٔ چهره‌ها با هوش مصنوعی ساخته شده‌اند و آدم واقعی نیستند؛ «بعد» همان چیزی است که آینه نشان می‌دهد، شبیه‌سازی روی صفحه، نه نتیجهٔ قطعی.';
+// For business/: one picture per face, the look that shows most.
+const BOLDEST=['evening','bold','bridal','smoky','office','natural'];
+const SHOW_PICKS=[...new Set(showcase.filter(x=>x.kind==='makeup').map(x=>x.face))].slice(0,4).map(face=>
+  showcase.filter(x=>x.kind==='makeup'&&x.face===face).sort((a,b)=>BOLDEST.indexOf(a.id)-BOLDEST.indexOf(b.id))[0]);
 const shows=(list,r)=>`<ul class="showcase">${list.map(x=>`<li><img src="${r}showcase/${esc(x.file)}" alt="${esc(`پیش و پس: ${x.name}، شبیه‌سازی روی چهره‌ای ساخته‌شده با هوش مصنوعی`)}" width="1200" height="860" loading="lazy" decoding="async"></li>`).join('')}</ul>`;
 if(showcase.length)out.set('showcase/index.html',page({dir:'showcase',
   title:'پیش و پس با آینهٔ رُژا و رُژا کلینیک | رُژا',
@@ -294,7 +298,7 @@ out.set('business/index.html',page({dir:'business',
   <li><strong>بدون دردسر حقوقی تصویر</strong><span>همهٔ پردازش روی دستگاه مشتری است؛ هیچ تصویری به سرور شما یا ما نمی‌رسد که نگه‌داری‌اش مسئولیت داشته باشد.</span></li>
 </ul>
 ${showcase.some(x=>x.kind==='makeup')?`<h2>پیش و پس</h2>
-${shows(showcase.filter(x=>x.kind==='makeup').slice(0,4),r)}
+${shows(SHOW_PICKS,r)}
 <p class="quiet">${SHOW_NOTE} <a href="${r}showcase/">همهٔ نمونه‌ها</a></p>`:''}
 <h2 id="plans">پلن‌ها</h2>
 ${PLANS}
