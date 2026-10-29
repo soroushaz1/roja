@@ -379,6 +379,29 @@ Roja's looks or Roja Clinic's procedures in the mirrors themselves (`render.cjs`
 merged. Every picture says on itself that it is a simulation on a face made by AI;
 `build-pages.mjs` then adds them to `business/` and a page of their own, `showcase/`.
 
+## Calibration
+
+`tools/calibrate/faces.json` lists faces made by AI to check the skin check and the shade
+finder against, each labelled with the Fitzpatrick type and skin condition it was asked
+to show (and five more face shapes for Roja Clinic). `.github/workflows/calibrate.yml`
+makes them into a branch `calibrate-<run>`; `tools/calibrate/measure.cjs` runs the skin
+check and the shade finder on them and prints what each measured beside what it was
+asked for. What it showed, and what changed for it:
+
+- The shade finder matched raw lightness, but skin on camera (about L 45 to 77) is darker
+  than product swatches: everyone landed mid-range and the fairest faces were offered a
+  dark bronze. It now takes the skin's place in the camera's range to the same place in
+  each product's range, so types I to VI go from the lightest shades to the darkest.
+- Redness was raw a\*, which rises with melanin: clear brown skin scored 46 to 50 against
+  62 to 66 for rosacea on fair skin. It is now the hue's lean towards red: clear skin 0 to
+  19 at every depth, the red faces 78 and 95.
+- Not changed, for want of faces that show them plainly: shine, acne spots and dark spots
+  barely registered on the faces asked to show them. Skin types IV to VI read one type
+  lighter by colour alone, a finding about camera ITA against the colorimetric scale it
+  comes from, left for real faces to confirm.
+- The foundation's 13 shades stop at a medium tan (L 63): brown and dark skin get the
+  darkest of them, with a low match. Deeper shades are for the catalogue to add.
+
 ## Tests
 
 ```bash

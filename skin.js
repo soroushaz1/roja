@@ -107,7 +107,10 @@ export function imageScores(scan){
   const keep=(on,v)=>on?v:NaN;
   return {
     oil:keep(pass('light','pose'),ramp(m.shineT,.004,.05)),
-    red:keep(colour,blend([[ramp(m.redness,9,22),.6],[ramp(m.redPatches,.02,.22),.4]])),
+    // Redness is the skin's hue leaning towards red, whatever its depth: raw a* rises
+    // with melanin, so clear brown skin read as nearly as red as rosacea on fair skin
+    // (tools/calibrate/measure.cjs). Red faces measure under 50°, clear ones 53° and up.
+    red:keep(colour,blend([[ramp(m.rednessHue,4,13),.6],[ramp(m.redPatches,.02,.22),.4]])),
     acne:keep(detail&&colour,ramp(m.redSpots,.012,.07)),
     pigment:keep(detail&&colour&&pass('even'),blend([[ramp(m.darkSpots,.012,.08),.5],[ramp(m.uneven,.9,3),.5]])),
     texture:keep(detail,ramp(m.texture,.7,2.1)),
