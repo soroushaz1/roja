@@ -1,0 +1,29 @@
+{
+ "about": "Faces made by an image model (tools/showcase/make-faces.mjs) to check the skin check, the shade finder and Roja Clinic's procedures against: no real person. Each face says what it was asked to show (fitz: the Fitzpatrick type asked for; skin: the condition asked for), so the measurements can be compared with it. Not shown on the site. Made by .github/workflows/calibrate.yml into a branch of their own.",
+ "style": "Photorealistic studio portrait photograph of one adult, head and upper shoulders, facing the camera straight on, eyes open looking into the lens, mouth closed, relaxed neutral expression, hair pulled back away from the face so the whole face and jawline show, no glasses, no jewellery, no makeup, bare natural skin with real texture and pores, soft even daylight from the front, white balanced, plain light grey background, sharp focus, 85mm lens. The person is fictional.",
+ "faces": [
+  {"id":"s1","fitz":1,"skin":"clear","prompt":"A woman in her late twenties with very fair pale skin that always burns in the sun (Fitzpatrick type I), red hair, light freckle-free clear skin."},
+  {"id":"s2","fitz":2,"skin":"clear","prompt":"A woman in her thirties with fair skin (Fitzpatrick type II), light brown hair, clear even skin."},
+  {"id":"s3","fitz":3,"skin":"clear","prompt":"An Iranian woman in her thirties with light olive skin (Fitzpatrick type III), dark brown hair, clear even skin."},
+  {"id":"s4","fitz":4,"skin":"clear","prompt":"A woman in her thirties with medium tan olive-brown skin (Fitzpatrick type IV), black hair, clear even skin."},
+  {"id":"s5","fitz":5,"skin":"clear","prompt":"A woman in her thirties with brown skin (Fitzpatrick type V), black hair, clear even skin."},
+  {"id":"s6","fitz":6,"skin":"clear","prompt":"A woman in her thirties with very dark brown skin (Fitzpatrick type VI), black hair, clear even skin."},
+  {"id":"o2","fitz":2,"skin":"oily","prompt":"A man in his twenties with fair skin (Fitzpatrick type II) and visibly oily skin: shiny forehead, nose and chin with clear specular highlights, enlarged pores."},
+  {"id":"o4","fitz":4,"skin":"oily","prompt":"A woman in her twenties with medium tan skin (Fitzpatrick type IV) and visibly oily skin: shiny forehead, nose and chin with clear specular highlights, enlarged pores."},
+  {"id":"o6","fitz":6,"skin":"oily","prompt":"A man in his twenties with very dark skin (Fitzpatrick type VI) and visibly oily skin: shiny forehead, nose and chin with clear specular highlights."},
+  {"id":"r1","fitz":1,"skin":"redness","prompt":"A woman in her forties with very fair skin (Fitzpatrick type I) and diffuse redness across both cheeks and nose, like mild rosacea, without spots."},
+  {"id":"r3","fitz":3,"skin":"redness","prompt":"A man in his forties with light olive skin (Fitzpatrick type III) and diffuse redness across both cheeks and nose, like mild rosacea, without spots."},
+  {"id":"a2","fitz":2,"skin":"acne","prompt":"A woman in her early twenties with fair skin (Fitzpatrick type II) and mild acne: a dozen small red inflamed pimples on the cheeks, chin and forehead."},
+  {"id":"a5","fitz":5,"skin":"acne","prompt":"A man in his early twenties with brown skin (Fitzpatrick type V) and mild acne: a dozen small inflamed pimples on the cheeks, chin and forehead."},
+  {"id":"p3","fitz":3,"skin":"spots","prompt":"An Iranian woman in her forties with light olive skin (Fitzpatrick type III) and uneven pigmentation: brown sun spots and patches of melasma on the cheeks and upper lip."},
+  {"id":"p4","fitz":4,"skin":"spots","prompt":"A woman in her forties with medium tan skin (Fitzpatrick type IV) and uneven pigmentation: dark spots and patches on the cheeks and forehead."},
+  {"id":"p6","fitz":6,"skin":"spots","prompt":"A woman in her forties with very dark skin (Fitzpatrick type VI) and uneven pigmentation: darker patches on the cheeks and forehead."},
+  {"id":"l2","fitz":2,"skin":"lines","prompt":"A woman in her late fifties with fair skin (Fitzpatrick type II), visible forehead lines, crow's feet and fine lines around the mouth."},
+  {"id":"l5","fitz":5,"skin":"lines","prompt":"A man in his sixties with brown skin (Fitzpatrick type V), visible forehead lines, crow's feet and nasolabial folds."},
+  {"id":"k1","clinic":true,"prompt":"An East Asian woman in her twenties with a low nasal bridge, single eyelids and a round face."},
+  {"id":"k2","clinic":true,"prompt":"A South Asian man in his thirties with a broad nose, thick eyebrows and a full beard trimmed short."},
+  {"id":"k3","clinic":true,"prompt":"A European man in his sixties with deep wrinkles, sagging jowls and a thin upper lip."},
+  {"id":"k4","clinic":true,"prompt":"An Iranian woman in her twenties with a strong nose with a pronounced dorsal hump, a wide square jaw and full lips."},
+  {"id":"k5","clinic":true,"prompt":"A Black woman in her thirties with a wide nose, full lips and high cheekbones."}
+ ]
+}

@@ -3,16 +3,19 @@
 // Gemini's image model, else Imagen 4 (whose endpoint answered 404 from October 2026);
 // says which one made each face.
 //
-//   ROJA_GCP_PROJECT=… GCP_TOKEN=$(gcloud auth print-access-token) node tools/showcase/make-faces.mjs
+//   ROJA_GCP_PROJECT=… GCP_TOKEN=$(gcloud auth print-access-token) node tools/showcase/make-faces.mjs [list.json]
 //
-// A face already in tools/showcase/faces/ is kept: the same people across runs.
+// The list is faces.json here unless another is given (tools/calibrate/faces.json);
+// the faces go to faces/ beside it. A face already there is kept: the same people
+// across runs.
 import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 const here=path.dirname(fileURLToPath(import.meta.url));
-const {style,faces}=JSON.parse(fs.readFileSync(path.join(here,'faces.json'),'utf8'));
-const project=process.env.ROJA_GCP_PROJECT,token=process.env.GCP_TOKEN,out=process.argv[2]||path.join(here,'faces');
+const list=path.resolve(process.argv[2]||path.join(here,'faces.json'));
+const {style,faces}=JSON.parse(fs.readFileSync(list,'utf8'));
+const project=process.env.ROJA_GCP_PROJECT,token=process.env.GCP_TOKEN,out=path.join(path.dirname(list),'faces');
 if(!project||!token)throw new Error('ROJA_GCP_PROJECT and GCP_TOKEN are needed');
 fs.mkdirSync(out,{recursive:true});
 

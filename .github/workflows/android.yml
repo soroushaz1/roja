@@ -20,6 +20,8 @@ on:
     paths-ignore:
       - 'showcase/**'
       - 'tools/showcase/**'
+      - 'tools/calibrate/**'
+      - '.github/workflows/calibrate.yml'
       - '.github/workflows/showcase.yml'
       - 'README.md'
   workflow_dispatch:
