@@ -140,6 +140,7 @@ A shop's mirror has one of two plans (`plan.js`):
 | ready-made looks | the first two | all |
 | skin check | profile, the skin's state, priorities | also the morning and evening routine, keeping results and comparing them |
 | pictures | Roja's mark, at most 720 px on the long side | the camera's full size, no mark; several shades side by side |
+| 3D view | | the face with its makeup as a model to turn |
 
 A shop buys the professional plan itself on `business/`, paying through Zarinpal: it gives
 its name, its site's address and, if it likes, its search address, and comes back with its
@@ -213,6 +214,13 @@ are committed like the rest of the site; run the tool again after changing it
 item chosen, through the address: `#product=velvet`, `#skin`, or `#look=…` for a shared
 look. The old procedure pages' addresses (`/procedures/…`) land on the mirror (see
 `server/nginx-pythonpath.conf`).
+
+**The 3D view** (`viewer3d.js`, `fuse.js`, `head3d.js`, taken over from Roja Clinic) turns
+the face with its makeup as a model, out to 50° each way. It is made from one picture:
+the mirror as it is, held still while the view is open, on the tracker's own mesh with
+its depth, smoothed and given an atlas of its own. A change of shade or look remakes it
+from the same frame; "without makeup" makes it from the bare frame. A snapshot while it
+is open saves the model as seen.
 
 ## Privacy
 

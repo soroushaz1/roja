@@ -781,3 +781,30 @@ html.embedded .brand{pointer-events:none}
   .product-head .lede{display:none}
   .product-head h2{font-size:19px}
 }
+
+/* The 3D view (viewer3d.js): over the picture while it is open, its controls in a bar at
+   the bottom. The canvas is mirrored like the live picture. */
+.v3{position:absolute;inset:0;z-index:4;background:radial-gradient(ellipse at center,#1F151B,#0C070A 72%)}
+.stage .v3 canvas{pointer-events:auto;touch-action:none;cursor:grab;object-fit:fill}
+.stage .v3 canvas:active{cursor:grabbing}
+.v3-bar{
+  position:absolute;bottom:12px;left:50%;transform:translateX(-50%);z-index:1;
+  display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:6px;padding:6px;max-width:calc(100% - 24px);
+  background:#140C11B3;border:1px solid #FFFFFF14;border-radius:14px;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
+}
+.v3-bar .segmented{background:#0C070A99;border-color:#FFFFFF14;flex:none;flex-wrap:nowrap}
+.v3-bar .segmented button{color:#BBA1AD}
+.v3-bar .segmented button[aria-checked=true]{color:#F6ECF1;background:#B83A6A55}
+.v3-bar .ghost{padding:7px 12px;font-size:12.5px;background:#0C070A99;border-color:#FFFFFF1F;color:#E9D6DF}
+.v3-bar .ghost[aria-pressed=true]{border-color:var(--rose);background:#B83A6A33;color:#F6ECF1}
+.v3-hint{position:absolute;top:12px;inset-inline-start:14px;margin:0;font-size:12px;color:#BBA1AD;pointer-events:none;max-width:calc(100% - 100px)}
+.v3-short{display:none}
+.v3.building canvas{opacity:.55;transition:opacity .2s}
+/* On a phone the bar is one short row at the bottom, so it leaves the face in view. */
+@media (max-width:900px){
+  .v3-bar{bottom:6px;flex-wrap:nowrap;gap:4px;padding:4px;max-width:calc(100% - 12px);overflow-x:auto;scrollbar-width:none}
+  .v3-bar .segmented{padding:2px;gap:2px}
+  .v3-bar .segmented button,.v3-bar .ghost{padding:5px 8px;font-size:11.5px;white-space:nowrap}
+  .v3-long{display:none}.v3-short{display:inline}
+  .v3-hint{display:none}
+}
