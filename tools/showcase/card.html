@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<!-- One before/after picture for the site, filled in by render.cjs. -->
+<style>
+@font-face{font-family:Estedad;src:url(../../fonts/Estedad-var.woff2) format('woff2');font-weight:100 900}
+*{box-sizing:border-box;margin:0}
+html,body{width:1200px;height:860px;background:#140C11;font-family:Estedad,Tahoma,sans-serif;color:#F6ECF1}
+.card{display:flex;flex-direction:column;height:100%;padding:28px 32px 22px;
+  background:radial-gradient(900px 500px at 50% -10%,#3A1A2A,transparent 70%),#140C11}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:20px;flex:1;min-height:0}
+figure{position:relative;border-radius:22px;overflow:hidden;background:#0C070A;box-shadow:0 20px 40px -20px #000}
+figure img{width:100%;height:100%;object-fit:cover;display:block}
+figcaption{position:absolute;top:14px;inset-inline-start:14px;padding:6px 16px;border-radius:999px;font-size:22px;font-weight:800;
+  background:#140C11CC;border:1px solid #FFFFFF22}
+figure.after figcaption{background:#B83A6ACC}
+.foot{display:flex;justify-content:space-between;align-items:center;margin-top:16px;gap:20px}
+.name{font-size:26px;font-weight:800}
+.note{font-size:16px;color:#BBA1AD;text-align:left}
+.brand{font-weight:900;color:#F4E3B0}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="pair">
+    <figure><img id="before" alt=""><figcaption>قبل</figcaption></figure>
+    <figure class="after"><img id="after" alt=""><figcaption>بعد</figcaption></figure>
+  </div>
+  <div class="foot">
+    <div class="name" id="name"></div>
+    <div class="note"><span id="note"></span> · <span class="brand">رُژا</span> pythonpath.ir</div>
+  </div>
+</div>
+</body>
+</html>

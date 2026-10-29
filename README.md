@@ -367,6 +367,18 @@ The last three come from repository variables of the same names; whatever is not
 left as the server has it. Zarinpal checks that the payment's return address is on the
 site registered for the merchant id, so that site must be `pythonpath.ir`.
 
+## Before/after pictures
+
+`showcase/` holds before/after pictures for the site, on faces made by an image model:
+no real person. `.github/workflows/showcase.yml` makes them whenever
+`tools/showcase/faces.json` changes on main (or by hand): it signs in to the Google Cloud
+project the keyless way the real-devices job does, has Vertex AI make each face
+(`make-faces.mjs`: Imagen 4, else Gemini's image model), shows it bare and then with
+Roja's looks or Roja Clinic's procedures in the mirrors themselves (`render.cjs`, with
+`card.html`), and pushes the pictures to a branch `showcase-<run>` to be looked at and
+merged. Every picture says on itself that it is a simulation on a face made by AI;
+`build-pages.mjs` then adds them to `business/` and a page of their own, `showcase/`.
+
 ## Tests
 
 ```bash
