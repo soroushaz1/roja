@@ -49,17 +49,20 @@ export const contact={
   telegram:'soroushamel'
 };
 
-const KEY='roja-shop';
-// Shops that subscribed on the business page, as the server described them (resolveShop).
-const registered={};
-const known=id=>typeof id==='string'&&(Object.hasOwn(shops,id)||Object.hasOwn(registered,id));
+const KEY='roja-shop',KNOWN='roja-shops';
+// Shops that subscribed on the business page, as the server last described them
+// (refreshShop), kept for the visit so the mirror can start from them straight away.
+const registered=(()=>{try{return JSON.parse(sessionStorage.getItem(KNOWN))||{};}catch{return {};}})();
+// hasOwnProperty, as the WebView on older phones predates the newer shorthand for it.
+const own=(o,k)=>Object.prototype.hasOwnProperty.call(o,k);
+const known=id=>typeof id==='string'&&(own(shops,id)||own(registered,id));
 const idFrom=loc=>{
   const from=s=>new URLSearchParams(s).get('shop');
   return from(loc?.search||'')||from((loc?.hash||'').replace(/^#/,''));
 };
-// The shop this page is for, or null. Only ids in `shops`, or ones the server knows,
-// count, so an address cannot make the mirror send people anywhere a shop was not set
-// up for.
+// The shop this page is for, or null. Only ids in `shops`, or ones the server has
+// described, count, so an address cannot make the mirror send people anywhere a shop
+// was not set up for.
 export function currentShop(loc=globalThis.location){
   let id=null;
   try{
@@ -69,22 +72,29 @@ export function currentShop(loc=globalThis.location){
   }catch{}
   id=known(id)?id:defaultShop;
   if(!id)return null;
-  return Object.hasOwn(shops,id)?{id,...shops[id]}:{id,...registered[id]};
+  return own(shops,id)?{id,...shops[id]}:{id,...registered[id]};
 }
-// The same, after asking the server about an id that is not in `shops`. Gives up after a
-// few seconds (offline, or the app), and the mirror is then Roja's own.
-export async function resolveShop(loc=globalThis.location){
+// Asks the server about the shop in the address when it is not one of `shops`: whether
+// it exists and its plan is running. The mirror starts at once from what this visit
+// already knows; this says whether the answer changed that (a shop seen for the first
+// time, a plan begun or ended), in which case the page loads again once. Gives up after
+// a few seconds (offline, or the app).
+export async function refreshShop(loc=globalThis.location){
   let id=null;
   try{id=idFrom(loc)||sessionStorage.getItem(KEY);}catch{}
-  if(id&&!known(id)&&/^[a-z0-9-]{1,24}$/.test(id)&&!globalThis.RojaAndroid){
-    try{
-      const res=await fetch(`${new URL('api/shop',document.baseURI)}?id=${encodeURIComponent(id)}`,{signal:AbortSignal.timeout(4000)});
-      if(res.ok){const s=await res.json();
-        if(s?.id===id&&typeof s.name==='string'&&typeof s.origin==='string')
-          registered[id]={name:s.name,origin:s.origin,search:s.search||null,pro:!!s.pro};}
-    }catch{}
-  }
-  return currentShop(loc);
+  if(!id||own(shops,id)||!/^[a-z0-9-]{1,24}$/.test(id)||globalThis.RojaAndroid)return false;
+  try{
+    const stop=new AbortController(),timer=setTimeout(()=>stop.abort(),4000);
+    const res=await fetch(`${new URL('api/shop',document.baseURI)}?id=${encodeURIComponent(id)}`,{signal:stop.signal}).finally(()=>clearTimeout(timer));
+    if(!res.ok&&res.status!==404)return false;
+    const s=res.ok?await res.json():null;
+    const next=s?.id===id&&typeof s.name==='string'&&typeof s.origin==='string'
+      ?{name:s.name,origin:s.origin,search:s.search||null,pro:!!s.pro}:null;
+    const before=JSON.stringify(registered[id]||null);
+    if(next)registered[id]=next;else delete registered[id];
+    try{sessionStorage.setItem(KNOWN,JSON.stringify(registered));if(next)sessionStorage.setItem(KEY,id);}catch{}
+    return JSON.stringify(next)!==before;
+  }catch{return false;}
 }
 
 // The words for one product in one shade. A skincare product is searched by its own

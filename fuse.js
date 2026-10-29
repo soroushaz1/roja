@@ -15,7 +15,7 @@
 // The shape stays in the first picture's own frame (its pixels, z on the scale of x,
 // larger farther from the camera), so it reads like that picture's landmarks, and
 // each picture's pose maps the shape into that picture.
-import {WARP_TRIANGLES} from './head3d.js?v=31';
+import {WARP_TRIANGLES} from './head3d.js?v=32';
 
 export const MESH=468;
 // How much a point's depth is trusted against its place across the picture.
