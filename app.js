@@ -1,15 +1,16 @@
-import {products,categories,finishes,looks,byProduct} from './catalog.js?v=27';
-import {layerSpecs,createMaskPainter,renderFallback,createSmoother,landmarksByType,frameLandmarks,hexToRgb} from './makeup.js?v=27';
-import {createStage,layerModes} from './stage.js?v=27';
-import {renderDebug,nearest} from './debug.js?v=27';
-import {createBrush,brushModes} from './brush.js?v=27';
-import {measure,points as placed,symmetry,pose as poseOf} from './measure.js?v=27';
-import {CANON,CANON_ASPECT,TRIANGLES} from './facemesh.js?v=27';
-import {createSkinScanner} from './skin-scan.js?v=27';
-import {createSkinPanel} from './skin-panel.js?v=27';
-import {skincareById} from './skin.js?v=27';
-import {count} from './usage.js?v=27';
-import {currentShop,shopUrl,searchWords} from './shops.js?v=27';
+import {products,categories,finishes,looks,byProduct} from './catalog.js?v=28';
+import {layerSpecs,createMaskPainter,renderFallback,createSmoother,landmarksByType,frameLandmarks,hexToRgb} from './makeup.js?v=28';
+import {createStage,layerModes} from './stage.js?v=28';
+import {renderDebug,nearest} from './debug.js?v=28';
+import {createBrush,brushModes} from './brush.js?v=28';
+import {measure,points as placed,symmetry,pose as poseOf} from './measure.js?v=28';
+import {CANON,CANON_ASPECT,TRIANGLES} from './facemesh.js?v=28';
+import {createSkinScanner} from './skin-scan.js?v=28';
+import {createSkinPanel} from './skin-panel.js?v=28';
+import {skincareById} from './skin.js?v=28';
+import {count} from './usage.js?v=28';
+import {resolveShop,shopUrl,searchWords} from './shops.js?v=28';
+import {planFor,applyFreePlan,freeShadeIds,FREE_LOOKS,FREE_PHOTO_PX} from './plan.js?v=28';
 
 const $=id=>document.getElementById(id);
 // GitHub Pages ignores the ?v= query, and browsers and its CDN keep a page for up to ten
@@ -17,7 +18,7 @@ const $=id=>document.getElementById(id);
 // newer script, which would then look for elements that page does not have. Such a
 // page is loaded afresh, once; if it is still the old one, it says a new version is
 // on its way instead of failing.
-const RELEASE='27';
+const RELEASE='28';
 if(document.documentElement.dataset.release!==RELEASE){
   let tried=null;
   try{tried=sessionStorage.getItem('roja-reloaded');sessionStorage.setItem('roja-reloaded',RELEASE);}catch{}
@@ -73,7 +74,16 @@ const viewport=$('viewport');
 // The shop this mirror sells for (shops.js), from the address; null on Roja's own demo,
 // which then offers no buying, only the way to put the mirror on a shop. Inside a
 // shop's page (an iframe) the page around it is that shop.
-const shop=currentShop();
+const shop=await resolveShop();
+// The professional plan or the free one (plan.js). The free one trims the catalogue
+// before anything is drawn from it; on Roja's own site everything stays, and what only
+// the professional plan has is marked.
+const tier=planFor(shop);
+const proOnly=tier.showcase?(()=>{const free=freeShadeIds(products,looks);return id=>!free.has(id);})():()=>false;
+const freeLooks=new Set(FREE_LOOKS);
+if(!tier.pro)applyFreePlan(products,looks);
+document.documentElement.classList.toggle('pro',tier.pro);
+document.documentElement.classList.toggle('showcase',tier.showcase);
 count('step','open');
 const embedded=(()=>{try{return window.parent!==window;}catch{return true;}})();
 document.documentElement.classList.toggle('has-shop',!!shop);
@@ -182,7 +192,9 @@ function swatchStyle(shade){
 function renderShades(){
   $('shades').replaceChildren();
   for(const shade of product.shades){
-    const b=el('button',{class:`shade f-${finishOf(product,shade)}`,type:'button',role:'radio','aria-label':shade.name,title:shade.name,data:{id:shade.id}});
+    const pro=proOnly(shade.id);
+    const b=el('button',{class:`shade f-${finishOf(product,shade)}${pro?' pro-only':''}`,type:'button',role:'radio',
+      'aria-label':pro?`${shade.name} (حرفه‌ای)`:shade.name,title:pro?`${shade.name} · حرفه‌ای`:shade.name,data:{id:shade.id}});
     b.style.background=swatchStyle(shade);
     b.onclick=()=>select(shade.id);
     $('shades').append(b);
@@ -286,8 +298,12 @@ function applyLook(look){
   }else toast(`استایل «${look.name}» روی صورت است. هر محصول را می‌توانی جدا عوض کنی.`);
 }
 function renderLooks(){
-  $('looks').replaceChildren(...looks.map(look=>el('button',{class:'look-card',type:'button',onclick:()=>applyLook(look),data:{look:look.id}},
-    lookDots(look.items),el('strong',{text:look.name}),el('small',{text:look.description}))));
+  $('looks').replaceChildren(...looks.map(look=>{
+    const pro=tier.showcase&&!freeLooks.has(look.id);
+    return el('button',{class:`look-card${pro?' pro-only':''}`,type:'button',onclick:()=>applyLook(look),data:{look:look.id}},
+      lookDots(look.items),el('strong',{text:look.name},...(pro?[el('span',{class:'pro-badge',text:'حرفه‌ای'})]:[])),
+      el('small',{text:look.description}));
+  }));
   renderMyLooks();
 }
 
@@ -969,7 +985,7 @@ function onTracker(d){
 function ensureTracker(){
   if(tracker||trackerStarting)return;
   let w=null;
-  try{w=new Worker(new URL(`face-worker.js?v=27${gpuQuery}`,import.meta.url));}catch(e){perf.lastError=`worker: ${e.message}`;}
+  try{w=new Worker(new URL(`face-worker.js?v=28${gpuQuery}`,import.meta.url));}catch(e){perf.lastError=`worker: ${e.message}`;}
   if(!w){useTracker('page','no worker');return;}
   ready=false;busy=false;
   tracker={kind:'worker',post:(m,transfer)=>w.postMessage(m,transfer),close:()=>w.terminate()};
@@ -989,7 +1005,7 @@ async function useTracker(kind,reason){
   const token=++trackerGeneration;
   try{
     const Vision=await import('./vendor/vision_bundle.mjs');
-    await import('./face-core.js?v=27');
+    await import('./face-core.js?v=28');
     const core=self.rojaFaceCore(Vision,new URL('./',import.meta.url).href);
     const found=await core.init('CPU',(loaded,total)=>{if(token===trackerGeneration)onTracker({type:'progress',loaded,total});});
     if(token!==trackerGeneration){core.close();return;}
@@ -1414,8 +1430,15 @@ async function capture({marks=true}={}){
       x.fillStyle='#140C11CC';x.fillRect(align==='left'?px-6*s:px-m-6*s,h-30*s,m+12*s,22*s);x.fillStyle='#F4E3B0';x.fillText(text,px,h-12*s);};
     tag(before,12*s,'left');tag(after,w-12*s,'right');
   }
-  if(marks)brandMark(x,w,Math.max(1,w/640));
-  return c;
+  // A shop on the professional plan gets its pictures without Roja's mark and at the
+  // camera's full size; the free plan's are marked and smaller (plan.js).
+  if(marks&&!(shop&&tier.pro))brandMark(x,w,Math.max(1,w/640));
+  const long=Math.max(w,h);
+  if(tier.pro||long<=FREE_PHOTO_PX)return c;
+  const k=FREE_PHOTO_PX/long,small=document.createElement('canvas');
+  small.width=Math.round(w*k);small.height=Math.round(h*k);
+  const sx=small.getContext('2d');sx.imageSmoothingQuality='high';sx.drawImage(c,0,0,small.width,small.height);
+  return small;
 }
 function brandMark(x,w,s){
   x.font=`800 ${15*s}px Estedad, Tahoma, sans-serif`;x.fillStyle='#FFFFFFB0';x.textAlign='right';x.textBaseline='top';x.direction='rtl';
@@ -1666,7 +1689,7 @@ function restoreSaved(){
 // Measured from the picture the landmarks were found in: the camera video (paused
 // when frozen) or the chosen photo. The native mirror keeps its frames to itself.
 const skinScanner=createSkinScanner();
-const skinPanel=createSkinPanel({el,fa,pct,toast,buyLink,shop,icon,
+const skinPanel=createSkinPanel({el,fa,pct,toast,buyLink,shop,icon,pro:tier.pro,showcase:tier.showcase,
   mirror:()=>({source:!!source,native:!!source?.native,face:!!landmarks}),
   scan:()=>source&&!source.native&&landmarks?skinScanner.scan(source.el,source.width,source.height,landmarks,poseAngles):null});
 
@@ -1735,6 +1758,8 @@ $('add-look').onclick=openBuy;
 $('clear-look').onclick=()=>{for(const item of products)makeupState[item.id].enabled=false;pin=null;updatePinButton();afterMakeupChange();};
 $('pin-shade').onclick=togglePin;
 $('multi-open').onclick=openMulti;
+// Several shades side by side is the professional plan's (plan.js).
+$('multi-open').hidden=!tier.pro;
 $('multi-run').onclick=runMulti;
 $('multi-close').onclick=()=>$('multi').close();
 $('multi-again').onclick=()=>{$('multi-pick').hidden=false;$('multi-result').hidden=true;};

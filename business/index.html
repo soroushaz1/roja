@@ -50,13 +50,67 @@
   <li><strong>ماندن بیشتر در سایت</strong><span>استایل‌های آماده، مقایسهٔ دو رنگ کنار هم، براش و عکس گرفتن؛ و هر استایل با یک لینک برای دوست فرستاده می‌شود.</span></li>
   <li><strong>بدون دردسر حقوقی تصویر</strong><span>همهٔ پردازش روی دستگاه مشتری است؛ هیچ تصویری به سرور شما یا ما نمی‌رسد که نگه‌داری‌اش مسئولیت داشته باشد.</span></li>
 </ul>
+<h2 id="plans">پلن‌ها</h2>
+<div class="plans">
+  <section class="plan">
+    <h3>پایه</h3>
+    <p class="price">رایگان</p>
+    <ul>
+      <li>۶۹ رنگ از ۱۲۱، پخش در همهٔ طیف هر محصول</li>
+      <li>۲ استایل آماده</li>
+      <li>تحلیل پوست: تیپ پوست، وضعیت و اولویت‌ها</li>
+      <li>عکس با نشان رُژا، تا ۷۲۰ پیکسل</li>
+    </ul>
+    <p class="quiet">با یک پیام راه‌اندازی می‌شود.</p>
+  </section>
+  <section class="plan pro">
+    <h3>حرفه‌ای</h3>
+    <p class="price"><b data-price="month">۹۹۰٬۰۰۰</b> تومان در ماه<br><small><b data-price="year">۹٬۹۰۰٬۰۰۰</b> تومان در سال</small></p>
+    <ul>
+      <li>همهٔ ۱۲۱ رنگ ۱۶ محصول</li>
+      <li>همهٔ ۶ استایل آماده</li>
+      <li>تحلیل کامل پوست با روتین صبح و شب و مقایسه با دفعه‌های قبل</li>
+      <li>عکس با کیفیت کامل دوربین، بدون نشان رُژا</li>
+      <li>چند رنگ کنار هم در یک عکس</li>
+      <li>نمای سه‌بعدی چرخان صورت با آرایش (به‌زودی)</li>
+    </ul>
+    <p class="cta"><a class="button" href="#subscribe">خرید اشتراک</a></p>
+  </section>
+</div>
 <h2>در عمل ببینید</h2>
 <p>آینه را با یک «فروشگاه نمونه» باز کنید، رنگی را امتحان کنید و دکمهٔ خرید را بزنید؛ جایی که در سایت شما صفحهٔ محصول باز می‌شود، به همین صفحه برمی‌گردید.</p>
 <p class="cta"><a class="button" href="../?shop=demo">باز کردن آینه با فروشگاه نمونه</a></p>
 <div class="note" id="buy-demo"><p><strong>اینجا صفحهٔ محصول شما بود.</strong> در سایت شما، دکمهٔ خرید به صفحهٔ همین محصول، یا جست‌وجوی همین نوع و رنگ، در فروشگاه خودتان می‌رود؛ یا محصول بی‌آنکه مشتری آینه را ترک کند، به سبد شما اضافه می‌شود.</p></div>
+<h2 id="subscribe">خرید اشتراک حرفه‌ای</h2>
+<p>پرداخت با درگاه زرین‌پال است. بعد از پرداخت، همین‌جا شناسهٔ فروشگاه، کد گذاشتن آینه روی سایتتان و یک <strong>کد فعال‌سازی</strong> می‌گیرید که با آن وضعیت اشتراک را می‌بینید و تمدیدش می‌کنید.</p>
+<div id="pay-result" class="pay-result" hidden></div>
+<p id="subscribe-closed" class="note">پرداخت آنلاین هنوز باز نشده است؛ برای خرید اشتراک پیام بدهید (پایین همین صفحه).</p>
+<form id="subscribe-form" class="form" hidden>
+  <label>نام فروشگاه <input name="name" required minlength="2" maxlength="40" autocomplete="organization"></label>
+  <label>نشانی سایت فروشگاه <input name="origin" required dir="ltr" inputmode="url" placeholder="https://shop.example.ir" autocomplete="url"></label>
+  <label>نشانی جست‌وجوی سایت <small>اختیاری؛ به جای کلمهٔ جست‌وجو بنویسید <code dir="ltr">{q}</code></small>
+    <input name="search" dir="ltr" inputmode="url" placeholder="https://shop.example.ir/search?q={q}"></label>
+  <label>شمارهٔ موبایل <small>اختیاری؛ فقط برای رسید زرین‌پال و تماس دربارهٔ اشتراک</small>
+    <input name="contact" dir="ltr" inputmode="tel" placeholder="09120000000" autocomplete="tel"></label>
+  <fieldset><legend>مدت</legend>
+    <label class="choice"><input type="radio" name="period" value="month" checked> یک‌ماهه · <b data-price="month">۹۹۰٬۰۰۰</b> تومان</label>
+    <label class="choice"><input type="radio" name="period" value="year"> یک‌ساله · <b data-price="year">۹٬۹۰۰٬۰۰۰</b> تومان</label>
+  </fieldset>
+  <p class="form-error" role="alert" hidden></p>
+  <p class="sandbox note" hidden>درگاه در حالت آزمایشی است: پولی کم نمی‌شود و اشتراک واقعی ساخته نمی‌شود.</p>
+  <button class="button" type="submit">پرداخت و فعال‌سازی</button>
+</form>
+<h2 id="panel">پنل فروشگاه</h2>
+<p>اگر اشتراک دارید، کد فعال‌سازی را وارد کنید تا وضعیت، کد آینه و تمدید را ببینید.</p>
+<form id="login-form" class="form inline">
+  <label>کد فعال‌سازی <input name="code" required dir="ltr" autocomplete="off" spellcheck="false" placeholder="RJ-XXXX-XXXX-XXXX-XXXX"></label>
+  <button class="button ghost" type="submit">ورود</button>
+  <p class="form-error" role="alert" hidden></p>
+</form>
+<div id="shop-panel" class="shop-panel" hidden></div>
 <h2>چطور روی سایت شما می‌نشیند</h2>
 <ol class="steps">
-  <li>نام فروشگاه و نشانی جست‌وجوی سایتتان را می‌گیریم، یا اگر بخواهید، نشانی صفحهٔ محصول برای هر رنگ؛ و فروشگاه شما با یک شناسه به آینه اضافه می‌شود.</li>
+  <li>اشتراک را همین‌جا می‌خرید و شناسهٔ فروشگاهتان را همان لحظه می‌گیرید؛ یا برای پلن پایه، نام فروشگاه و نشانی جست‌وجوی سایتتان را می‌فرستید و شناسه را از ما می‌گیرید.</li>
   <li>این کد را در هر صفحه‌ای که می‌خواهید می‌گذارید (به جای <code dir="ltr">YOUR-SHOP</code>، شناسهٔ فروشگاه شما):</li>
 </ol>
 <pre dir="ltr"><code>&lt;iframe src=&quot;https://pythonpath.ir/?shop=YOUR-SHOP&quot;
@@ -79,11 +133,12 @@
 <h2>گفت‌وگو</h2>
 <p>برای راه‌اندازی، قیمت، یا دیدن آینه با محصولات خودتان، پیام بدهید:</p>
 <p class="cta contact"><a class="button" href="https://wa.me/989116571248?text=%D8%B3%D9%84%D8%A7%D9%85%D8%8C%20%D8%AF%D8%B1%D8%A8%D8%A7%D8%B1%D9%87%D9%94%20%DA%AF%D8%B0%D8%A7%D8%B4%D8%AA%D9%86%20%D8%A2%DB%8C%D9%86%D9%87%D9%94%20%D8%B1%D9%8F%DA%98%D8%A7%20%D8%B1%D9%88%DB%8C%20%D8%B3%D8%A7%DB%8C%D8%AA%20%D9%81%D8%B1%D9%88%D8%B4%DA%AF%D8%A7%D9%87%D9%85%D8%A7%D9%86%20%D8%B3%D8%A4%D8%A7%D9%84%20%D8%AF%D8%A7%D8%B1%D9%85." rel="noopener">واتس‌اپ</a> <a class="button ghost" href="https://t.me/soroushamel" rel="noopener">تلگرام</a></p>
-<p class="disclaimer">رنگ‌ها نمونه‌ای روی صفحه‌اند، نه اندازه‌گیری دقیق محصول؛ نور محیط، دوربین و رنگ طبیعی پوست، چیزی را که می‌بینی جابه‌جا می‌کنند. تحلیل پوست هم در آینه هست و می‌تواند روی سایت شما روشن یا خاموش باشد.</p>
+<p class="disclaimer">رنگ‌ها نمونه‌ای روی صفحه‌اند، نه اندازه‌گیری دقیق محصول؛ نور محیط، دوربین و رنگ طبیعی پوست، چیزی را که می‌بینی جابه‌جا می‌کنند. تحلیل پوست هم در آینه هست و می‌تواند روی سایت شما روشن یا خاموش باشد. قابلیت‌های حرفه‌ای فقط وقتی باز می‌شوند که آینه روی سایت خود فروشگاه باشد، یا از آن لینک شده باشد.</p>
 </main>
 <footer>
   <p>رُژا آینه‌ای زنده در مرورگر است. تصویر دوربین روی همین دستگاه پردازش می‌شود و جایی فرستاده یا ذخیره نمی‌شود.</p>
   <p><a href="../">آینه</a> · <a href="../makeup/">آرایش</a> · <a href="../faq/">پرسش‌ها</a> · <a href="../business/">برای فروشگاه‌ها</a> · <a href="../privacy/">حریم خصوصی</a></p>
 </footer>
+<script type="module" src="../business.js"></script>
 </body>
 </html>

@@ -5,11 +5,12 @@
 // or answer is ever part of it.
 //
 // Not from the Android app (its pages are not on the site) or a development server.
-import {currentShop} from './shops.js?v=27';
+import {currentShop} from './shops.js?v=28';
 
 const API='api/stats';
-// The shop whose mirror this is, so each shop's counts can be read on their own.
-const shop=currentShop()?.id||'';
+// The shop whose mirror this is, so each shop's counts can be read on their own. Asked
+// when sending, as a shop that subscribed is known only once the server has said so.
+const shopId=()=>currentShop()?.id||'';
 const on=!window.RojaAndroid&&location.protocol==='https:'&&!['localhost','127.0.0.1','[::1]'].includes(location.hostname);
 const queue=[];
 const seen=new Set();
@@ -25,6 +26,7 @@ export function count(event,item,{each=false}={}){
 }
 export function flush(){
   if(!queue.length)return;
+  const shop=shopId();
   const body=JSON.stringify({events:queue.splice(0,100),...(shop&&{shop})});
   try{
     if(!navigator.sendBeacon?.(API,new Blob([body],{type:'application/json'})))

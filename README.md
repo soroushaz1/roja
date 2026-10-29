@@ -130,6 +130,31 @@ shop's mirror.
 one shop's mirror: what was tried, what was opened in the shop, and how far visits got,
 from opening the page to opening the shop.
 
+### Plans
+
+A shop's mirror has one of two plans (`plan.js`):
+
+| | basic (free) | professional |
+|---|---|---|
+| shades | about half of each product's, spread over its whole range | all |
+| ready-made looks | the first two | all |
+| skin check | profile, the skin's state, priorities | also the morning and evening routine, keeping results and comparing them |
+| pictures | Roja's mark, at most 720 px on the long side | the camera's full size, no mark; several shades side by side |
+
+A shop buys the professional plan itself on `business/`, paying through Zarinpal: it gives
+its name, its site's address and, if it likes, its search address, and comes back with its
+shop id, the code to put on its site, and an **activation code**. The code opens the shop's
+panel on the same page: how long the plan runs, renewing it, and changing the name or
+addresses. These shops are kept on the server (`server/billing.mjs`), not in `shops.js`;
+the mirror asks the server about an id it does not know (`resolveShop`).
+
+The professional plan opens only on the shop's own site: inside a page of its origin, or
+reached by a link from it (and for the rest of that visit). The same address opened
+anywhere else is the basic mirror. Roja's own site shows everything, with the
+professional parts marked, as the showcase; a shop in `shops.js` can be given
+`plan: 'pro'` (the demo shop is). The mirror runs on the shopper's device, so this decides
+what is offered rather than locking anything: the agreement with the shop is what binds.
+
 ## How it works
 
 - **Face tracking** — MediaPipe Face Landmarker, 478 points with head pose and expression
@@ -214,6 +239,11 @@ box and press save: its scores and your answers, no picture, no name or account.
 made on your device (kept in its local storage, sent in a request header) names your results
 on the server; only a hash of it is stored, and the same screen deletes everything kept
 under it.
+
+Shops that buy a plan give their name, their site's address and, if they like, a mobile
+number; the server keeps those, how long the plan runs, a hash of the activation code, and
+for each payment its amount and Zarinpal's reference and masked card number. Nothing about
+the shoppers who use a shop's mirror is part of it.
 
 ## Browsers
 
@@ -306,6 +336,29 @@ This server is temporary; the site is meant to move to a server in Iran. If it i
 behind Cloudflare's proxy, the nginx site already reads the visitor's address from
 `CF-Connecting-IP` for Cloudflare's ranges only, so the API's rate limit stays per visitor.
 
+### Payments
+
+`server/billing.mjs` sells the professional plan (see [Plans](#plans)) through Zarinpal's
+v4 gateway: `/api/plans` gives the prices, `/api/pay/start` asks Zarinpal for a payment and
+returns the address to pay at, `/api/pay/back` is where Zarinpal sends the payer back
+(verified there, then on to `business/` with the activation code or the news), and
+`/api/shop/login`, `/api/shop/update` and `/api/shop` serve the shop's panel and the
+mirror. Activation codes are kept only as hashes; a new one is shown for an hour after
+paying should the page be opened again, then only its hash is left. Amounts go to
+Zarinpal in rials; prices are set in toman.
+
+It reads, from `/etc/roja-api.env`:
+
+- `ZARINPAL_MERCHANT`: the merchant id. Without it, payment is closed and `business/` says
+  to get in touch instead. Never in the repository: the deploy workflow writes it from the
+  repository secret `ZARINPAL_MERCHANT`.
+- `ZARINPAL_SANDBOX=1`: every payment goes to Zarinpal's sandbox, where nothing is charged.
+- `ROJA_PRICE_MONTH`, `ROJA_PRICE_YEAR`: the prices in toman (990000 and 9900000 if unset).
+
+The last three come from repository variables of the same names; whatever is not set is
+left as the server has it. Zarinpal checks that the payment's return address is on the
+site registered for the merchant id, so that site must be `pythonpath.ir`.
+
 ## Tests
 
 ```bash
@@ -352,6 +405,14 @@ second, tracking latency, the model's time per frame, mask and draw cost) for a 
 Headless Chromium only emulates a GPU, so compare runs with each other; on a phone, open the
 debug panel for the same numbers. `?gpu=0` keeps the model on the CPU and `?gpu=force` puts
 it on the GPU regardless, for comparing the two.
+
+`node tools/billing-check.mjs` runs the shops' payments end to end against a throwaway
+database and a stand-in for Zarinpal on the same machine: checking what a shop sends,
+paying, the way back opened twice, cancelled and refused payments, the panel, renewing,
+and the usage counts taking a new shop. `tools/deploy.sh` runs it before deploying. To try
+the business page by hand, run the API with `ZARINPAL_SANDBOX=1` and a merchant id, and
+the preview with `ROJA_API=http://127.0.0.1:51840 node tools/preview.cjs`, which passes
+`/api/` on as nginx does.
 
 ## First load
 

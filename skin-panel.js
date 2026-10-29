@@ -5,7 +5,7 @@
 // The mirror (app.js) owns the camera and the landmarks. It calls tick() every frame
 // while this panel is showing; the panel asks it for a measurement through scan()
 // when it wants one, a few times a second at most.
-import {questions,requiredQuestions,assess,combineScans,record,axes,fitzNames,concernNames} from './skin.js?v=27';
+import {questions,requiredQuestions,assess,combineScans,record,axes,fitzNames,concernNames} from './skin.js?v=28';
 
 const QUALITY={
   size:'صورت به اندازهٔ کافی نزدیک است',
@@ -18,7 +18,9 @@ const QUALITY={
 const API='api/skin';
 const SCANS=6;
 
-export function createSkinPanel({el,fa,pct,toast,buyLink,shop,icon,scan,mirror}){
+// With the free plan (plan.js) the result stops at the profile, the skin's state and the
+// priorities: the routine, and keeping and comparing results, are the professional plan's.
+export function createSkinPanel({el,fa,pct,toast,buyLink,shop,icon,scan,mirror,pro=true,showcase=false}){
   const $=id=>document.getElementById(id);
   const answers={using:[],irritants:[]};
   let step='capture';               // capture | questions | result
@@ -134,14 +136,18 @@ export function createSkinPanel({el,fa,pct,toast,buyLink,shop,icon,scan,mirror})
       el('p',{class:'help',text:'۰ یعنی نشانه‌ای دیده یا گزارش نشده، ۱۰۰ یعنی خیلی زیاد. حساسیت از پرسش‌ها می‌آید؛ قرمزی، جوش، بافت و زیر چشم فقط از تصویر، و وقتی تصویر برایشان کافی نباشد نشان داده نمی‌شوند.'}),
       el('h3',{text:'اولویت‌ها'}),
       el('ol',{class:'priorities'},...r.priorities.map(t=>el('li',{text:t}))),
-      el('h3',{text:'روتین صبح'}),
+      ...(pro?[
+      el('h3',{text:'روتین صبح'},...proBadge()),
       el('ol',{class:'routine'},...r.routine.morning.map(productRow)),
-      el('h3',{text:'روتین شب'}),
+      el('h3',{text:'روتین شب'},...proBadge()),
       el('ol',{class:'routine'},...r.routine.evening.map(productRow)),
       el('p',{class:'help',text:shop?`هر قدم نوع محصول را می‌گوید، نه برند آن را. دکمهٔ «${shop.name}» محصولات همان نوع را در ${shop.name} نشان می‌دهد؛ پیش از خرید، ترکیب و درصد مادهٔ مؤثر را با این روتین مقایسه کن.`:'هر قدم نوع محصول را می‌گوید، نه برند آن را؛ هنگام خرید، ترکیب و درصد مادهٔ مؤثر را با این روتین مقایسه کن.'}),
-      ...r.routine.notes.map(t=>el('p',{class:'quiet',text:t}))].filter(Boolean));
-    renderFollow();
+      ...r.routine.notes.map(t=>el('p',{class:'quiet',text:t}))]:[
+      el('p',{class:'note pro-note',text:'روتین صبح و شب برای همین پوست، و نگه‌داشتن نتیجه برای مقایسه با دفعه‌های بعد، در نسخهٔ کامل آینه است.'})])
+    ].filter(Boolean));
+    if(pro)renderFollow();else $('skin-follow').replaceChildren();
   }
+  const proBadge=()=>showcase?[el('span',{class:'pro-badge',text:'حرفه‌ای'})]:[];
 
   /* ---- keeping a result, by choice ---- */
   // A random key on this device names its results on the server. Whoever has the key
