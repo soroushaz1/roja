@@ -115,3 +115,6 @@ pre code{background:none;border:0;padding:0;font-size:13px;line-height:1.7;color
 .status.off{color:#B85D0E}
 .linkish{background:none;border:0;padding:0;color:var(--faint);font:inherit;font-size:13px;text-decoration:underline;cursor:pointer;margin-top:8px}
 @media (max-width:520px){.form.inline{grid-template-columns:1fr}.form.inline .button{justify-self:stretch}}
+.showcase{list-style:none;padding:0;margin:12px 0;display:grid;grid-template-columns:1fr;gap:14px}
+@media (min-width:700px){.showcase{grid-template-columns:1fr 1fr}}
+.showcase img{display:block;width:100%;height:auto;border-radius:14px;border:1px solid var(--line)}

@@ -17,6 +17,8 @@ node tools/billing-check.mjs >/dev/null
 node tools/build-pages.mjs --check
 
 SITE=(index.html stats.html pages.css sitemap.xml robots.txt makeup faq privacy business roja.css sw.js manifest.webmanifest favicon.svg ./*.js icons fonts vendor)
+# The before/after pictures and their page, once there are any (tools/showcase/).
+if [ -d showcase ]; then SITE+=(showcase); fi
 echo "site → /var/www/pythonpath"
 tar -cz "${SITE[@]}" | ssh_ 'set -e
   rm -rf /var/www/pythonpath.new && mkdir -p /var/www/pythonpath.new

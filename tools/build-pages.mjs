@@ -177,6 +177,27 @@ out.set('privacy/index.html',page({dir:'privacy',
 <p>شمار ناشناس «کدام محصول در فروشگاه باز شد» هم مثل باقی آمار، فقط به‌صورت شمار روزانه ثبت می‌شود.</p>
 ${cta(r,'باز کردن آینه')}`}));
 
+/* ---- before and after ---- */
+// The showcase's pictures (tools/showcase/, made by the Showcase workflow), if there are
+// any yet: every one a simulation on a face made by AI, and says so on itself.
+const showcase=(()=>{try{return JSON.parse(fs.readFileSync(path.join(root,'showcase/index.json'),'utf8'));}catch{return [];}})();
+const SHOW_NOTE='همهٔ چهره‌ها با هوش مصنوعی ساخته شده‌اند و آدم واقعی نیستند؛ «بعد» همان چیزی است که آینه نشان می‌دهد، شبیه‌سازی روی صفحه، نه نتیجهٔ قطعی.';
+const shows=(list,r)=>`<ul class="showcase">${list.map(x=>`<li><img src="${r}showcase/${esc(x.file)}" alt="${esc(`پیش و پس: ${x.name}، شبیه‌سازی روی چهره‌ای ساخته‌شده با هوش مصنوعی`)}" width="1200" height="860" loading="lazy" decoding="async"></li>`).join('')}</ul>`;
+if(showcase.length)out.set('showcase/index.html',page({dir:'showcase',
+  title:'پیش و پس با آینهٔ رُژا و رُژا کلینیک | رُژا',
+  description:'نمونه‌های پیش و پس آرایش با آینهٔ رُژا و عمل‌های زیبایی با رُژا کلینیک، روی چهره‌هایی که با هوش مصنوعی ساخته شده‌اند.',
+  h1:'پیش و پس',
+  lead:'آرایش‌های آمادهٔ آینهٔ رُژا و عمل‌های رُژا کلینیک، روی چند چهره.',
+  crumbs:[{name:'پیش و پس',dir:'showcase'}],
+  body:r=>`<p class="note">${SHOW_NOTE}</p>
+${showcase.some(x=>x.kind==='makeup')?`<h2>آرایش، با آینهٔ رُژا</h2>
+${shows(showcase.filter(x=>x.kind==='makeup'),r)}
+${cta(`${r}`,'امتحان روی صورت خودتان')}`:''}
+${showcase.some(x=>x.kind==='clinic')?`<h2>عمل‌های زیبایی، با رُژا کلینیک</h2>
+<p>پیش‌نمایش زندهٔ عمل برای مطب و کلینیک: پزشک عمل را انتخاب می‌کند و نتیجهٔ تقریبی همان لحظه روی تصویر زندهٔ بیمار ساخته می‌شود.</p>
+${shows(showcase.filter(x=>x.kind==='clinic'),r)}
+${cta(`${r}clinic/`,'باز کردن رُژا کلینیک')}`:''}`}));
+
 /* ---- for shops ---- */
 // The mirror as something a shop puts on its own site: what it does for the shop, the
 // code, the message a shop's cart can listen for, and who to ask.
@@ -272,6 +293,9 @@ out.set('business/index.html',page({dir:'business',
   <li><strong>ماندن بیشتر در سایت</strong><span>استایل‌های آماده، مقایسهٔ دو رنگ کنار هم، براش و عکس گرفتن؛ و هر استایل با یک لینک برای دوست فرستاده می‌شود.</span></li>
   <li><strong>بدون دردسر حقوقی تصویر</strong><span>همهٔ پردازش روی دستگاه مشتری است؛ هیچ تصویری به سرور شما یا ما نمی‌رسد که نگه‌داری‌اش مسئولیت داشته باشد.</span></li>
 </ul>
+${showcase.some(x=>x.kind==='makeup')?`<h2>پیش و پس</h2>
+${shows(showcase.filter(x=>x.kind==='makeup').slice(0,4),r)}
+<p class="quiet">${SHOW_NOTE} <a href="${r}showcase/">همهٔ نمونه‌ها</a></p>`:''}
 <h2 id="plans">پلن‌ها</h2>
 ${PLANS}
 <h2>در عمل ببینید</h2>

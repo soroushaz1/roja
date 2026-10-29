@@ -1,0 +1,13 @@
+{
+  "about": "Faces made by an image model (tools/showcase/make-faces.mjs) for the before/after pictures on the site: no real person. Each face is shown bare and then with what is listed: Roja's own looks (catalog.js), or Roja Clinic's procedures (procedures.js). Changing this file and pushing it to main makes them again (.github/workflows/showcase.yml).",
+  "style": "Photorealistic studio portrait photograph of one adult, head and upper shoulders, facing the camera straight on, eyes open looking into the lens, mouth closed, relaxed neutral expression, hair pulled back away from the face so the whole face and jawline show, no glasses, no jewellery, no makeup, bare natural skin with real texture, soft even daylight from the front, plain light grey background, sharp focus, 85mm lens. The person is fictional.",
+  "faces": [
+    {"id":"f1","prompt":"An Iranian woman in her late twenties with light olive skin and dark brown hair.","makeup":["natural","evening","bold"]},
+    {"id":"f2","prompt":"A Persian woman in her mid thirties with medium tan skin and black hair.","makeup":["office","smoky","bridal"]},
+    {"id":"f3","prompt":"A woman in her early twenties with fair skin and light brown hair.","makeup":["natural","bold","evening"]},
+    {"id":"f4","prompt":"A woman in her forties with deep brown skin and black hair.","makeup":["office","bridal","smoky"]},
+    {"id":"c1","prompt":"An Iranian woman in her early thirties with light olive skin, a straight nose with a small dorsal hump and thin lips.","clinic":["rhinoplasty","lip-filler","cheek-filler"]},
+    {"id":"c2","prompt":"An Iranian man in his late thirties with medium skin, short dark hair, clean shaven, a soft jawline and a slightly receding chin.","clinic":["jaw-contour","chin-implant","rhinoplasty"]},
+    {"id":"c3","prompt":"A Persian woman in her fifties with light skin, dark hair pulled back and slightly hooded upper eyelids.","clinic":["blepharoplasty","face-lift","fox-eye"]}
+  ]
+}
