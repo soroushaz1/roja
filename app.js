@@ -1,17 +1,17 @@
-import {products,categories,finishes,looks,byProduct} from './catalog.js?v=31';
-import {layerSpecs,createMaskPainter,renderFallback,createSmoother,landmarksByType,frameLandmarks,hexToRgb} from './makeup.js?v=31';
-import {createStage,layerModes} from './stage.js?v=31';
-import {renderDebug,nearest} from './debug.js?v=31';
-import {createBrush,brushModes} from './brush.js?v=31';
-import {measure,points as placed,symmetry,pose as poseOf} from './measure.js?v=31';
-import {CANON,CANON_ASPECT,TRIANGLES} from './facemesh.js?v=31';
-import {createSkinScanner} from './skin-scan.js?v=31';
-import {createSkinPanel} from './skin-panel.js?v=31';
-import {skincareById} from './skin.js?v=31';
-import {count} from './usage.js?v=31';
-import {resolveShop,shopUrl,searchWords} from './shops.js?v=31';
-import {planFor,applyFreePlan,freeShadeIds,FREE_LOOKS,FREE_PHOTO_PX} from './plan.js?v=31';
-import {createViewer3d} from './viewer3d.js?v=31';
+import {products,categories,finishes,looks,byProduct} from './catalog.js?v=32';
+import {layerSpecs,createMaskPainter,renderFallback,createSmoother,landmarksByType,frameLandmarks,hexToRgb} from './makeup.js?v=32';
+import {createStage,layerModes} from './stage.js?v=32';
+import {renderDebug,nearest} from './debug.js?v=32';
+import {createBrush,brushModes} from './brush.js?v=32';
+import {measure,points as placed,symmetry,pose as poseOf} from './measure.js?v=32';
+import {CANON,CANON_ASPECT,TRIANGLES} from './facemesh.js?v=32';
+import {createSkinScanner} from './skin-scan.js?v=32';
+import {createSkinPanel} from './skin-panel.js?v=32';
+import {skincareById} from './skin.js?v=32';
+import {count} from './usage.js?v=32';
+import {currentShop,refreshShop,shopUrl,searchWords} from './shops.js?v=32';
+import {planFor,applyFreePlan,freeShadeIds,FREE_LOOKS,FREE_PHOTO_PX} from './plan.js?v=32';
+import {createViewer3d} from './viewer3d.js?v=32';
 
 const $=id=>document.getElementById(id);
 // GitHub Pages ignores the ?v= query, and browsers and its CDN keep a page for up to ten
@@ -19,7 +19,7 @@ const $=id=>document.getElementById(id);
 // newer script, which would then look for elements that page does not have. Such a
 // page is loaded afresh, once; if it is still the old one, it says a new version is
 // on its way instead of failing.
-const RELEASE='31';
+const RELEASE='32';
 if(document.documentElement.dataset.release!==RELEASE){
   let tried=null;
   try{tried=sessionStorage.getItem('roja-reloaded');sessionStorage.setItem('roja-reloaded',RELEASE);}catch{}
@@ -75,7 +75,11 @@ const viewport=$('viewport');
 // The shop this mirror sells for (shops.js), from the address; null on Roja's own demo,
 // which then offers no buying, only the way to put the mirror on a shop. Inside a
 // shop's page (an iframe) the page around it is that shop.
-const shop=await resolveShop();
+// A shop that subscribed is known from earlier in the visit; the server is asked again
+// in the background, and if that changes which shop or plan this is, the page loads
+// once more (shops.js).
+const shop=currentShop();
+refreshShop().then(changed=>{if(changed)location.reload();});
 // The professional plan or the free one (plan.js). The free one trims the catalogue
 // before anything is drawn from it; on Roja's own site everything stays, and what only
 // the professional plan has is marked.
@@ -1000,7 +1004,7 @@ function onTracker(d){
 function ensureTracker(){
   if(tracker||trackerStarting)return;
   let w=null;
-  try{w=new Worker(new URL(`face-worker.js?v=31${gpuQuery}`,import.meta.url));}catch(e){perf.lastError=`worker: ${e.message}`;}
+  try{w=new Worker(new URL(`face-worker.js?v=32${gpuQuery}`,import.meta.url));}catch(e){perf.lastError=`worker: ${e.message}`;}
   if(!w){useTracker('page','no worker');return;}
   ready=false;busy=false;
   tracker={kind:'worker',post:(m,transfer)=>w.postMessage(m,transfer),close:()=>w.terminate()};
@@ -1020,7 +1024,7 @@ async function useTracker(kind,reason){
   const token=++trackerGeneration;
   try{
     const Vision=await import('./vendor/vision_bundle.mjs');
-    await import('./face-core.js?v=31');
+    await import('./face-core.js?v=32');
     const core=self.rojaFaceCore(Vision,new URL('./',import.meta.url).href);
     const found=await core.init('CPU',(loaded,total)=>{if(token===trackerGeneration)onTracker({type:'progress',loaded,total});});
     if(token!==trackerGeneration){core.close();return;}

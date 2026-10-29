@@ -8,8 +8,8 @@
 // repainting every mask on the CPU each time the face moves.
 //
 // With no layers the output is a pixel-exact copy of the camera frame.
-import {CANON,TRIANGLES} from './facemesh.js?v=31';
-import * as GLSL from './shaders.js?v=31';
+import {CANON,TRIANGLES} from './facemesh.js?v=32';
+import * as GLSL from './shaders.js?v=32';
 
 const LANDMARKS=468;
 

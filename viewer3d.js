@@ -25,9 +25,9 @@
 // stays smooth when small and clean at a slant.
 //
 // It is all done on this device, from the frame already on screen.
-import {points3,headFrame,WARP_TRIANGLES,SEEN_VERT,SEEN_FRAG} from './head3d.js?v=31';
-import {PRECISION} from './shaders.js?v=31';
-import {fuse,apply,place,MESH} from './fuse.js?v=31';
+import {points3,headFrame,WARP_TRIANGLES,SEEN_VERT,SEEN_FRAG} from './head3d.js?v=32';
+import {PRECISION} from './shaders.js?v=32';
+import {fuse,apply,place,MESH} from './fuse.js?v=32';
 
 const LEVELS=2;
 // The face's outline, in order round it (MediaPipe's face oval).
