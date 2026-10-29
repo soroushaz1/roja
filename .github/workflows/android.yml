@@ -15,6 +15,13 @@ name: Android app
 # of its branch's latest push, and work in progress gets an APK before it is merged.
 on:
   push:
+    # The app carries the mirror, not the site's pictures or their tools: a change only
+    # there builds nothing (and spends nothing on real phones).
+    paths-ignore:
+      - 'showcase/**'
+      - 'tools/showcase/**'
+      - '.github/workflows/showcase.yml'
+      - 'README.md'
   workflow_dispatch:
 
 concurrency:

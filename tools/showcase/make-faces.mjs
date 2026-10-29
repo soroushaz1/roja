@@ -3,14 +3,16 @@
 // Tries Imagen 4 first, then Gemini's image model, as Imagen's endpoints are being
 // retired; says which one made each face.
 //
-//   ROJA_GCP_PROJECT=… GCP_TOKEN=$(gcloud auth print-access-token) node tools/showcase/make-faces.mjs out/faces
+//   ROJA_GCP_PROJECT=… GCP_TOKEN=$(gcloud auth print-access-token) node tools/showcase/make-faces.mjs
+//
+// A face already in tools/showcase/faces/ is kept: the same people across runs.
 import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 const here=path.dirname(fileURLToPath(import.meta.url));
 const {style,faces}=JSON.parse(fs.readFileSync(path.join(here,'faces.json'),'utf8'));
-const project=process.env.ROJA_GCP_PROJECT,token=process.env.GCP_TOKEN,out=process.argv[2]||'faces';
+const project=process.env.ROJA_GCP_PROJECT,token=process.env.GCP_TOKEN,out=process.argv[2]||path.join(here,'faces');
 if(!project||!token)throw new Error('ROJA_GCP_PROJECT and GCP_TOKEN are needed');
 fs.mkdirSync(out,{recursive:true});
 
@@ -36,6 +38,7 @@ const makers=[
 
 const made=[];
 for(const face of faces){
+  if(fs.existsSync(path.join(out,`${face.id}.png`))){console.log(`${face.id}: kept`);made.push({id:face.id,model:'kept'});continue;}
   const prompt=`${style} ${face.prompt}`;
   let done=false;
   for(const [model,make] of makers){
@@ -48,5 +51,4 @@ for(const face of faces){
   }
   if(!done)console.log(`${face.id}: not made`);
 }
-fs.writeFileSync(path.join(out,'made.json'),JSON.stringify(made,null,1));
 if(!made.length)process.exit(1);
