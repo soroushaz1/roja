@@ -13,6 +13,7 @@ KEY=${ROJA_KEY:-$HOME/.ssh/roja_deploy}
 ssh_(){ ssh -i "$KEY" -o BatchMode=yes "$HOST" "$@"; }
 
 node tools/skin-check.mjs >/dev/null
+node tools/billing-check.mjs >/dev/null
 node tools/build-pages.mjs --check
 
 SITE=(index.html stats.html pages.css sitemap.xml robots.txt makeup faq privacy business roja.css sw.js manifest.webmanifest favicon.svg ./*.js icons fonts vendor)
@@ -24,6 +25,21 @@ tar -cz "${SITE[@]}" | ssh_ 'set -e
   if [ -d /var/www/pythonpath ]; then mv /var/www/pythonpath /var/www/pythonpath.old; fi
   mv /var/www/pythonpath.new /var/www/pythonpath
   rm -rf /var/www/pythonpath.old'
+
+# Payment settings for shops' plans (server/billing.mjs), from this script's environment
+# (the deploy workflow passes them from the repository's secrets and variables). Each
+# one set here replaces its line in the server's /etc/roja-api.env; one not set is left
+# as the server has it. Sent on standard input, never on a command line.
+ENV_LINES=$(for name in ZARINPAL_MERCHANT ZARINPAL_SANDBOX ROJA_PRICE_MONTH ROJA_PRICE_YEAR; do
+  [ -n "${!name:-}" ] && printf '%s=%s\n' "$name" "${!name}"; done; true)
+if [ -n "$ENV_LINES" ]; then
+  echo "payment settings → /etc/roja-api.env ($(printf '%s\n' "$ENV_LINES" | cut -d= -f1 | tr '\n' ' '))"
+  printf '%s\n' "$ENV_LINES" | ssh_ 'set -e
+    f=/etc/roja-api.env; umask 077; touch "$f"; new=$(cat)
+    names=$(printf "%s\n" "$new" | cut -d= -f1 | paste -sd"|")
+    { grep -Ev "^($names)=" "$f" || true; printf "%s\n" "$new"; } > "$f.new"
+    chmod 600 "$f.new"; mv "$f.new" "$f"'
+fi
 
 echo "api → /opt/roja-api"
 tar -cz skin.js catalog.js shops.js server | ssh_ 'set -e

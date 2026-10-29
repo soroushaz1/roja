@@ -473,6 +473,13 @@ details > summary + *{margin-top:10px}
     radial-gradient(#FFFFFFCC .8px,transparent 1.2px) 0 0/6px 6px,radial-gradient(#FFFFFF88 .6px,transparent 1px) 3px 3px/6px 6px}
 .shade[aria-checked=true]{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--rose),inset 0 -6px 10px #0000002E}
 .shade:hover{transform:translateY(-1px)}
+/* On Roja's own site, what only the professional plan offers (plan.js) is marked: a small
+   brass dot on a shade, a badge on a look or a heading. */
+.shade.pro-only::before{content:'';position:absolute;z-index:1;inset-block-end:4px;inset-inline-start:calc(50% - 3px);
+  width:6px;height:6px;border-radius:50%;background:var(--brass);box-shadow:0 0 0 1.5px #FFFFFFCC}
+.pro-badge{display:inline-block;margin-inline-start:6px;padding:1px 7px;border-radius:999px;font-size:.68rem;font-weight:700;
+  line-height:1.6;vertical-align:middle;color:var(--brass-ink);background:var(--brass-soft);border:1px solid #A87B1E40}
+.pro-note{border-inline-start:3px solid var(--brass)}
 .quick-meta{display:flex;align-items:center;gap:10px;flex:none;max-width:40%}
 .quick-meta > span:last-child{min-width:0}
 .quick-meta strong{display:block;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

@@ -71,9 +71,17 @@ jobs:
           printf '%s\n' "$ROJA_KNOWN_HOSTS" | tr -d '\r' > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/roja_deploy ~/.ssh/known_hosts
 
+      # Payment for shops' plans (server/billing.mjs): the Zarinpal merchant id as the
+      # secret ZARINPAL_MERCHANT, and as variables ZARINPAL_SANDBOX (1 while testing, 0
+      # for real payments) and the prices in toman, ROJA_PRICE_MONTH and ROJA_PRICE_YEAR.
+      # Whatever is not set stays as the server has it.
       - name: Deploy
         env:
           ROJA_HOST: ${{ vars.ROJA_HOST || 'root@204.48.27.227' }}
+          ZARINPAL_MERCHANT: ${{ secrets.ZARINPAL_MERCHANT }}
+          ZARINPAL_SANDBOX: ${{ vars.ZARINPAL_SANDBOX }}
+          ROJA_PRICE_MONTH: ${{ vars.ROJA_PRICE_MONTH }}
+          ROJA_PRICE_YEAR: ${{ vars.ROJA_PRICE_YEAR }}
         run: bash tools/deploy.sh
 
       # The page the server now gives out is this commit's release.

@@ -11,9 +11,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {products,categories,finishes} from '../catalog.js';
+import {products,categories,finishes,looks} from '../catalog.js';
 import {skincare} from '../skin.js';
 import {contact} from '../shops.js';
+import {freeShadeIds,FREE_LOOKS,FREE_PHOTO_PX} from '../plan.js';
+import {periods} from '../server/billing.mjs';
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const SITE='https://pythonpath.ir/';
@@ -25,7 +27,7 @@ const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'
 // to each other relatively, so they also work from a sub-path such as /roja/.
 const up=dir=>dir?'../'.repeat(dir.split('/').length):'';
 
-function page({dir,title,description,h1,lead,body,crumbs=[],jsonld=[]}){
+function page({dir,title,description,h1,lead,body,crumbs=[],jsonld=[],script=null}){
   const r=up(dir), url=SITE+(dir?dir+'/':'');
   const trail=[{name:'رُژا',url:SITE},...crumbs.map(c=>({name:c.name,url:SITE+c.dir+'/'}))];
   const ld=[...(crumbs.length?[{'@context':'https://schema.org','@type':'BreadcrumbList',
@@ -75,7 +77,8 @@ ${body(r)}
   <p>رُژا آینه‌ای زنده در مرورگر است. تصویر دوربین روی همین دستگاه پردازش می‌شود و جایی فرستاده یا ذخیره نمی‌شود.</p>
   <p><a href="${r}">آینه</a> · <a href="${r}makeup/">آرایش</a> · <a href="${r}faq/">پرسش‌ها</a> · <a href="${r}business/">برای فروشگاه‌ها</a> · <a href="${r}privacy/">حریم خصوصی</a></p>
 </footer>
-</body>
+${script?`<script type="module" src="${r}${script}"></script>
+`:''}</body>
 </html>
 `;
 }
@@ -190,6 +193,63 @@ const LISTEN=`window.addEventListener('message', e => {
   addToCart(e.data);   // your own cart
 });`;
 const shadeCount=products.reduce((a,p)=>a+p.shades.length,0);
+// The two plans side by side (plan.js), counted from the catalogue itself. Prices are the
+// server's defaults here; business.js puts in the ones the server charges.
+const freeShades=freeShadeIds(products,looks).size;
+const toman=n=>fa.format(n);
+const PLANS=`<div class="plans">
+  <section class="plan">
+    <h3>پایه</h3>
+    <p class="price">رایگان</p>
+    <ul>
+      <li>${fa.format(freeShades)} رنگ از ${fa.format(shadeCount)}، پخش در همهٔ طیف هر محصول</li>
+      <li>${fa.format(FREE_LOOKS.length)} استایل آماده</li>
+      <li>تحلیل پوست: تیپ پوست، وضعیت و اولویت‌ها</li>
+      <li>عکس با نشان رُژا، تا ${fa.format(FREE_PHOTO_PX)} پیکسل</li>
+    </ul>
+    <p class="quiet">با یک پیام راه‌اندازی می‌شود.</p>
+  </section>
+  <section class="plan pro">
+    <h3>حرفه‌ای</h3>
+    <p class="price"><b data-price="month">${toman(periods.month.price)}</b> تومان در ماه<br><small><b data-price="year">${toman(periods.year.price)}</b> تومان در سال</small></p>
+    <ul>
+      <li>همهٔ ${fa.format(shadeCount)} رنگ ${fa.format(products.length)} محصول</li>
+      <li>همهٔ ${fa.format(looks.length)} استایل آماده</li>
+      <li>تحلیل کامل پوست با روتین صبح و شب و مقایسه با دفعه‌های قبل</li>
+      <li>عکس با کیفیت کامل دوربین، بدون نشان رُژا</li>
+      <li>چند رنگ کنار هم در یک عکس</li>
+      <li>نمای سه‌بعدی چرخان صورت با آرایش (به‌زودی)</li>
+    </ul>
+    <p class="cta"><a class="button" href="#subscribe">خرید اشتراک</a></p>
+  </section>
+</div>`;
+const SUBSCRIBE=`<h2 id="subscribe">خرید اشتراک حرفه‌ای</h2>
+<p>پرداخت با درگاه زرین‌پال است. بعد از پرداخت، همین‌جا شناسهٔ فروشگاه، کد گذاشتن آینه روی سایتتان و یک <strong>کد فعال‌سازی</strong> می‌گیرید که با آن وضعیت اشتراک را می‌بینید و تمدیدش می‌کنید.</p>
+<div id="pay-result" class="pay-result" hidden></div>
+<p id="subscribe-closed" class="note">پرداخت آنلاین هنوز باز نشده است؛ برای خرید اشتراک پیام بدهید (پایین همین صفحه).</p>
+<form id="subscribe-form" class="form" hidden>
+  <label>نام فروشگاه <input name="name" required minlength="2" maxlength="40" autocomplete="organization"></label>
+  <label>نشانی سایت فروشگاه <input name="origin" required dir="ltr" inputmode="url" placeholder="https://shop.example.ir" autocomplete="url"></label>
+  <label>نشانی جست‌وجوی سایت <small>اختیاری؛ به جای کلمهٔ جست‌وجو بنویسید <code dir="ltr">{q}</code></small>
+    <input name="search" dir="ltr" inputmode="url" placeholder="https://shop.example.ir/search?q={q}"></label>
+  <label>شمارهٔ موبایل <small>اختیاری؛ فقط برای رسید زرین‌پال و تماس دربارهٔ اشتراک</small>
+    <input name="contact" dir="ltr" inputmode="tel" placeholder="09120000000" autocomplete="tel"></label>
+  <fieldset><legend>مدت</legend>
+    <label class="choice"><input type="radio" name="period" value="month" checked> یک‌ماهه · <b data-price="month">${toman(periods.month.price)}</b> تومان</label>
+    <label class="choice"><input type="radio" name="period" value="year"> یک‌ساله · <b data-price="year">${toman(periods.year.price)}</b> تومان</label>
+  </fieldset>
+  <p class="form-error" role="alert" hidden></p>
+  <p class="sandbox note" hidden>درگاه در حالت آزمایشی است: پولی کم نمی‌شود و اشتراک واقعی ساخته نمی‌شود.</p>
+  <button class="button" type="submit">پرداخت و فعال‌سازی</button>
+</form>
+<h2 id="panel">پنل فروشگاه</h2>
+<p>اگر اشتراک دارید، کد فعال‌سازی را وارد کنید تا وضعیت، کد آینه و تمدید را ببینید.</p>
+<form id="login-form" class="form inline">
+  <label>کد فعال‌سازی <input name="code" required dir="ltr" autocomplete="off" spellcheck="false" placeholder="RJ-XXXX-XXXX-XXXX-XXXX"></label>
+  <button class="button ghost" type="submit">ورود</button>
+  <p class="form-error" role="alert" hidden></p>
+</form>
+<div id="shop-panel" class="shop-panel" hidden></div>`;
 const wa=/^\d{8,15}$/.test(contact.whatsapp)?`https://wa.me/${contact.whatsapp}?text=${encodeURIComponent('سلام، دربارهٔ گذاشتن آینهٔ رُژا روی سایت فروشگاهمان سؤال دارم.')}`:'';
 const tg=/^[A-Za-z]\w{3,31}$/.test(contact.telegram)?`https://t.me/${contact.telegram}`:'';
 out.set('business/index.html',page({dir:'business',
@@ -212,13 +272,16 @@ out.set('business/index.html',page({dir:'business',
   <li><strong>ماندن بیشتر در سایت</strong><span>استایل‌های آماده، مقایسهٔ دو رنگ کنار هم، براش و عکس گرفتن؛ و هر استایل با یک لینک برای دوست فرستاده می‌شود.</span></li>
   <li><strong>بدون دردسر حقوقی تصویر</strong><span>همهٔ پردازش روی دستگاه مشتری است؛ هیچ تصویری به سرور شما یا ما نمی‌رسد که نگه‌داری‌اش مسئولیت داشته باشد.</span></li>
 </ul>
+<h2 id="plans">پلن‌ها</h2>
+${PLANS}
 <h2>در عمل ببینید</h2>
 <p>آینه را با یک «فروشگاه نمونه» باز کنید، رنگی را امتحان کنید و دکمهٔ خرید را بزنید؛ جایی که در سایت شما صفحهٔ محصول باز می‌شود، به همین صفحه برمی‌گردید.</p>
 ${cta(`${r}?shop=demo`,'باز کردن آینه با فروشگاه نمونه')}
 <div class="note" id="buy-demo"><p><strong>اینجا صفحهٔ محصول شما بود.</strong> در سایت شما، دکمهٔ خرید به صفحهٔ همین محصول، یا جست‌وجوی همین نوع و رنگ، در فروشگاه خودتان می‌رود؛ یا محصول بی‌آنکه مشتری آینه را ترک کند، به سبد شما اضافه می‌شود.</p></div>
+${SUBSCRIBE}
 <h2>چطور روی سایت شما می‌نشیند</h2>
 <ol class="steps">
-  <li>نام فروشگاه و نشانی جست‌وجوی سایتتان را می‌گیریم، یا اگر بخواهید، نشانی صفحهٔ محصول برای هر رنگ؛ و فروشگاه شما با یک شناسه به آینه اضافه می‌شود.</li>
+  <li>اشتراک را همین‌جا می‌خرید و شناسهٔ فروشگاهتان را همان لحظه می‌گیرید؛ یا برای پلن پایه، نام فروشگاه و نشانی جست‌وجوی سایتتان را می‌فرستید و شناسه را از ما می‌گیرید.</li>
   <li>این کد را در هر صفحه‌ای که می‌خواهید می‌گذارید (به جای <code dir="ltr">YOUR-SHOP</code>، شناسهٔ فروشگاه شما):</li>
 </ol>
 <pre dir="ltr"><code>${esc(SNIPPET)}</code></pre>
@@ -231,7 +294,8 @@ ${cta(`${r}?shop=demo`,'باز کردن آینه با فروشگاه نمونه'
 <h2>گفت‌وگو</h2>
 <p>برای راه‌اندازی، قیمت، یا دیدن آینه با محصولات خودتان، پیام بدهید:</p>
 <p class="cta contact">${wa?`<a class="button" href="${wa}" rel="noopener">واتس‌اپ</a>`:''} ${tg?`<a class="button ghost" href="${tg}" rel="noopener">تلگرام</a>`:''}</p>
-<p class="disclaimer">${COLOUR_NOTE} تحلیل پوست هم در آینه هست و می‌تواند روی سایت شما روشن یا خاموش باشد.</p>`}));
+<p class="disclaimer">${COLOUR_NOTE} تحلیل پوست هم در آینه هست و می‌تواند روی سایت شما روشن یا خاموش باشد. قابلیت‌های حرفه‌ای فقط وقتی باز می‌شوند که آینه روی سایت خود فروشگاه باشد، یا از آن لینک شده باشد.</p>`,
+  script:'business.js'}));
 
 /* ---- sitemap, robots ---- */
 const urls=['',...[...out.keys()].map(k=>k.replace(/index\.html$/,''))];

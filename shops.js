@@ -17,6 +17,9 @@
 //   cart      true when the shop's page listens for "roja:buy" messages and puts the
 //             product in its own cart; the mirror then stays where it is instead of
 //             opening a link (see business/ for the message)
+//   plan      'pro' for the professional plan wherever the mirror is (plan.js); shops
+//             that subscribe on the business page are not listed here but kept on the
+//             server, which says how long their plan runs
 //
 // Check `search` on the shop itself: a link that lands on "nothing found" is worse
 // than none.
@@ -25,6 +28,7 @@ export const shops={
   demo:{
     name:'فروشگاه نمونه',
     origin:'https://pythonpath.ir',
+    plan:'pro',
     search:'https://pythonpath.ir/business/?q={q}#buy-demo'
   },
   // An example of a real shop's search. Put a shop here only once it has agreed.
@@ -46,18 +50,41 @@ export const contact={
 };
 
 const KEY='roja-shop';
-// The shop this page is for, or null. Only ids in `shops` count, so an address
-// cannot make the mirror send people anywhere a shop was not set up for.
+// Shops that subscribed on the business page, as the server described them (resolveShop).
+const registered={};
+const known=id=>typeof id==='string'&&(Object.hasOwn(shops,id)||Object.hasOwn(registered,id));
+const idFrom=loc=>{
+  const from=s=>new URLSearchParams(s).get('shop');
+  return from(loc?.search||'')||from((loc?.hash||'').replace(/^#/,''));
+};
+// The shop this page is for, or null. Only ids in `shops`, or ones the server knows,
+// count, so an address cannot make the mirror send people anywhere a shop was not set
+// up for.
 export function currentShop(loc=globalThis.location){
   let id=null;
   try{
-    const from=s=>new URLSearchParams(s).get('shop');
-    id=from(loc?.search||'')||from((loc?.hash||'').replace(/^#/,''));
-    if(id&&shops[id])sessionStorage.setItem(KEY,id);
+    id=idFrom(loc);
+    if(known(id))sessionStorage.setItem(KEY,id);
     else id=sessionStorage.getItem(KEY);
   }catch{}
-  id=shops[id]?id:defaultShop;
-  return id&&shops[id]?{id,...shops[id]}:null;
+  id=known(id)?id:defaultShop;
+  if(!id)return null;
+  return Object.hasOwn(shops,id)?{id,...shops[id]}:{id,...registered[id]};
+}
+// The same, after asking the server about an id that is not in `shops`. Gives up after a
+// few seconds (offline, or the app), and the mirror is then Roja's own.
+export async function resolveShop(loc=globalThis.location){
+  let id=null;
+  try{id=idFrom(loc)||sessionStorage.getItem(KEY);}catch{}
+  if(id&&!known(id)&&/^[a-z0-9-]{1,24}$/.test(id)&&!globalThis.RojaAndroid){
+    try{
+      const res=await fetch(`${new URL('api/shop',document.baseURI)}?id=${encodeURIComponent(id)}`,{signal:AbortSignal.timeout(4000)});
+      if(res.ok){const s=await res.json();
+        if(s?.id===id&&typeof s.name==='string'&&typeof s.origin==='string')
+          registered[id]={name:s.name,origin:s.origin,search:s.search||null,pro:!!s.pro};}
+    }catch{}
+  }
+  return currentShop(loc);
 }
 
 // The words for one product in one shade. A skincare product is searched by its own

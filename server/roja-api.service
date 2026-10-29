@@ -9,8 +9,10 @@ ExecStart=/usr/local/bin/node /opt/roja-api/server/skin-api.mjs
 Environment=ROJA_PORT=51840
 Environment=ROJA_DB=/var/lib/roja-api/skin.db
 Environment=NODE_ENV=production
-# ROJA_STATS_KEY=… here unlocks reading the usage counts (stats.html). Kept on the
-# server only, never in the repository; without it the counts are written but unreadable.
+# ROJA_STATS_KEY=… here unlocks reading the usage counts (stats.html), and
+# ZARINPAL_MERCHANT=… opens payment for shops' plans (billing.mjs; ZARINPAL_SANDBOX=1,
+# ROJA_PRICE_MONTH and ROJA_PRICE_YEAR too). Kept on the server only, never in the
+# repository; tools/deploy.sh writes the payment ones from its environment.
 EnvironmentFile=-/etc/roja-api.env
 Restart=on-failure
 RestartSec=3
@@ -24,7 +26,8 @@ PrivateTmp=yes
 PrivateDevices=yes
 ProtectKernelTunables=yes
 ProtectControlGroups=yes
-RestrictAddressFamilies=AF_INET AF_UNIX
+# Out to Zarinpal for payments (billing.mjs), so both address families.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 MemoryMax=96M
 
 [Install]

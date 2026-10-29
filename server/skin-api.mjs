@@ -1,6 +1,7 @@
 // Roja's server-side part: keeping a skin check, when its owner asks, so a later check
-// can be compared with it, and the anonymous usage counts (stats.mjs). nginx serves the
-// site and passes /api/skin and /api/stats here.
+// can be compared with it, the anonymous usage counts (stats.mjs) and shops'
+// subscriptions (billing.mjs). nginx serves the site and passes /api/skin, /api/stats,
+// /api/plans, /api/pay/ and /api/shop here.
 //
 // What is kept is the profile and the answers (skin.js record()), never a picture; no
 // name, address or account. A random key made on the visitor's device names its
@@ -13,6 +14,8 @@ import {createHash,randomUUID} from 'node:crypto';
 import {DatabaseSync} from 'node:sqlite';
 import {questions,axes,concernNames} from '../skin.js';
 import {createStats} from './stats.mjs';
+import {createBilling} from './billing.mjs';
+import {shops} from '../shops.js';
 
 const PORT=Number(process.env.ROJA_PORT||51840);
 const db=new DatabaseSync(process.env.ROJA_DB||'roja-skin.db');
@@ -95,13 +98,15 @@ const ownerOf=req=>{
   return typeof key==='string'&&/^[0-9a-f]{32}$/.test(key)?createHash('sha256').update(key).digest('hex'):null;
 };
 
-let stats=null;
+let stats=null,billing=null;
+const failed=res=>e=>{
+  if(e instanceof Invalid)send(res,400,{error:'invalid',field:e.message});
+  else{console.error(e);if(!res.headersSent)send(res,500,{error:'server'});}
+};
 function handle(req,res){
   const url=new URL(req.url,'http://local');
-  if(url.pathname==='/api/stats')return void stats(req,res,url).catch(e=>{
-    if(e instanceof Invalid)send(res,400,{error:'invalid',field:e.message});
-    else{console.error(e);if(!res.headersSent)send(res,500,{error:'server'});}
-  });
+  if(url.pathname==='/api/stats')return void stats(req,res,url).catch(failed(res));
+  if(/^\/api\/(plans|pay\/|shop($|\/))/.test(url.pathname))return void billing.handle(req,res,url).catch(failed(res));
   const path=url.pathname.replace(/^\/api\/skin/,'');
   if(!url.pathname.startsWith('/api/skin'))return send(res,404,{error:'not found'});
   const owner=ownerOf(req);
@@ -136,5 +141,6 @@ function handle(req,res){
   });
 }
 
-stats=createStats(db,{send,readJson,Invalid});
+billing=createBilling(db,{send,readJson,Invalid,staticShops:shops});
+stats=createStats(db,{send,readJson,Invalid,isShop:billing.isShop});
 http.createServer(handle).listen(PORT,'127.0.0.1',()=>console.log(`roja skin api on 127.0.0.1:${PORT}`));

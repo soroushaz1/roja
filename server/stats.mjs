@@ -3,7 +3,8 @@
 // (or Roja's own site). That is all a row is, (day, shop, event, item, count): no key, no
 // cookie, no address, no time of day, nothing that tells one visitor from another. nginx
 // keeps no access log for it either. Every item is checked against the catalogue and every
-// shop against shops.js, so the table can only ever hold names the site itself has.
+// shop against shops.js or the shops that subscribed (billing.mjs), so the table can only
+// ever hold names the site itself has.
 //
 // Reading the counts needs ROJA_STATS_KEY (sent as X-Roja-Stats-Key); without it set,
 // nobody can read them.
@@ -29,7 +30,7 @@ const MAX_EVENTS=100, MAX_DAYS=366;
 // Tehran's calendar day.
 const dayOf=t=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Tehran'}).format(t);
 
-export function createStats(db,{send,readJson,Invalid}){
+export function createStats(db,{send,readJson,Invalid,isShop=()=>false}){
   // shop is '' on Roja's own site. A table from before shops were counted is moved over,
   // its rows Roja's own.
   const create=name=>`CREATE TABLE IF NOT EXISTS ${name}(
@@ -58,7 +59,7 @@ export function createStats(db,{send,readJson,Invalid}){
       const list=body?.events;
       if(!Array.isArray(list)||!list.length||list.length>MAX_EVENTS)throw new Invalid('events');
       const shop=body.shop??'';
-      if(shop!==''&&!(typeof shop==='string'&&Object.hasOwn(shops,shop)))throw new Invalid('shop');
+      if(shop!==''&&!(typeof shop==='string'&&(Object.hasOwn(shops,shop)||isShop(shop))))throw new Invalid('shop');
       // Counted together, so one visit adds one write per item, not one per event.
       const counts=new Map();
       for(const e of list){
