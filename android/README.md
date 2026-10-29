@@ -70,9 +70,12 @@ The emulator draws with a software renderer and shows an emulated camera, so it 
 show what a phone's own GPU driver, camera or WebView does to the mirror. On `main`, the
 *real-devices* job runs the same tests on real phones in
 [Firebase Test Lab](https://firebase.google.com/docs/test-lab): a Samsung Galaxy A or M,
-a Xiaomi, a Pixel and the phone with the oldest Android in Test Lab's catalogue, picked
-afresh each run by `.github/testlab-devices.sh` (or the phones named in the repository
-variable `ROJA_TEST_DEVICES`, one `model=…,version=…` per line). Each phone's test results
+a phone of another maker (a Xiaomi when Test Lab has one that works), a Pixel and the
+phone with the oldest Android in Test Lab's catalogue, picked afresh each run by
+`.github/testlab-devices.sh` (or the phones named in the repository variable
+`ROJA_TEST_DEVICES`, one `model=…,version=…` per line). Phones whose own software stops
+a run before it starts, such as a Xiaomi that asks on screen before Test Lab may install
+the app, are listed in that script and never picked. Each phone's test results
 and logcat are in the run's `real-device-report` artifact; videos and screenshots are in
 the Firebase console, through the link in the job log. The release does not wait for
 this job.
