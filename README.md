@@ -373,7 +373,7 @@ site registered for the merchant id, so that site must be `pythonpath.ir`.
 no real person. `.github/workflows/showcase.yml` makes them whenever
 `tools/showcase/faces.json` changes on main (or by hand): it signs in to the Google Cloud
 project the keyless way the real-devices job does, has Vertex AI make each face
-(`make-faces.mjs`: Imagen 4, else Gemini's image model), shows it bare and then with
+(`make-faces.mjs`: Imagen 4, else Gemini's image model; faces once made are kept in `tools/showcase/faces/` and reused), shows it bare and then with
 Roja's looks or Roja Clinic's procedures in the mirrors themselves (`render.cjs`, with
 `card.html`), and pushes the pictures to a branch `showcase-<run>` to be looked at and
 merged. Every picture says on itself that it is a simulation on a face made by AI;

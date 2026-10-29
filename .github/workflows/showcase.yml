@@ -3,7 +3,8 @@
 # Roja's looks or Roja Clinic's procedures by the mirrors' own renderers, every picture
 # saying it is a simulation on a face made by AI. See tools/showcase/.
 #
-# Runs when tools/showcase/faces.json changes on main, or by hand. Signs in to Google
+# Runs when tools/showcase/faces.json changes on main, or by hand. The faces it makes
+# go to the branch too (tools/showcase/faces/), so a later run uses the same people. Signs in to Google
 # Cloud the same keyless way as the real-devices job in android.yml (its repository
 # variables), and pushes the pictures to a branch of their own, showcase-<run>, to be
 # looked at and merged like any other change: nothing reaches the site by itself.
@@ -50,7 +51,7 @@ jobs:
           ROJA_GCP_PROJECT: ${{ vars.ROJA_GCP_PROJECT }}
         run: |
           gcloud services enable aiplatform.googleapis.com --project "$ROJA_GCP_PROJECT"
-          GCP_TOKEN=$(gcloud auth print-access-token) node tools/showcase/make-faces.mjs "$RUNNER_TEMP/faces"
+          GCP_TOKEN=$(gcloud auth print-access-token) node tools/showcase/make-faces.mjs
 
       - name: Playwright
         run: |
@@ -63,15 +64,7 @@ jobs:
         run: |
           node tools/preview.cjs & PORT=4174 node clinic/tools/preview.cjs &
           sleep 2
-          rm -rf showcase && node tools/showcase/render.cjs "$RUNNER_TEMP/faces" showcase
-
-      # The faces themselves, to look at; only the pictures go to the branch.
-      - uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: showcase-faces
-          path: ${{ runner.temp }}/faces/
-          if-no-files-found: ignore
+          rm -rf showcase && node tools/showcase/render.cjs tools/showcase/faces showcase
 
       - name: To a branch of their own
         run: |
@@ -79,7 +72,7 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git switch -c "$branch"
-          git add showcase
+          git add showcase tools/showcase/faces
           git commit -q -m "Before/after pictures, made by the Showcase workflow (run ${{ github.run_number }})"
           git push -q origin "$branch"
           echo "pushed $branch: $(ls showcase/*.jpg | wc -l) pictures" | tee -a "$GITHUB_STEP_SUMMARY"

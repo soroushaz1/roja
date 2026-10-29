@@ -5,19 +5,20 @@
 //
 //   node tools/preview.cjs                       # Roja on 4173
 //   PORT=4174 node ../roja-clinic/tools/preview.cjs
-//   node tools/showcase/render.cjs out/faces showcase
+//   node tools/showcase/render.cjs tools/showcase/faces showcase
 //
 // Playwright and its Chromium as for tools/roja-check.cjs (PLAYWRIGHT_MODULE, ROJA_CHROMIUM).
 const fs=require('fs'),path=require('path');
 const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
 const ROJA=process.env.ROJA_URL||'http://127.0.0.1:4173',CLINIC=process.env.CLINIC_URL||'http://127.0.0.1:4174';
-const [facesDir='faces',outDir='showcase']=process.argv.slice(2);
+const [facesDir=path.join(__dirname,'faces'),outDir='showcase']=process.argv.slice(2);
 const {faces}=JSON.parse(fs.readFileSync(path.join(__dirname,'faces.json'),'utf8'));
 fs.mkdirSync(outDir,{recursive:true});
 
-// The picture alone: the stage filling the window (3:4), everything over it hidden.
+// The picture alone: the stage filling the window (3:4), everything over it hidden,
+// the clinic's own "simulation" tag too, as each card says so itself.
 const BARE=`#viewport{position:fixed!important;top:0!important;left:0!important;right:auto!important;bottom:auto!important;width:100vw!important;height:100vh!important;max-width:none!important;max-height:none!important;min-height:0!important;z-index:2147483646!important;border:0!important;border-radius:0!important;margin:0!important}
-#toolbar,#seam,#guide,#hud,#flash,#tour,#loading,#v3,.menu,#tap-start,#inspect-tip,#brush-cursor,.v3-capture,#welcome{display:none!important}`;
+#toolbar,#seam,#guide,#hud,#flash,#tour,#loading,#v3,.menu,#tap-start,#inspect-tip,#brush-cursor,.v3-capture,#welcome,#badge{display:none!important}`;
 const W=768,H=1024;
 
 async function openFace(page,origin,file){
