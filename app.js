@@ -1,16 +1,17 @@
-import {products,categories,finishes,looks,byProduct} from './catalog.js?v=28';
-import {layerSpecs,createMaskPainter,renderFallback,createSmoother,landmarksByType,frameLandmarks,hexToRgb} from './makeup.js?v=28';
-import {createStage,layerModes} from './stage.js?v=28';
-import {renderDebug,nearest} from './debug.js?v=28';
-import {createBrush,brushModes} from './brush.js?v=28';
-import {measure,points as placed,symmetry,pose as poseOf} from './measure.js?v=28';
-import {CANON,CANON_ASPECT,TRIANGLES} from './facemesh.js?v=28';
-import {createSkinScanner} from './skin-scan.js?v=28';
-import {createSkinPanel} from './skin-panel.js?v=28';
-import {skincareById} from './skin.js?v=28';
-import {count} from './usage.js?v=28';
-import {resolveShop,shopUrl,searchWords} from './shops.js?v=28';
-import {planFor,applyFreePlan,freeShadeIds,FREE_LOOKS,FREE_PHOTO_PX} from './plan.js?v=28';
+import {products,categories,finishes,looks,byProduct} from './catalog.js?v=29';
+import {layerSpecs,createMaskPainter,renderFallback,createSmoother,landmarksByType,frameLandmarks,hexToRgb} from './makeup.js?v=29';
+import {createStage,layerModes} from './stage.js?v=29';
+import {renderDebug,nearest} from './debug.js?v=29';
+import {createBrush,brushModes} from './brush.js?v=29';
+import {measure,points as placed,symmetry,pose as poseOf} from './measure.js?v=29';
+import {CANON,CANON_ASPECT,TRIANGLES} from './facemesh.js?v=29';
+import {createSkinScanner} from './skin-scan.js?v=29';
+import {createSkinPanel} from './skin-panel.js?v=29';
+import {skincareById} from './skin.js?v=29';
+import {count} from './usage.js?v=29';
+import {resolveShop,shopUrl,searchWords} from './shops.js?v=29';
+import {planFor,applyFreePlan,freeShadeIds,FREE_LOOKS,FREE_PHOTO_PX} from './plan.js?v=29';
+import {createViewer3d} from './viewer3d.js?v=29';
 
 const $=id=>document.getElementById(id);
 // GitHub Pages ignores the ?v= query, and browsers and its CDN keep a page for up to ten
@@ -18,7 +19,7 @@ const $=id=>document.getElementById(id);
 // newer script, which would then look for elements that page does not have. Such a
 // page is loaded afresh, once; if it is still the old one, it says a new version is
 // on its way instead of failing.
-const RELEASE='28';
+const RELEASE='29';
 if(document.documentElement.dataset.release!==RELEASE){
   let tried=null;
   try{tried=sessionStorage.getItem('roja-reloaded');sessionStorage.setItem('roja-reloaded',RELEASE);}catch{}
@@ -101,6 +102,8 @@ let stage=null, stageBroken=false;
 let seam=0.5, seamOn=false, compare=false, pin=null;
 let frozen=false, light='none';
 let masksDirty=true, dirty=true, debugDirty=true;
+// The 3D view (below): its viewer, whether it is open, and what it was made from.
+let viewer=null,v3Open=false,v3Froze=false,v3Look='made',v3Timer=0,v3Busy=false;
 
 // Skin products start from a middle shade, not the lightest one: the shade finder or
 // the shopper moves it from there.
@@ -272,6 +275,7 @@ function afterMakeupChange(look=true){
   saveSoon();
   invalidate({masks:true});
   updateSeam();
+  rebuild3d();
 }
 
 function applyLook(look){
@@ -655,6 +659,7 @@ function statusText(){
   return 'آرایش زنده است.';
 }
 function setMode(next){
+  if(next!=='makeup')close3d();
   mode=next;
   // The tour is about the makeup controls; leaving them ends it.
   if(tourAt>=0&&mode!=='makeup')endTour();
@@ -985,7 +990,7 @@ function onTracker(d){
 function ensureTracker(){
   if(tracker||trackerStarting)return;
   let w=null;
-  try{w=new Worker(new URL(`face-worker.js?v=28${gpuQuery}`,import.meta.url));}catch(e){perf.lastError=`worker: ${e.message}`;}
+  try{w=new Worker(new URL(`face-worker.js?v=29${gpuQuery}`,import.meta.url));}catch(e){perf.lastError=`worker: ${e.message}`;}
   if(!w){useTracker('page','no worker');return;}
   ready=false;busy=false;
   tracker={kind:'worker',post:(m,transfer)=>w.postMessage(m,transfer),close:()=>w.terminate()};
@@ -1005,7 +1010,7 @@ async function useTracker(kind,reason){
   const token=++trackerGeneration;
   try{
     const Vision=await import('./vendor/vision_bundle.mjs');
-    await import('./face-core.js?v=28');
+    await import('./face-core.js?v=29');
     const core=self.rojaFaceCore(Vision,new URL('./',import.meta.url).href);
     const found=await core.init('CPU',(loaded,total)=>{if(token===trackerGeneration)onTracker({type:'progress',loaded,total});});
     if(token!==trackerGeneration){core.close();return;}
@@ -1041,7 +1046,7 @@ function shutdown(message){
   stop(message);
 }
 function enableTools(on){
-  for(const id of ['compare','brush-toggle','snap','light-toggle'])$(id).disabled=!on;
+  for(const id of ['compare','brush-toggle','snap','light-toggle','view3d'])$(id).disabled=!on;
   $('freeze').disabled=!on||source?.kind!=='camera';
 }
 function goLive(){
@@ -1061,6 +1066,7 @@ function goLive(){
 }
 
 function stop(message='دوربین خاموش شد.'){
+  close3d();
   if(source?.native||nativeStarting){try{native.mirrorStop();}catch{}}
   nativeStarting=false;document.documentElement.classList.remove('native-live');lastPlan='';
   generation++;activeSource=false;busy=false;watching++;dropFrames();smoother.reset();
@@ -1405,6 +1411,7 @@ function toggleFreeze(){
 // comparison is cut from. Null when there is nothing to take.
 async function capture({marks=true}={}){
   if(!source)return null;
+  if(v3Open&&viewer){const c=v3Picture();if(marks&&!shop)brandMark(c.getContext('2d'),c.width,c.width/640);return c;}
   const {w,h}=frameSize();
   // Natively, the picture comes from the renderer, as drawn.
   const picture=source.native?await nativePicture():null;
@@ -1466,6 +1473,113 @@ async function addShot(c,label){
   $('shots-count').textContent=fa.format(shots.length);
   return shot;
 }
+
+/* ---------- the 3D view --------------------------------------------------- */
+// The face with its makeup as a model to turn by hand (viewer3d.js, from Roja Clinic):
+// made from the mirror as it is, the picture held still while it is open, so a change of
+// shade remakes it from the same frame. "Without makeup" makes it from the bare frame.
+// The professional plan's (plan.js).
+function ensureViewer(){
+  if(!viewer){
+    viewer=createViewer3d($('v3-canvas'));
+    viewer?.on({spin:on=>$('v3-spin').setAttribute('aria-pressed',String(on))});
+  }
+  return viewer;
+}
+// The frame as drawn (bare, or with makeup), not mirrored, with the landmarks found on it.
+async function framePicture(bare){
+  const {w,h}=frameSize();
+  const c=document.createElement('canvas');c.width=w;c.height=h;
+  const x=c.getContext('2d');
+  if(source.native){
+    const picture=await nativePicture();
+    if(!picture)return null;
+    x.drawImage(picture,0,0,w,h);
+  }else if(bare)x.drawImage(source.el,0,0,w,h);
+  else if(stage&&!$('stage').hidden)x.drawImage($('stage'),0,0,w,h);
+  else{
+    x.drawImage(source.el,0,0,w,h);
+    if($('natural-blend').checked)x.globalCompositeOperation='multiply';
+    x.drawImage(overlay,0,0,w,h);x.globalCompositeOperation='source-over';
+  }
+  return c;
+}
+// The face cut out of a picture (1024 px on its longer side at most, 640 on a phone),
+// as the viewer takes it.
+const V3_CROP=matchMedia('(pointer:coarse)').matches?640:1024;
+function faceView(picture,lm){
+  const {w,h}=frameSize();
+  let x0=1,x1=0,y0=1,y1=0;
+  for(const p of lm){x0=Math.min(x0,p.x);x1=Math.max(x1,p.x);y0=Math.min(y0,p.y);y1=Math.max(y1,p.y);}
+  const mx=(x1-x0)*.15,my=(y1-y0)*.15;
+  const cx=Math.max(0,Math.floor((x0-mx)*w)),cy=Math.max(0,Math.floor((y0-my)*h));
+  const cw=Math.max(1,Math.min(w,Math.ceil((x1+mx)*w))-cx),ch=Math.max(1,Math.min(h,Math.ceil((y1+my)*h))-cy);
+  const k=Math.min(1,V3_CROP/Math.max(cw,ch)),c=document.createElement('canvas');
+  c.width=Math.max(1,Math.round(cw*k));c.height=Math.max(1,Math.round(ch*k));
+  c.getContext('2d').drawImage(picture,cx,cy,cw,ch,0,0,c.width,c.height);
+  return {image:c,crop:{x:cx,y:cy,w:cw,h:ch},landmarks:lm.map(p=>({x:p.x,y:p.y,z:p.z||0})),width:w,height:h};
+}
+async function build3d(){
+  if(!v3Open||v3Busy||!landmarks)return;
+  v3Busy=true;$('v3').classList.add('building');
+  try{
+    await rendered();
+    const picture=await framePicture(v3Look==='bare');
+    if(picture&&v3Open&&landmarks){
+      const {yaw,pitch}=viewer.state;
+      viewer.build([faceView(picture,landmarks)]);
+      viewer.animateTo(yaw,pitch);
+    }
+  }finally{v3Busy=false;$('v3').classList.remove('building');}
+}
+const rebuild3d=()=>{if(!v3Open)return;clearTimeout(v3Timer);v3Timer=setTimeout(build3d,220);};
+async function open3d(){
+  if(v3Open){close3d();return;}
+  if(!tier.pro)return;
+  if(!source||!landmarks){toast('اول باید صورت روی تصویر دیده شود.');return;}
+  if(!ensureViewer()){toast('نمای سه‌بعدی روی این مرورگر ساخته نمی‌شود (WebGL).');return;}
+  if(brushState.on)setBrush(false);
+  if(compare)toggleCompare();
+  // Held still, so the picture and the landmarks found on it stay together.
+  v3Froze=source.kind==='camera'&&!frozen;
+  if(v3Froze){toggleFreeze();await new Promise(r=>setTimeout(r,500));}
+  v3Open=true;v3Look='made';
+  for(const b of $('v3-look').querySelectorAll('button'))b.setAttribute('aria-checked',String(b.dataset.v3==='made'));
+  $('v3-look').querySelector('[data-v3=bare]').disabled=!!source.native;
+  $('v3').hidden=false;$('view3d').setAttribute('aria-pressed','true');
+  await build3d();
+  viewer.animateTo(-22,0);
+}
+function close3d(){
+  if(!v3Open)return;
+  v3Open=false;clearTimeout(v3Timer);viewer.spin(false);viewer.clear();
+  $('v3').hidden=true;$('view3d').setAttribute('aria-pressed','false');
+  if(v3Froze&&frozen)toggleFreeze();
+  v3Froze=false;invalidate();
+}
+// A picture of the model as on screen (mirrored, like the live picture), 3:4.
+function v3Picture(){
+  const W=900,H=1200,src=viewer.picture('after',W,H),c=document.createElement('canvas');c.width=W;c.height=H;
+  const x=c.getContext('2d');x.translate(W,0);x.scale(-1,1);x.drawImage(src,0,0);x.setTransform(1,0,0,1,0,0);
+  return c;
+}
+$('view3d').onclick=open3d;
+$('v3-close').onclick=close3d;
+$('v3-look').onclick=e=>{
+  const b=e.target.closest('[data-v3]');if(!b||b.disabled)return;
+  v3Look=b.dataset.v3;
+  for(const x of $('v3-look').querySelectorAll('button'))x.setAttribute('aria-checked',String(x===b));
+  build3d();
+};
+// Three-quarter and further go to whichever side the model is already turned to.
+$('v3-angle').onclick=e=>{
+  const b=e.target.closest('[data-angle]');if(!b)return;
+  viewer.spin(false);
+  const a=Number(b.dataset.angle),side=viewer.state.yaw<0?-1:1;
+  viewer.animateTo(a*side,0);
+};
+$('v3-spin').onclick=()=>viewer.spin(!viewer.spinning);
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&v3Open)close3d();});
 
 /* ---------- several shades side by side --------------------------------- */
 // One picture of the face in each chosen shade of the current product, cut around the
@@ -1760,6 +1874,8 @@ $('pin-shade').onclick=togglePin;
 $('multi-open').onclick=openMulti;
 // Several shades side by side is the professional plan's (plan.js).
 $('multi-open').hidden=!tier.pro;
+$('view3d').hidden=!tier.pro;
+if(tier.showcase)$('view3d').title+=' · حرفه‌ای';
 $('multi-run').onclick=runMulti;
 $('multi-close').onclick=()=>$('multi').close();
 $('multi-again').onclick=()=>{$('multi-pick').hidden=false;$('multi-result').hidden=true;};
@@ -1935,6 +2051,7 @@ document.addEventListener('keydown',e=>{
   const k=e.key.toLowerCase();
   if(k==='b'&&mode==='makeup')setBrush(!brushState.on);
   else if(k==='c')$('compare').click();
+  else if(k==='d'&&!$('view3d').hidden)open3d();
   else if(k==='f')toggleFreeze();
   else if(k==='s')snapshot();
   else if(k==='['||k===']'){

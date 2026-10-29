@@ -4,10 +4,10 @@
 //
 // Only this origin's own files are cached, and nothing from the camera ever passes
 // through here: frames never leave the page.
-const CACHE='roja-v28';
-const SHELL=['./','index.html','roja.css?v=28','app.js?v=28','catalog.js?v=28','makeup.js?v=28','stage.js?v=28',
-  'debug.js?v=28','brush.js?v=28','measure.js?v=28','blur.js?v=28','facemesh.js?v=28','shaders.js?v=28',
-  'face-worker.js?v=28','face-core.js?v=28','skin.js?v=28','skin-scan.js?v=28','skin-panel.js?v=28','usage.js?v=28','shops.js?v=28','plan.js?v=28',
+const CACHE='roja-v29';
+const SHELL=['./','index.html','roja.css?v=29','app.js?v=29','catalog.js?v=29','makeup.js?v=29','stage.js?v=29',
+  'debug.js?v=29','brush.js?v=29','measure.js?v=29','blur.js?v=29','facemesh.js?v=29','shaders.js?v=29',
+  'face-worker.js?v=29','face-core.js?v=29','skin.js?v=29','skin-scan.js?v=29','skin-panel.js?v=29','usage.js?v=29','shops.js?v=29','plan.js?v=29','viewer3d.js?v=29','fuse.js?v=29','head3d.js?v=29',
   'fonts/Estedad-var.woff2','favicon.svg','manifest.webmanifest','icons/icon-192.png','icons/app-qr.svg'];
 
 // From the server, not the browser's cache: that can still hold the previous release's
